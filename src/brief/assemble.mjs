@@ -224,6 +224,11 @@ export async function assembleBrief({
   // A view is the same packet with the other sections never collected, so it shares the
   // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
   const section = only === null ? null : String(only).toUpperCase();
+  // The skills view is the only one in existence, and it collects nothing but SKILLS. The
+  // work whose results feed no other section — file ranking, decisions, lessons, the
+  // generated-region scan — is skipped here instead of done and dropped by collect(): the
+  // packet's bytes are what collect() already made them, so nothing a reader sees changes.
+  const skillsOnly = section === 'SKILLS';
   const named = paths !== null;
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
   // A dirty file is where the reader is standing, not what the task asked about. When a
@@ -309,36 +314,41 @@ export async function assembleBrief({
     });
   }
 
-  const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts }) : [];
-  const queryVector =
-    flags?.embed === true && embeddings.length > 0
-      ? await embedTaskQuery(root, task, {
-          embed: true,
-          allowRemote: flags?.allowRemote === true,
-        })
-      : null;
-  const ranked = rankFiles({ files, symbols, edges, fts, bm25, embeddings, queryVector, task });
-  // A resolver hit is the task's own words against a path or symbol; a fused score is
-  // positive for graph neighbours and BM25 body hits too. When nothing resolves, those
-  // rows stay as context and the caution below says so. When something does resolve, keep
-  // only the resolver rows: the rest made a two-file task look like it touched src/name.mjs.
-  const matched = ranked.filter((row) => row.resolver > 0).length;
-  const focused = matched > 0 ? ranked.filter((row) => row.resolver > 0) : ranked;
-  if (task.trim().length > 0 && matched === 0) {
-    packet.add('CAUTIONS', 'matched 0: no path or symbol matches this task’s words, so FILES is context rather than a match', {
-      hard: true,
-      why: ['a body hit or a graph neighbour is not path or symbol evidence about this task'],
-    });
-  }
-  const rendered = renderMap(focused, symbols, { level: 'names', budget: budget > 0 ? budget * MAP_FACTOR : 0 });
-  for (const line of rendered.text.split('\n')) {
-    packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });
-  }
-  if (rendered.truncated) {
-    packet.add('CAUTIONS', `the map held back ${rendered.total - rendered.shown} of ${rendered.total} files`, {
-      hard: true,
-      why: [`\`${CLI} map --budget 0\` lists them all`],
-    });
+  // `focused` feeds the FILES section and the `likely` list below; in the skills view both
+  // are dropped by collect(), so the ranking that produces them is not run.
+  let focused = [];
+  if (!skillsOnly) {
+    const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts }) : [];
+    const queryVector =
+      flags?.embed === true && embeddings.length > 0
+        ? await embedTaskQuery(root, task, {
+            embed: true,
+            allowRemote: flags?.allowRemote === true,
+          })
+        : null;
+    const ranked = rankFiles({ files, symbols, edges, fts, bm25, embeddings, queryVector, task });
+    // A resolver hit is the task's own words against a path or symbol; a fused score is
+    // positive for graph neighbours and BM25 body hits too. When nothing resolves, those
+    // rows stay as context and the caution below says so. When something does resolve, keep
+    // only the resolver rows: the rest made a two-file task look like it touched src/name.mjs.
+    const matched = ranked.filter((row) => row.resolver > 0).length;
+    focused = matched > 0 ? ranked.filter((row) => row.resolver > 0) : ranked;
+    if (task.trim().length > 0 && matched === 0) {
+      packet.add('CAUTIONS', 'matched 0: no path or symbol matches this task’s words, so FILES is context rather than a match', {
+        hard: true,
+        why: ['a body hit or a graph neighbour is not path or symbol evidence about this task'],
+      });
+    }
+    const rendered = renderMap(focused, symbols, { level: 'names', budget: budget > 0 ? budget * MAP_FACTOR : 0 });
+    for (const line of rendered.text.split('\n')) {
+      packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });
+    }
+    if (rendered.truncated) {
+      packet.add('CAUTIONS', `the map held back ${rendered.total - rendered.shown} of ${rendered.total} files`, {
+        hard: true,
+        why: [`\`${CLI} map --budget 0\` lists them all`],
+      });
+    }
   }
 
   // Model and effort advice comes from the repository's bench history, not from anything a
@@ -376,30 +386,32 @@ export async function assembleBrief({
     else packet.add('TESTS', `${path} -> ${found.join(' ')}`, { why: ['the test imports it, or sits beside it'] });
   }
 
-  const records = await decisionRecords(root);
-  const ctx = {
-    files: filePaths,
-    // The card's lines are shell commands (`npm run test`); a decision's Affects token is
-    // a command of this tool. Passing only the card's list made every `simt …` token
-    // unresolved — 47 false cautions on this repository.
-    commands: new Set([...card.lines.map((line) => line.command), ...commands]),
-    roots: sourceRoots([...filePaths]),
-  };
-  const decisions = new Map();
-  const unresolved = new Set();
-  for (const path of likely) {
-    const hit = decisionHits(records, path, ctx);
-    for (const entry of hit.hits) if (!decisions.has(entry.id)) decisions.set(entry.id, { ...entry, path });
-    for (const entry of hit.unresolved) unresolved.add(entry.token);
-  }
-  for (const id of [...decisions.keys()].sort()) {
-    const entry = decisions.get(id);
-    packet.add('DECISIONS', `${entry.id} — ${entry.detail}`, { why: [`names ${entry.path}`] });
-  }
-  if (unresolved.size > 0) {
-    packet.add('CAUTIONS', `decisions name tokens nothing resolves: ${[...unresolved].sort().join(', ')}`, {
-      why: [`\`${CLI} why\` reports them`],
-    });
+  if (!skillsOnly) {
+    const records = await decisionRecords(root);
+    const ctx = {
+      files: filePaths,
+      // The card's lines are shell commands (`npm run test`); a decision's Affects token is
+      // a command of this tool. Passing only the card's list made every `simt …` token
+      // unresolved — 47 false cautions on this repository.
+      commands: new Set([...card.lines.map((line) => line.command), ...commands]),
+      roots: sourceRoots([...filePaths]),
+    };
+    const decisions = new Map();
+    const unresolved = new Set();
+    for (const path of likely) {
+      const hit = decisionHits(records, path, ctx);
+      for (const entry of hit.hits) if (!decisions.has(entry.id)) decisions.set(entry.id, { ...entry, path });
+      for (const entry of hit.unresolved) unresolved.add(entry.token);
+    }
+    for (const id of [...decisions.keys()].sort()) {
+      const entry = decisions.get(id);
+      packet.add('DECISIONS', `${entry.id} — ${entry.detail}`, { why: [`names ${entry.path}`] });
+    }
+    if (unresolved.size > 0) {
+      packet.add('CAUTIONS', `decisions name tokens nothing resolves: ${[...unresolved].sort().join(', ')}`, {
+        why: [`\`${CLI} why\` reports them`],
+      });
+    }
   }
 
   if (federate && (section === null || section === 'FEDERATION')) {
@@ -478,31 +490,33 @@ export async function assembleBrief({
     }
   }
 
-  const lessonTargets = [...new Set([...scope, ...likely])];
-  const taskTokenSet = new Set(tokenize(task));
-  for (const lesson of await lessonScopes(root)) {
-    const pathHits = lessonTargets.flatMap((path) => scopeHits(path, { lessons: [lesson] }));
-    const keywordMatch =
-      pathHits.length === 0 &&
-      Array.isArray(lesson.keywords) &&
-      lesson.keywords.some((kw) => taskTokenSet.has(String(kw).toLowerCase())) &&
-      [...filePaths].some((path) => scopeHits(path, { lessons: [lesson] }).length > 0);
-    if (pathHits.length > 0 || keywordMatch) {
-      const body =
-        lesson.paragraph && lesson.paragraph !== lesson.detail
-          ? `${lesson.detail}: ${lesson.paragraph.replace(/\s+/g, ' ').trim()}`
-          : lesson.detail;
-      packet.add('LESSONS', `${lesson.id} — ${body}`, {
-        why: [pathHits.length > 0 ? 'a lesson names a path this task will touch' : 'a lesson trigger matches this task'],
+  if (!skillsOnly) {
+    const lessonTargets = [...new Set([...scope, ...likely])];
+    const taskTokenSet = new Set(tokenize(task));
+    for (const lesson of await lessonScopes(root)) {
+      const pathHits = lessonTargets.flatMap((path) => scopeHits(path, { lessons: [lesson] }));
+      const keywordMatch =
+        pathHits.length === 0 &&
+        Array.isArray(lesson.keywords) &&
+        lesson.keywords.some((kw) => taskTokenSet.has(String(kw).toLowerCase())) &&
+        [...filePaths].some((path) => scopeHits(path, { lessons: [lesson] }).length > 0);
+      if (pathHits.length > 0 || keywordMatch) {
+        const body =
+          lesson.paragraph && lesson.paragraph !== lesson.detail
+            ? `${lesson.detail}: ${lesson.paragraph.replace(/\s+/g, ' ').trim()}`
+            : lesson.detail;
+        packet.add('LESSONS', `${lesson.id} — ${body}`, {
+          why: [pathHits.length > 0 ? 'a lesson names a path this task will touch' : 'a lesson trigger matches this task'],
+        });
+      }
+    }
+
+    const generated = await generatedRegions(root);
+    if (generated.length > 0) {
+      packet.add('CAUTIONS', `generated — edit the source, not these: ${generated.join(', ')}`, {
+        why: ['a hand edit inside a generated region is overwritten by the next projection'],
       });
     }
-  }
-
-  const generated = await generatedRegions(root);
-  if (generated.length > 0) {
-    packet.add('CAUTIONS', `generated — edit the source, not these: ${generated.join(', ')}`, {
-      why: ['a hand edit inside a generated region is overwritten by the next projection'],
-    });
   }
   if (untested.length > 0) {
     packet.add('CAUTIONS', `the index knows no test for ${untested.join(', ')}`, {

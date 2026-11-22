@@ -18,6 +18,7 @@ import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
 import { extract, resolveImports } from './extract.mjs';
+import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
 // names the extensions that RESOLVE to a language (JavaScript claims `.ts` for extraction
 // but not for resolution), so a record's extraction and resolution cannot desynchronize.
@@ -40,7 +41,7 @@ import {
   writeSqlite,
 } from './persist.mjs';
 
-export { SQLITE_FILE, decodeVectorBlob, encodeVectorBlob };
+export { BM25F_WEIGHTS, SQLITE_FILE, decodeVectorBlob, encodeVectorBlob, scoreFtsBm25F };
 
 // A tracked blob larger than this is recorded with its size and counted in
 // `skipped`, not streamed and tokenized: a 65 MiB file is indexed as a row, and
@@ -199,6 +200,26 @@ export function buildFtsBodies(filePath, symbolsForPath = [], text = null, root 
   return rows;
 }
 
+/** File metadata belongs to the first section. Repeating it in every section
+ * would change document frequencies based on how long a file happens to be. */
+export function buildFieldedFtsBodies(path, symbols = [], text = '', root = null) {
+  const kind = ftsKindOf(path, langOf(path, root));
+  const sections = splitSections(text);
+  const metadata = {
+    path_tokens: fieldTokens(path),
+    symbol_names: fieldTokens(symbols.map((symbol) => symbol.name ?? '').join(' ')),
+    qual_names: fieldTokens(symbols.map((symbol) => symbol.qualname ?? `${path}.${symbol.name ?? ''}`).join(' ')),
+    signatures: fieldTokens(symbols.map((symbol) => symbol.sig ?? '').join(' ')),
+  };
+  return (sections.length ? sections : ['']).map((section, index) => ({
+    kind,
+    ref: path,
+    ...Object.fromEntries(Object.entries(metadata).map(([field, value]) => [field, index === 0 ? value : ''])),
+    headings: fieldTokens([...section.matchAll(/^ {0,3}#{1,6}[ 	]+(.+)$/gm)].map((match) => match[1]).join(' ')),
+    body: fieldTokens(section),
+  }));
+}
+
 export function buildFtsBody(filePath, symbolsForPath = [], text = null, root = null) {
   const rows = buildFtsBodies(filePath, symbolsForPath, text, root);
   return rows.length > 0 ? rows[0].body : '';
@@ -227,7 +248,7 @@ export function ftsQueryTerms(task) {
  * Rebuild the index from the git index. Unchanged blobs are left as they are.
  *
  * @param {string} root
- * @param {{embed?: boolean, allowRemote?: boolean, fetchImpl?: typeof fetch}} [opts]
+ * @param {{embed?: boolean, fielded?: boolean, allowRemote?: boolean, fetchImpl?: typeof fetch}} [opts]
  */
 export async function reindex(root, opts = {}) {
   const started = Date.now();
@@ -236,18 +257,21 @@ export async function reindex(root, opts = {}) {
   const version = await readSchema(root);
   // A cache written before symbols existed has the right blobs and the wrong
   // tables. Re-extract once, then an unchanged blob stays untouched.
-  const forceSchema = version !== SCHEMA_V;
+  const forceSchema = version !== SCHEMA_V && version !== '5';
   // The package layout is an input of the row, not decoration: an unchanged blob
   // under a new nearest package marker has a new `pkg`, and resolution can cross a
   // boundary it did not before.
   const packages = await packageLayout(root, listed);
   const adapter = await resolveAdapter(root, opts);
   const stored = await readBuildMeta(root);
+  const hadFielded = stored.meta.fts_fields === '1';
+  const fielded = hadFielded || opts.fielded === true;
   const inputs = inputsDigest(root, { adapter, packages });
+  const priorInputs = version === '5' ? inputsDigest(root, { adapter, packages, schema: version }) : inputs;
   const resolution = resolutionDigest(root, listed);
   // A cache with no stamp was written by a reading this one cannot describe, so
   // it is rebuilt rather than partly reused.
-  const force = forceSchema || stored.error != null || !stored.meta.inputs || stored.meta.inputs !== inputs;
+  const force = forceSchema || (fielded && !hadFielded) || stored.error != null || stored.meta.inputs !== priorInputs;
   // Import resolution reads the tracked path set and the language table, not a
   // file's bytes. When either moves, an unchanged importer's edge can name a
   // destination that was added, deleted or renamed; its stored specifiers are
@@ -271,6 +295,7 @@ export async function reindex(root, opts = {}) {
   const symbols = [];
   const edges = [];
   const fts = [];
+  const fieldedRows = [];
   let skipped = 0;
   for (const entry of changed) {
     const lang = langOf(entry.path, root);
@@ -297,6 +322,7 @@ export async function reindex(root, opts = {}) {
       continue;
     }
     fts.push(...buildFtsBodies(entry.path, pulled.symbols, text, root));
+    if (fielded) fieldedRows.push(...buildFieldedFtsBodies(entry.path, pulled.symbols, text, root));
   }
   const edgeOwners = [];
   if (resolutionChanged) {
@@ -333,6 +359,8 @@ export async function reindex(root, opts = {}) {
     resolution,
     build,
     edgeOwners,
+    fielded,
+    fieldedRows,
     embedBasis: embedBuild.basis ?? null,
   });
   const counts = await countSqlite(root);
@@ -373,10 +401,10 @@ const byEntryName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
  * a row's `pkg` nor how a relative import resolves, and rebuilding the tree for it
  * would make every newly tracked file a full re-extraction.
  */
-function inputsDigest(root, { adapter, packages }) {
+function inputsDigest(root, { adapter, packages, schema = SCHEMA_V }) {
   return digestOfParts({
     format: 'index-inputs-v1',
-    schema: SCHEMA_V,
+    schema,
     revision: INDEX_INPUT_REVISION,
     scope: INDEX_SCOPE,
     parser: {
@@ -563,14 +591,43 @@ function parseImports(value) {
   }
 }
 
-/** FTS rows currently indexed: one row per section, first section first. */
+/** Legacy FTS rows, in the original section order used by the baseline ranker. */
 export async function readFts(root) {
-  const { rows, error } = await readSqliteRows(
-    root,
-    `select f.kind as kind, substr(n.key, 6) as ref, f.body as body
-      from fts f join nodes n on n.id = f.node_id order by ref, kind, f.rowid`,
-  );
+  const sql = (table) => `select f.kind as kind, substr(n.key, 6) as ref, f.body as body
+    from ${table} f join nodes n on n.id = f.node_id order by ref, kind, f.rowid`;
+  const { rows, error } = await readSqliteRows(root, sql('fts_legacy'), [], { legacySql: sql('fts') });
   return withReadError(rows, error);
+}
+
+export async function readFieldedFts(root) {
+  const { rows, error } = await readSqliteRows(root,
+    `select f.kind, substr(n.key, 6) as ref, ${BM25F_FIELDS.map((field) => `f.${field}`).join(', ')}
+      from fts f join nodes n on n.id = f.node_id
+      where (select value from meta where key = 'fts_fields') = '1'
+      order by ref, f.rowid`, [], { legacySql: null });
+  return withReadError(rows, error);
+}
+
+export async function searchFtsBm25F(root, task, { fts } = {}) {
+  if (fts !== undefined) return withReadError(scoreFtsBm25F(fts, task), fts.error);
+  const terms = fieldQueryTerms(task);
+  if (!terms.length) return [];
+  // Score and collapse sections in SQLite so one large file cannot fill the
+  // result cap or force every matching section over the storage boundary.
+  const { rows, error } = await readSqliteRows(root,
+    `with hits as materialized (
+       select f.kind, substr(n.key, 6) as path, f.rowid as section,
+         -bm25(fts, ${BM25F_WEIGHTS.join(', ')}) as score
+       from fts f join nodes n on n.id = f.node_id
+       where fts match ? and (select value from meta where key = 'fts_fields') = '1'
+     ), ranked as (
+       select kind, path, score, row_number() over (partition by path order by score desc, section) as position
+       from hits
+     )
+     select kind, path, score from ranked where position = 1
+     order by score desc, path asc limit ?`,
+    [terms.map(ftsQuote).join(' OR '), FTS_LIMIT], { legacySql: null });
+  return withReadError(bestFieldHits(rows), error);
 }
 
 /** Stored vector embeddings, decoded as Float32Array per path. */
@@ -606,64 +663,28 @@ function dedupePaths(rows) {
   return [...best.values()].sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
-/**
- * Rank indexed documents against a task string using BM25.
- *
- * Uses SQLite FTS5 `bm25(fts)` when there are hits. A caller that hands in its
- * own row set (`opts.fts`) is ranked by the identical Okapi BM25 computation, so
- * the fold can be exercised without a database.
- * A query with CJK also consults the trigram table - unicode61 has no CJK
- * segmentation, so those runs are unqueryable there - and a mixed query
- * unions both tables, trigram hits first, because an ASCII-only table cannot
- * hold a CJK run and a trigram table cannot hold an ASCII-only file.
- */
+/** Rank with the baseline body scorer and its separate CJK trigram channel. */
 export async function searchFtsBm25(root, task, opts = {}) {
   const terms = ftsQueryTerms(task);
   if (terms.length === 0) return [];
   await ensureIndexSupport();
-  const ascii = terms.filter((t) => !isCjkToken(t));
-  const runs = [...new Set(cjkRuns(foldText(task)))];
-  const hits = [];
-  let error = null;
+  const runs = cjkRuns(foldText(task));
   if (runs.length > 0) {
-    const tri = await ftsBranch(root, 'fts_tri', [...runs, ...ascii]);
-    hits.push(...tri.rows);
-    error = tri.error;
-  }
-  if (ascii.length > 0) {
-    const seen = new Set(hits.map((row) => row.path));
-    const fts = await ftsBranch(root, 'fts', ascii);
-    for (const row of fts.rows) {
-      if (!seen.has(row.path)) {
-        seen.add(row.path);
-        hits.push(row);
-      }
+    const matchExpr = [...runs, ...terms.filter((term) => !isCjkToken(term))].map(ftsQuote).join(' OR ');
+    const { rows, error } = await readSqliteRows(root,
+      `select kind, ref as path, -bm25(fts_tri) as score from fts_tri
+        where fts_tri match ? order by score desc, path asc limit ?`,
+      [matchExpr, FTS_LIMIT]);
+    if (rows.length > 0 || error) {
+      const hits = rows.map(({ kind, path, score }) => ({ kind, path, score }));
+      return withReadError(dedupePaths(hits).slice(0, FTS_LIMIT), error);
     }
-    error = error ?? fts.error;
   }
-  if (hits.length > 0) return withReadError(dedupePaths(hits).slice(0, FTS_LIMIT), error);
+  // The v5 body query used an FTS alias that SQLite rejected. Existing
+  // consumers therefore ranked body rows with this scorer. Keep that ordering
+  // while new consumers explicitly select the native fielded scorer.
   const ftsRows = opts.fts ?? await readFts(root);
   return withReadError(scoreFtsBm25(ftsRows, task).slice(0, FTS_LIMIT), ftsRows.error);
-}
-
-async function ftsBranch(root, table, terms) {
-  if (terms.length === 0) return { rows: [], error: null };
-  // FTS5 escapes a phrase by doubling its quote. A token carrying one used to break the
-  // MATCH expression and come back as a read failure rather than as rows or no rows.
-  const matchExpr = terms.map((t) => `"${String(t).replaceAll('"', '""')}"`).join(' OR ');
-  // `fts` is the v5 node-keyed table: the path comes back through the node key.
-  // `fts_tri` keeps its v4 (kind, ref, body) shape for the CJK trigram path ,
-  // so it is queried the old way.
-  const sql = table === 'fts'
-    ? `select f.kind as kind, substr(n.key, 6) as path, -bm25(f) as score
-       from fts f join nodes n on n.id = f.node_id
-       where f match ? order by score desc, path asc limit ?`
-    : `select kind, ref as path, -bm25(${table}) as score from ${table} where ${table} match ? order by score desc, path asc limit ?`;
-  const { rows, error } = await readSqliteRows(root, sql, [matchExpr, FTS_LIMIT]);
-  return {
-    rows: rows.map((row) => ({ kind: row.kind, path: row.path, score: Number(row.score) || 0 })),
-    error,
-  };
 }
 
 /**

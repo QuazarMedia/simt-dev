@@ -730,7 +730,7 @@ Columns follow `templates/plan/tracker.json` (`Lane` names disjoint subsystems s
 | D03 | Retrieval, MSC & impact grading harness | 0 | bench | M | D02 | M | P1 | exact MSC/MFC/MRR/Hub-Noise/latency metrics | Complete | b03b64ecd2ae97c39532fccb6f5b97061b14758e · test: node --test test/retrieval-metrics.test.mjs |
 | D04 | Ablation runner & determinism gate | 0 | bench | S | D03 | S | P1 | paired bootstrap CIs; strict byte determinism | Complete | 5ad795f8c9b160ff6b5060312646e25a434617f1 · test: node --test test/retrieval-ablation.test.mjs |
 | D05 | Dual-emission identifier tokenizer | 1 | index | S | D01 | S | P2 | camelCase/snake/kebab/CJK round-trip; >=10 MB/s | Complete | 24a6c99f35f91579efc5a2af004a0dee4bca6369 · test: node --test test/identifiers.test.mjs test/index.test.mjs test/index-tri.test.mjs test/retrieval-baseline.test.mjs |
-| D06 | SQLite v6 multi-column BM25F schema | 1 | index | M | D05 | M | P2 | v5->v6 migration; SQLite/JS BM25F parity | Queued | |
+| D06 | SQLite v6 multi-column BM25F schema | 1 | index | M | D05 | M | P2 | v5->v6 migration; SQLite/JS BM25F parity | Complete | b2bcb2c8b4dbcaa48f5cb7d18d11959d58897e58 · test: node --test test/index-bm25f.test.mjs test/index.test.mjs test/index-tri.test.mjs test/retrieval-baseline.test.mjs test/map.test.mjs test/index-open-error.test.mjs |
 | D07 | Hierarchical entity index & phrase boost | 1 | index | M | D06 | M | P2 | 4-tier lookup + FTS5 NEAR phrase scoring | Queued | |
 | D08 | Continuous IDF & lexical conceptual coupling | 1 | index | S | D06 | S | P2 | smooth IDF; zero-embedding TF-IDF file cosine | Queued | |
 | D09 | Guarded Bo1 / RM3-lite query expansion | 1 | index | M | D07, D08 | M | P3 | vocab-gap MRR gain; 0% drift when guard fires | Queued | |

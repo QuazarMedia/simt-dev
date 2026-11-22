@@ -70,6 +70,27 @@ export async function readGraph(root) {
   };
 }
 
+export async function readStagedImports(root, tree, paths) {
+  const { results, error } = await readSqliteBatch(root, [
+    ["select value from meta where key = 'tree'"],
+    [`with recursive upstream(path, depth) as (
+      select value, 0 from json_each(?)
+      union
+      select substr(n.key, 6), upstream.depth + 1
+      from upstream join edges e on e.kind = 'import' and e.dst_key = upstream.path
+      join nodes n on n.id = e.src_id where upstream.depth < 2
+    )
+    select substr(n.key, 6) as src, e.dst_key as dst, e.kind
+    from edges e join nodes n on n.id = e.src_id
+    where e.kind = 'import' and (
+      e.dst_key in (select path from upstream where depth < 2)
+      or n.key in (select 'file:' || path from upstream where depth = 0)
+    )`, [JSON.stringify(paths)]],
+  ]);
+  const [metadata, edges] = results ?? [[], []];
+  return error || metadata[0]?.value !== tree ? null : edges;
+}
+
 export async function readSymbolGraph(root) {
   const { results, error } = await readSqliteBatch(root, symbolGraphQueries());
   const [edges, metadata] = results ?? [[], []];

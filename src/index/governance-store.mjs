@@ -12,7 +12,7 @@ import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { cmp } from '../util/sort.mjs';
-import { eligibleSkillScopes, resolveToken, scopeHits, sortHits, sourceRoots } from './govern.mjs';
+import { eligibleSkillScopes, resolveToken, scopeHits, sourceRoots } from './govern.mjs';
 import { CODEOWNERS_PATHS, ownersOf } from './impact.mjs';
 import { candidatePaths } from './live.mjs';
 import { readSqliteBatch, readSqliteRows } from './persist.mjs';
@@ -22,9 +22,10 @@ const DECISION_FILE = /^ADR-\d{3,}-.*\.md$/iu;
 const MARKDOWN = /\.mdc?$/u;
 
 const BASIS_SQL = `select value from meta where key = '${GOVERNANCE_BASIS_KEY}'`;
-const PATH_SQL = `select n.kind, n.id, n.detail, n.superseded_by as supersededBy
+const RELATION_SQL = `select e.src, e.kind as relation, e.dst, n.kind, n.id, n.detail, n.superseded_by as supersededBy
   from governance_edges e join governance_nodes n on n.key = e.src
-  where e.kind = 'governs_path' and e.dst = ?`;
+  where (e.kind = 'governs_path' and e.dst in (select value from json_each(?)))
+     or (e.kind = 'governs_command' and ?)`;
 
 async function matchingFiles(root, dir, pattern) {
   const folder = join(root, dir);
@@ -41,7 +42,7 @@ async function metadata(path) {
   }
 }
 
-async function governanceBasis(root, ctx) {
+export async function governanceInputState(root) {
   root = await realpath(root);
   const [dir, registry, { signals }] = await Promise.all([decisionsDir(root), registryLocation({ root }), fingerprint(root)]);
   const sources = [
@@ -56,6 +57,11 @@ async function governanceBasis(root, ctx) {
   for (let start = 0; start < sources.length; start += 64) {
     revisions.push(...await Promise.all(sources.slice(start, start + 64).map(metadata)));
   }
+  return { dir, revisions, signals };
+}
+
+export async function governanceBasis(root, ctx, inputState) {
+  const { dir, revisions, signals } = inputState ?? await governanceInputState(root);
   const basis = digestOf(JSON.stringify([1, packageVersion(), new Date().toISOString().slice(0, 10), dir,
     revisions, [...ctx.files].sort(cmp), [...ctx.commands].sort(cmp), [...signals].sort(cmp)]));
   return { basis, dir, signals };
@@ -120,24 +126,16 @@ export async function prepareGovernance(root, listed) {
   return cached.rows[0]?.value === basis.basis ? null : governanceSnapshot(root, ctx, { basis });
 }
 
-function classifyHits(rows) {
-  const items = [];
-  const historical = [];
-  for (const { kind, id, detail, supersededBy } of rows) {
-    if (supersededBy) historical.push({ kind, id, detail, supersededBy });
-    else items.push({ kind, id, detail });
-  }
-  return { items: sortHits(items), historical: sortHits(historical) };
-}
-
-export async function governingPath(root, path, ctx) {
+export async function readGovernance(root, ctx, targets, { includeCommands = false, observedBasis } = {}) {
   const [basis, cached] = await Promise.all([
-    governanceBasis(root, ctx), readSqliteBatch(root, [[BASIS_SQL], [PATH_SQL, [path]]]),
+    observedBasis ?? governanceBasis(root, ctx), readSqliteBatch(root, [[BASIS_SQL], [RELATION_SQL, [JSON.stringify([...targets]), Number(includeCommands)]]]),
   ]);
   const [metadata, rows] = cached.results ?? [[], []];
-  if (!cached.error && metadata[0]?.value === basis.basis) return { ...classifyHits(rows), basis: 'sqlite' };
-  const snapshot = await governanceSnapshot(root, ctx, { targets: new Set([path]), basis });
-  const current = snapshot.edges.filter(({ kind, dst }) => kind === 'governs_path' && dst === path)
-    .map(({ src }) => snapshot.nodes.get(src));
-  return { ...classifyHits(current), basis: 'worktree' };
+  if (!cached.error && metadata[0]?.value === basis.basis) return {
+    basis: 'sqlite',
+    nodes: new Map(rows.map(({ src, kind, id, detail, supersededBy }) => [src, { kind, id, detail, supersededBy }])),
+    edges: rows.map(({ src, relation, dst }) => ({ src, kind: relation, dst })),
+  };
+  const snapshot = await governanceSnapshot(root, ctx, { targets, basis });
+  return { ...snapshot, basis: 'worktree' };
 }

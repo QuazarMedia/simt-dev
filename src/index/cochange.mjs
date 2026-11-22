@@ -1,4 +1,5 @@
 import { git, gitText } from '../sys/git.mjs';
+import { GIT_SHA, parseNameLog } from '../sys/git-history.mjs';
 import { isTestPath } from '../testing/paths.mjs';
 import { cmp } from '../util/sort.mjs';
 
@@ -9,7 +10,6 @@ const TEST_CAP = 8;
 const PARTNER_CAP = 12;
 const MIN_SUPPORT = 2;
 const MIN_CONFIDENCE = 0.25;
-const HASH = /^[a-f\d]{40,64}$/u;
 
 export const COCHANGE_DDL = 'create table if not exists cochange('
   + 'src_path text not null, dst_path text not null, confidence real not null, '
@@ -17,20 +17,9 @@ export const COCHANGE_DDL = 'create table if not exists cochange('
   + 'primary key(src_path, dst_path)) without rowid';
 
 export function parseCochangeLog(raw) {
-  const rows = [];
-  const tokens = raw.split('\0');
-  let row;
-  for (let index = 0; index < tokens.length; index += 1) {
-    const token = tokens[index];
-    if (!token && HASH.test(tokens[index + 1] ?? '')) {
-      row = { sha: tokens[index + 1], parents: tokens[index + 2].split(' ').filter(Boolean), paths: [] };
-      rows.push(row);
-      index += 2;
-    } else if (token && row) {
-      row.paths.push(row.paths.length ? token : token.replace(/^\n/u, ''));
-    }
-  }
-  return rows;
+  return parseNameLog(raw, ['parents']).map(({ sha, paths, parents }) => ({
+    sha, paths, parents: parents.split(' ').filter(Boolean),
+  }));
 }
 
 async function logRange(root, revision, { merges = false, limit = COCHANGE_WINDOW } = {}) {
@@ -47,7 +36,7 @@ function extendsHistory(rows, previous) {
 
 /** Keep the old window only when Git proves the new history is a linear extension. */
 export async function updateCochangeHistory(root, prior = null) {
-  if (prior?.head && HASH.test(prior.head)) {
+  if (prior?.head && GIT_SHA.test(prior.head)) {
     const range = prior.head + '..HEAD';
     try {
       const updated = await logRange(root, range, { merges: true, limit: COCHANGE_WINDOW + 1 });

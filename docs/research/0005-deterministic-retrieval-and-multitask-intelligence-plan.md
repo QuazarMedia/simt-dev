@@ -725,7 +725,7 @@ Columns follow `templates/plan/tracker.json` (`Lane` names disjoint subsystems s
 
 | ID | Slice | Phase | Lane | Tier | Depends on | Size | Needs ADR | Success metric | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| D01 | Baseline audit & live-failure fixtures | 0 | bench | S | research 0004 W52 | S | — | 4 live failure classes pinned; ADR-031 isolated | Queued | |
+| D01 | Baseline audit & live-failure fixtures | 0 | bench | S | research 0004 W52 | S | — | 4 live failure classes pinned; ADR-031 isolated | Complete | e96cec228a6b776b3e9dd2c315a1e241425b144f · test: node --test test/retrieval-baseline.test.mjs |
 | D02 | Multi-task & composite benchmark corpus | 0 | bench | M | D01 | M | P1 | >=30 tasks/stratum across 4 strata; gold 100% | Queued | |
 | D03 | Retrieval, MSC & impact grading harness | 0 | bench | M | D02 | M | P1 | exact MSC/MFC/MRR/Hub-Noise/latency metrics | Queued | |
 | D04 | Ablation runner & determinism gate | 0 | bench | S | D03 | S | P1 | paired bootstrap CIs; strict byte determinism | Queued | |

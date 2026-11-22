@@ -1,0 +1,338 @@
+{
+  "metrics": {
+    "mixedTaskCoverage": 0.25,
+    "survivingFacets": [
+      "FILES"
+    ],
+    "unrelatedImpactTests": [
+      "test/format.test.mjs"
+    ],
+    "foreignSkills": [
+      "edge-storage"
+    ]
+  },
+  "mixed": {
+    "code": 0,
+    "payload": {
+      "schemaVersion": 1,
+      "ok": true,
+      "command": "brief",
+      "kind": "bugfix",
+      "basis": "the task matches /\\bfix(?:es|ed|ing)?\\b/i",
+      "task": "Fix the lexical ranking in rank.mjs, add prompt segmentation to brief, update inventory to handle symbol call sites, and fix a typo in README.md",
+      "scope": [
+        "README.md"
+      ],
+      "budget": 2048,
+      "bytes": 606,
+      "before": 606,
+      "floorHeld": false,
+      "cut": [],
+      "sections": {
+        "TASK": [
+          "kind bugfix — the task matches /\\bfix(?:es|ed|ing)?\\b/i",
+          "task Fix the lexical ranking in rank.mjs, add prompt segmentation to brief, update inventory to handle symbol call sites, and fix a typo in README.md",
+          "scope README.md"
+        ],
+        "COMMANDS": [
+          "test  npm run test",
+          "focused test (Node)  node --test {file}"
+        ],
+        "FILES": [
+          "README.md"
+        ],
+        "TESTS": [
+          "the index knows direct importers; `simt tests <path>` is the authority for multi-line and dynamic imports"
+        ],
+        "SKILLS": [
+          "ranking — 512 B, keyword:ranking name:ranking stack:node",
+          "session-review — 512 B, keyword:and stack:node"
+        ],
+        "CAUTIONS": [
+          "the index knows no test for README.md"
+        ]
+      },
+      "text": "TASK\n  kind bugfix — the task matches /\\bfix(?:es|ed|ing)?\\b/i\n  task Fix the lexical ranking in rank.mjs, add prompt segmentation to brief, update inventory to handle symbol call sites, and fix a typo in README.md\n  scope README.md\nCOMMANDS\n  test  npm run test\n  focused test (Node)  node --test {file}\nFILES\n  README.md\nTESTS\n  the index knows direct importers; `simt tests <path>` is the authority for multi-line and dynamic imports\nSKILLS\n  ranking — 512 B, keyword:ranking name:ranking stack:node\n  session-review — 512 B, keyword:and stack:node\nCAUTIONS\n  the index knows no test for README.md",
+      "exitCode": 0
+    }
+  },
+  "composite": {
+    "code": 0,
+    "payload": {
+      "schemaVersion": 1,
+      "ok": true,
+      "command": "brief",
+      "kind": "refactor",
+      "basis": "the task matches /\\brefactor(?:s|ed|ing)?\\b/i",
+      "task": "Refactor the authentication middleware to support refresh token rotation, add unit tests for expired sessions, migrate database schema for audit logs, and document the new rate limits in the API guide",
+      "scope": [],
+      "budget": 2048,
+      "bytes": 1871,
+      "before": 11008,
+      "floorHeld": false,
+      "cut": [
+        "35",
+        "34",
+        "33",
+        "32",
+        "31",
+        "30",
+        "29",
+        "28",
+        "27",
+        "26",
+        "25",
+        "24",
+        "23",
+        "22",
+        "21",
+        "20",
+        "19",
+        "18",
+        "17",
+        "16",
+        "15",
+        "14",
+        "13",
+        "12",
+        "11",
+        "10",
+        "9"
+      ],
+      "sections": {
+        "TASK": [
+          "kind refactor — the task matches /\\brefactor(?:s|ed|ing)?\\b/i",
+          "task Refactor the authentication middleware to support refresh token rotation, add unit tests for expired sessions, migrate database schema for audit logs, and document the new rate limits in the API guide",
+          "scope the whole repository"
+        ],
+        "COMMANDS": [
+          "test  npm run test",
+          "focused test (Node)  node --test {file}"
+        ],
+        "FILES": [
+          "src/authentication-00.mjs refreshTokenRotationPolicy00Stage0 refreshTokenRotationPolicy00Stage1 refreshTokenRotationPolicy00Stage10 refreshTokenRotationPolicy00Stage11 refreshTokenRotationPolicy00Stage2 refreshTokenRotationPolicy00Stage3 refreshTokenRotationPolicy00Stage4 refreshTokenRotationPolicy00Stage5 refreshTokenRotationPolicy00Stage6 refreshTokenRotationPolicy00Stage7 refreshTokenRotationPolicy00Stage8 refreshTokenRotationPolicy00Stage9",
+          "src/authentication-01.mjs refreshTokenRotationPolicy01Stage0 refreshTokenRotationPolicy01Stage1 refreshTokenRotationPolicy01Stage10 refreshTokenRotationPolicy01Stage11 refreshTokenRotationPolicy01Stage2 refreshTokenRotationPolicy01Stage3 refreshTokenRotationPolicy01Stage4 refreshTokenRotationPolicy01Stage5 refreshTokenRotationPolicy01Stage6 refreshTokenRotationPolicy01Stage7 refreshTokenRotationPolicy01Stage8 refreshTokenRotationPolicy01Stage9",
+          "docs/lessons/0001-expired-sessions.md",
+          "src/authentication-02.mjs refreshTokenRotationPolicy02Stage0 refreshTokenRotationPolicy02Stage1 refreshTokenRotationPolicy02Stage10 refreshTokenRotationPolicy02Stage11 refreshTokenRotationPolicy02Stage2 refreshTokenRotationPolicy02Stage3 refreshTokenRotationPolicy02Stage4 refreshTokenRotationPolicy02Stage5 refreshTokenRotationPolicy02Stage6 refreshTokenRotationPolicy02Stage7 refreshTokenRotationPolicy02Stage8 refreshTokenRotationPolicy02Stage9"
+        ]
+      },
+      "explain": [
+        "keep TASK 1/3 worth 8: kind refactor — the task matches /\\brefactor(?:s|ed|ing)?\\b/i",
+        "     the kind chooses the commands, and the commands are the part a reader cannot recover from a wrong guess",
+        "keep TASK 2/3 worth 8: task Refactor the authentication middleware to support refresh token rotation, add unit tests for expired sessions, migrate database schema for audit logs, and document the new rate limits in the API guide",
+        "     the packet is an answer to this",
+        "keep TASK 3/3 worth 8: scope the whole repository",
+        "     the task names no path, so the whole repository",
+        "keep COMMANDS 1/2 worth 7: test  npm run test",
+        "     the refactor kind needs test",
+        "keep COMMANDS 2/2 worth 7: focused test (Node)  node --test {file}",
+        "     the refactor kind needs focused",
+        "keep FILES 1/25 worth 6: src/authentication-00.mjs refreshTokenRotationPolicy00Stage0 refreshTokenRotationPolicy00Stage1 refreshTokenRotationPolicy00Stage10 refreshTokenRotationPolicy00Stage11 refreshTokenRotationPolicy00Stage2 refreshTokenRotationPolicy00Stage3 refreshTokenRotationPolicy00Stage4 refreshTokenRotationPolicy00Stage5 refreshTokenRotationPolicy00Stage6 refreshTokenRotationPolicy00Stage7 refreshTokenRotationPolicy00Stage8 refreshTokenRotationPolicy00Stage9",
+        "     ranked by the task words against the import graph",
+        "keep FILES 2/25 worth 6: src/authentication-01.mjs refreshTokenRotationPolicy01Stage0 refreshTokenRotationPolicy01Stage1 refreshTokenRotationPolicy01Stage10 refreshTokenRotationPolicy01Stage11 refreshTokenRotationPolicy01Stage2 refreshTokenRotationPolicy01Stage3 refreshTokenRotationPolicy01Stage4 refreshTokenRotationPolicy01Stage5 refreshTokenRotationPolicy01Stage6 refreshTokenRotationPolicy01Stage7 refreshTokenRotationPolicy01Stage8 refreshTokenRotationPolicy01Stage9",
+        "     ranked by the task words against the import graph",
+        "keep FILES 3/25 worth 6: docs/lessons/0001-expired-sessions.md",
+        "     ranked by the task words against the import graph",
+        "keep FILES 4/25 worth 6: src/authentication-02.mjs refreshTokenRotationPolicy02Stage0 refreshTokenRotationPolicy02Stage1 refreshTokenRotationPolicy02Stage10 refreshTokenRotationPolicy02Stage11 refreshTokenRotationPolicy02Stage2 refreshTokenRotationPolicy02Stage3 refreshTokenRotationPolicy02Stage4 refreshTokenRotationPolicy02Stage5 refreshTokenRotationPolicy02Stage6 refreshTokenRotationPolicy02Stage7 refreshTokenRotationPolicy02Stage8 refreshTokenRotationPolicy02Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 5/25 worth 6: src/authentication-03.mjs refreshTokenRotationPolicy03Stage0 refreshTokenRotationPolicy03Stage1 refreshTokenRotationPolicy03Stage10 refreshTokenRotationPolicy03Stage11 refreshTokenRotationPolicy03Stage2 refreshTokenRotationPolicy03Stage3 refreshTokenRotationPolicy03Stage4 refreshTokenRotationPolicy03Stage5 refreshTokenRotationPolicy03Stage6 refreshTokenRotationPolicy03Stage7 refreshTokenRotationPolicy03Stage8 refreshTokenRotationPolicy03Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 6/25 worth 6: src/authentication-04.mjs refreshTokenRotationPolicy04Stage0 refreshTokenRotationPolicy04Stage1 refreshTokenRotationPolicy04Stage10 refreshTokenRotationPolicy04Stage11 refreshTokenRotationPolicy04Stage2 refreshTokenRotationPolicy04Stage3 refreshTokenRotationPolicy04Stage4 refreshTokenRotationPolicy04Stage5 refreshTokenRotationPolicy04Stage6 refreshTokenRotationPolicy04Stage7 refreshTokenRotationPolicy04Stage8 refreshTokenRotationPolicy04Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 7/25 worth 6: src/authentication-05.mjs refreshTokenRotationPolicy05Stage0 refreshTokenRotationPolicy05Stage1 refreshTokenRotationPolicy05Stage10 refreshTokenRotationPolicy05Stage11 refreshTokenRotationPolicy05Stage2 refreshTokenRotationPolicy05Stage3 refreshTokenRotationPolicy05Stage4 refreshTokenRotationPolicy05Stage5 refreshTokenRotationPolicy05Stage6 refreshTokenRotationPolicy05Stage7 refreshTokenRotationPolicy05Stage8 refreshTokenRotationPolicy05Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 8/25 worth 6: src/authentication-06.mjs refreshTokenRotationPolicy06Stage0 refreshTokenRotationPolicy06Stage1 refreshTokenRotationPolicy06Stage10 refreshTokenRotationPolicy06Stage11 refreshTokenRotationPolicy06Stage2 refreshTokenRotationPolicy06Stage3 refreshTokenRotationPolicy06Stage4 refreshTokenRotationPolicy06Stage5 refreshTokenRotationPolicy06Stage6 refreshTokenRotationPolicy06Stage7 refreshTokenRotationPolicy06Stage8 refreshTokenRotationPolicy06Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 9/25 worth 6: src/authentication-07.mjs refreshTokenRotationPolicy07Stage0 refreshTokenRotationPolicy07Stage1 refreshTokenRotationPolicy07Stage10 refreshTokenRotationPolicy07Stage11 refreshTokenRotationPolicy07Stage2 refreshTokenRotationPolicy07Stage3 refreshTokenRotationPolicy07Stage4 refreshTokenRotationPolicy07Stage5 refreshTokenRotationPolicy07Stage6 refreshTokenRotationPolicy07Stage7 refreshTokenRotationPolicy07Stage8 refreshTokenRotationPolicy07Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 10/25 worth 6: src/authentication-08.mjs refreshTokenRotationPolicy08Stage0 refreshTokenRotationPolicy08Stage1 refreshTokenRotationPolicy08Stage10 refreshTokenRotationPolicy08Stage11 refreshTokenRotationPolicy08Stage2 refreshTokenRotationPolicy08Stage3 refreshTokenRotationPolicy08Stage4 refreshTokenRotationPolicy08Stage5 refreshTokenRotationPolicy08Stage6 refreshTokenRotationPolicy08Stage7 refreshTokenRotationPolicy08Stage8 refreshTokenRotationPolicy08Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 11/25 worth 6: src/authentication-09.mjs refreshTokenRotationPolicy09Stage0 refreshTokenRotationPolicy09Stage1 refreshTokenRotationPolicy09Stage10 refreshTokenRotationPolicy09Stage11 refreshTokenRotationPolicy09Stage2 refreshTokenRotationPolicy09Stage3 refreshTokenRotationPolicy09Stage4 refreshTokenRotationPolicy09Stage5 refreshTokenRotationPolicy09Stage6 refreshTokenRotationPolicy09Stage7 refreshTokenRotationPolicy09Stage8 refreshTokenRotationPolicy09Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 12/25 worth 6: src/authentication-10.mjs refreshTokenRotationPolicy10Stage0 refreshTokenRotationPolicy10Stage1 refreshTokenRotationPolicy10Stage10 refreshTokenRotationPolicy10Stage11 refreshTokenRotationPolicy10Stage2 refreshTokenRotationPolicy10Stage3 refreshTokenRotationPolicy10Stage4 refreshTokenRotationPolicy10Stage5 refreshTokenRotationPolicy10Stage6 refreshTokenRotationPolicy10Stage7 refreshTokenRotationPolicy10Stage8 refreshTokenRotationPolicy10Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 13/25 worth 6: src/authentication-11.mjs refreshTokenRotationPolicy11Stage0 refreshTokenRotationPolicy11Stage1 refreshTokenRotationPolicy11Stage10 refreshTokenRotationPolicy11Stage11 refreshTokenRotationPolicy11Stage2 refreshTokenRotationPolicy11Stage3 refreshTokenRotationPolicy11Stage4 refreshTokenRotationPolicy11Stage5 refreshTokenRotationPolicy11Stage6 refreshTokenRotationPolicy11Stage7 refreshTokenRotationPolicy11Stage8 refreshTokenRotationPolicy11Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 14/25 worth 6: src/authentication-12.mjs refreshTokenRotationPolicy12Stage0 refreshTokenRotationPolicy12Stage1 refreshTokenRotationPolicy12Stage10 refreshTokenRotationPolicy12Stage11 refreshTokenRotationPolicy12Stage2 refreshTokenRotationPolicy12Stage3 refreshTokenRotationPolicy12Stage4 refreshTokenRotationPolicy12Stage5 refreshTokenRotationPolicy12Stage6 refreshTokenRotationPolicy12Stage7 refreshTokenRotationPolicy12Stage8 refreshTokenRotationPolicy12Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 15/25 worth 6: src/authentication-13.mjs refreshTokenRotationPolicy13Stage0 refreshTokenRotationPolicy13Stage1 refreshTokenRotationPolicy13Stage10 refreshTokenRotationPolicy13Stage11 refreshTokenRotationPolicy13Stage2 refreshTokenRotationPolicy13Stage3 refreshTokenRotationPolicy13Stage4 refreshTokenRotationPolicy13Stage5 refreshTokenRotationPolicy13Stage6 refreshTokenRotationPolicy13Stage7 refreshTokenRotationPolicy13Stage8 refreshTokenRotationPolicy13Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 16/25 worth 6: test/expired-sessions.test.mjs",
+        "     ranked by the task words against the import graph",
+        "cut FILES 17/25 worth 6: src/authentication-14.mjs refreshTokenRotationPolicy14Stage0 refreshTokenRotationPolicy14Stage1 refreshTokenRotationPolicy14Stage10 refreshTokenRotationPolicy14Stage11 refreshTokenRotationPolicy14Stage2 refreshTokenRotationPolicy14Stage3 refreshTokenRotationPolicy14Stage4 refreshTokenRotationPolicy14Stage5 refreshTokenRotationPolicy14Stage6 refreshTokenRotationPolicy14Stage7 refreshTokenRotationPolicy14Stage8 refreshTokenRotationPolicy14Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 18/25 worth 6: src/authentication-15.mjs refreshTokenRotationPolicy15Stage0 refreshTokenRotationPolicy15Stage1 refreshTokenRotationPolicy15Stage10 refreshTokenRotationPolicy15Stage11 refreshTokenRotationPolicy15Stage2 refreshTokenRotationPolicy15Stage3 refreshTokenRotationPolicy15Stage4 refreshTokenRotationPolicy15Stage5 refreshTokenRotationPolicy15Stage6 refreshTokenRotationPolicy15Stage7 refreshTokenRotationPolicy15Stage8 refreshTokenRotationPolicy15Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 19/25 worth 6: src/authentication-16.mjs refreshTokenRotationPolicy16Stage0 refreshTokenRotationPolicy16Stage1 refreshTokenRotationPolicy16Stage10 refreshTokenRotationPolicy16Stage11 refreshTokenRotationPolicy16Stage2 refreshTokenRotationPolicy16Stage3 refreshTokenRotationPolicy16Stage4 refreshTokenRotationPolicy16Stage5 refreshTokenRotationPolicy16Stage6 refreshTokenRotationPolicy16Stage7 refreshTokenRotationPolicy16Stage8 refreshTokenRotationPolicy16Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 20/25 worth 6: src/authentication-17.mjs refreshTokenRotationPolicy17Stage0 refreshTokenRotationPolicy17Stage1 refreshTokenRotationPolicy17Stage10 refreshTokenRotationPolicy17Stage11 refreshTokenRotationPolicy17Stage2 refreshTokenRotationPolicy17Stage3 refreshTokenRotationPolicy17Stage4 refreshTokenRotationPolicy17Stage5 refreshTokenRotationPolicy17Stage6 refreshTokenRotationPolicy17Stage7 refreshTokenRotationPolicy17Stage8 refreshTokenRotationPolicy17Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 21/25 worth 6: src/authentication-18.mjs refreshTokenRotationPolicy18Stage0 refreshTokenRotationPolicy18Stage1 refreshTokenRotationPolicy18Stage10 refreshTokenRotationPolicy18Stage11 refreshTokenRotationPolicy18Stage2 refreshTokenRotationPolicy18Stage3 refreshTokenRotationPolicy18Stage4 refreshTokenRotationPolicy18Stage5 refreshTokenRotationPolicy18Stage6 refreshTokenRotationPolicy18Stage7 refreshTokenRotationPolicy18Stage8 refreshTokenRotationPolicy18Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 22/25 worth 6: src/authentication-19.mjs refreshTokenRotationPolicy19Stage0 refreshTokenRotationPolicy19Stage1 refreshTokenRotationPolicy19Stage10 refreshTokenRotationPolicy19Stage11 refreshTokenRotationPolicy19Stage2 refreshTokenRotationPolicy19Stage3 refreshTokenRotationPolicy19Stage4 refreshTokenRotationPolicy19Stage5 refreshTokenRotationPolicy19Stage6 refreshTokenRotationPolicy19Stage7 refreshTokenRotationPolicy19Stage8 refreshTokenRotationPolicy19Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 23/25 worth 6: src/authentication-20.mjs refreshTokenRotationPolicy20Stage0 refreshTokenRotationPolicy20Stage1 refreshTokenRotationPolicy20Stage10 refreshTokenRotationPolicy20Stage11 refreshTokenRotationPolicy20Stage2 refreshTokenRotationPolicy20Stage3 refreshTokenRotationPolicy20Stage4 refreshTokenRotationPolicy20Stage5 refreshTokenRotationPolicy20Stage6 refreshTokenRotationPolicy20Stage7 refreshTokenRotationPolicy20Stage8 refreshTokenRotationPolicy20Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 24/25 worth 6: src/authentication-21.mjs refreshTokenRotationPolicy21Stage0 refreshTokenRotationPolicy21Stage1 refreshTokenRotationPolicy21Stage10 refreshTokenRotationPolicy21Stage11 refreshTokenRotationPolicy21Stage2 refreshTokenRotationPolicy21Stage3 refreshTokenRotationPolicy21Stage4 refreshTokenRotationPolicy21Stage5 refreshTokenRotationPolicy21Stage6 refreshTokenRotationPolicy21Stage7 refreshTokenRotationPolicy21Stage8 refreshTokenRotationPolicy21Stage9",
+        "     ranked by the task words against the import graph",
+        "cut FILES 25/25 worth 6: src/database-schema.mjs auditLogs",
+        "     ranked by the task words against the import graph",
+        "cut TESTS 1/2 worth 5: the index knows direct importers; `simt tests <path>` is the authority for multi-line and dynamic imports",
+        "     a cheap packet and an exact answer are different questions",
+        "cut TESTS 2/2 worth 5: src/authentication-00.mjs -> test/expired-sessions.test.mjs",
+        "     the test imports it, or sits beside it",
+        "cut DECISIONS 1/1 worth 4: ADR-002 — Authentication",
+        "     names src/authentication-00.mjs",
+        "cut SKILLS 1/1 worth 3: session-review — 512 B, keyword:authentication keyword:middleware keyword:and keyword:refresh keyword:token keyword:rotation summary:authentication summary:middleware summary:refresh summary:token summary:rotation stack:node",
+        "     `simt skills show session-review` reads the body",
+        "cut LESSONS 1/1 worth 2: 0001-expired-sessions — Cover expired sessions",
+        "     a lesson names a path this task will touch",
+        "cut CAUTIONS 1/1 worth 1: the index knows no test for src/authentication-01.mjs, docs/lessons/0001-expired-sessions.md",
+        "     `simt tests <path>` reads the blobs and may know one"
+      ],
+      "text": "TASK\n  kind refactor — the task matches /\\brefactor(?:s|ed|ing)?\\b/i\n  task Refactor the authentication middleware to support refresh token rotation, add unit tests for expired sessions, migrate database schema for audit logs, and document the new rate limits in the API guide\n  scope the whole repository\nCOMMANDS\n  test  npm run test\n  focused test (Node)  node --test {file}\nFILES\n  src/authentication-00.mjs refreshTokenRotationPolicy00Stage0 refreshTokenRotationPolicy00Stage1 refreshTokenRotationPolicy00Stage10 refreshTokenRotationPolicy00Stage11 refreshTokenRotationPolicy00Stage2 refreshTokenRotationPolicy00Stage3 refreshTokenRotationPolicy00Stage4 refreshTokenRotationPolicy00Stage5 refreshTokenRotationPolicy00Stage6 refreshTokenRotationPolicy00Stage7 refreshTokenRotationPolicy00Stage8 refreshTokenRotationPolicy00Stage9\n  src/authentication-01.mjs refreshTokenRotationPolicy01Stage0 refreshTokenRotationPolicy01Stage1 refreshTokenRotationPolicy01Stage10 refreshTokenRotationPolicy01Stage11 refreshTokenRotationPolicy01Stage2 refreshTokenRotationPolicy01Stage3 refreshTokenRotationPolicy01Stage4 refreshTokenRotationPolicy01Stage5 refreshTokenRotationPolicy01Stage6 refreshTokenRotationPolicy01Stage7 refreshTokenRotationPolicy01Stage8 refreshTokenRotationPolicy01Stage9\n  docs/lessons/0001-expired-sessions.md\n  src/authentication-02.mjs refreshTokenRotationPolicy02Stage0 refreshTokenRotationPolicy02Stage1 refreshTokenRotationPolicy02Stage10 refreshTokenRotationPolicy02Stage11 refreshTokenRotationPolicy02Stage2 refreshTokenRotationPolicy02Stage3 refreshTokenRotationPolicy02Stage4 refreshTokenRotationPolicy02Stage5 refreshTokenRotationPolicy02Stage6 refreshTokenRotationPolicy02Stage7 refreshTokenRotationPolicy02Stage8 refreshTokenRotationPolicy02Stage9\ncut 27 of 36 items to fit 2048: files 21, tests 2, decisions 1, skills 1, lessons 1, cautions 1",
+      "exitCode": 0
+    }
+  },
+  "map": {
+    "code": 0,
+    "payload": {
+      "schemaVersion": 1,
+      "ok": true,
+      "command": "map",
+      "level": "outline",
+      "budget": 2048,
+      "matched": 1,
+      "basis": "matched",
+      "freshness": "current",
+      "shown": 7,
+      "total": 7,
+      "truncated": false,
+      "files": [
+        {
+          "path": "README.md",
+          "rank": 0.073171
+        },
+        {
+          "path": "src/brief.mjs",
+          "rank": 0.02439
+        },
+        {
+          "path": "docs/decisions/ADR-001-ranking.md",
+          "rank": 0.02381
+        },
+        {
+          "path": "src/inventory.mjs",
+          "rank": 0.023256
+        },
+        {
+          "path": "src/dispatcher.mjs",
+          "rank": 0.022727
+        },
+        {
+          "path": "docs/decisions/ADR-002-auth.md",
+          "rank": 0.022222
+        },
+        {
+          "path": "docs/lessons/0001-expired-sessions.md",
+          "rank": 0.021739
+        }
+      ],
+      "text": "README.md\nsrc/brief.mjs\ndocs/decisions/ADR-001-ranking.md\nsrc/inventory.mjs\nsrc/dispatcher.mjs\ndocs/decisions/ADR-002-auth.md\ndocs/lessons/0001-expired-sessions.md",
+      "exitCode": 0
+    }
+  },
+  "impact": {
+    "code": 0,
+    "payload": {
+      "schemaVersion": 1,
+      "ok": true,
+      "command": "impact",
+      "file": "src/rank.mjs",
+      "symbol": "rankRecords",
+      "importers": [
+        "src/brief.mjs",
+        "src/dispatcher.mjs"
+      ],
+      "tests": [
+        "test/format.test.mjs",
+        "test/rank.test.mjs"
+      ],
+      "governs": [
+        {
+          "kind": "decision",
+          "id": "ADR-001",
+          "detail": "Ranking"
+        }
+      ],
+      "owners": [],
+      "consumers": [],
+      "truncated": false,
+      "exitCode": 0
+    }
+  },
+  "why": {
+    "code": 0,
+    "payload": {
+      "schemaVersion": 1,
+      "ok": true,
+      "command": "why",
+      "path": "src/rank.mjs",
+      "items": [
+        {
+          "kind": "decision",
+          "id": "ADR-001",
+          "detail": "Ranking"
+        },
+        {
+          "kind": "skill",
+          "id": "edge-storage",
+          "detail": "Edge worker storage"
+        },
+        {
+          "kind": "skill",
+          "id": "ranking",
+          "detail": "Ranking records"
+        },
+        {
+          "kind": "gate",
+          "id": "format",
+          "detail": "the hook owns format for staged files, so an author never commits unformatted work"
+        }
+      ],
+      "exitCode": 0
+    }
+  },
+  "gate": {
+    "code": 0,
+    "payload": {
+      "schemaVersion": 1,
+      "ok": true,
+      "command": "gate",
+      "selected": [],
+      "unmatched": [],
+      "graph": "resolved",
+      "verdict": "nothing-selected",
+      "code": 0,
+      "renames": [],
+      "deleted": [],
+      "exitCode": 0
+    }
+  },
+  "check": {
+    "code": 1,
+    "payload": {
+      "schemaVersion": 1,
+      "ok": false,
+      "command": "check",
+      "findings": [
+        {
+          "file": "AGENTS.md",
+          "status": "absent",
+          "detail": "no AGENTS.md; run: simt sync --yes"
+        }
+      ],
+      "exitCode": 1
+    }
+  }
+}

@@ -108,6 +108,7 @@ export const BOOL_FLAGS = new Set([
   // Off by default because a path is the change the caller named, and the diff
   // is a different question.
   'changed',
+  'with-knowledge',
   'staged',
   'public',
   // gate: treat an unproven selection as a failure. Off by default because the answer

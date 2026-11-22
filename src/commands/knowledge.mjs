@@ -32,7 +32,7 @@ import { rank as rankUnits } from '../knowledge/rank.mjs';
 import { regenerationCandidates } from '../knowledge/derivations.mjs';
 import { aggregate as aggregateDebt, coldStart as coldStartDebt, rank as rankDebt, weightSensitivity } from '../knowledge/debt.mjs';
 import { impactReport } from '../knowledge/impact.mjs';
-import { scopedImpact } from '../knowledge/local-impact.mjs';
+import { renderKnowledgeBridge, scopedUnifiedImpact } from '../index/unified-impact.mjs';
 import { extractDocument } from '../knowledge/sections.mjs';
 
 const WHY_USAGE = `run: ${CLI} knowledge why <claim-id> (--claims <file> | --scope <id>) [--limit <n>] [--page <n>]`;
@@ -433,16 +433,29 @@ export async function knowledgeCommand(sub, args, flags) {
     }
   }
   if (sub === 'impact' && (flags.changed === true || flags.scope !== undefined)) {
-    const usage = `run: ${CLI} knowledge impact --changed --scope <id>`;
-    if (args.length > 0 || flags.changed !== true || typeof flags.scope !== 'string' ||
+    const usage = `run: ${CLI} knowledge impact --changed [--scope <id>]`;
+    if (args.length > 0 || flags.changed !== true ||
         flags.input !== undefined || flags.refs !== undefined) {
-      return fail('scoped impact needs --changed and --scope without an explicit input or refs', EXIT.USAGE, usage);
+      return fail('change impact needs --changed without an explicit input or refs', EXIT.USAGE, usage);
+    }
+    if (flags.scope === undefined) {
+      try {
+        const { impactFacts } = await import('./impact.mjs');
+        const { root, knowledge, targets, importers, tests, tiers, conservativeFallback, truncated } =
+          await impactFacts(commandRoot(flags), [], { changed: true, withKnowledge: true });
+        const payload = { ok: true, command: 'knowledge impact', root,
+          code: { targets, importers, tests, tiers, conservativeFallback, truncated }, ...(knowledge ? { knowledge } : {}) };
+        present(payload, () => [...renderCodeImpact(payload.code), ...(knowledge ? renderKnowledgeBridge(knowledge) : [])].join('\n'), flags);
+        return EXIT.OK;
+      } catch (error) {
+        return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy ?? usage);
+      }
     }
     const declared = await declaredScope(flags, 'inspect');
     if (declared.error !== undefined) return fail(declared.error.message, declared.error.exit, declared.error.remedy);
     let report;
     try {
-      report = await scopedImpact({ ...declared, limit: flags.limit });
+      report = await scopedUnifiedImpact({ ...declared, limit: flags.limit });
     } catch (error) {
       return fail(`could not inspect the scoped change: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
     }
@@ -896,7 +909,17 @@ function renderImpact(payload) {
   for (const entry of payload.excluded ?? []) lines.push(`excluded   ${entry.id ?? entry.ref}  ${entry.reason ?? 'excluded'}`);
   for (const reason of payload.reasons ?? []) lines.push(`because    ${reason}`);
   if (payload.truncated) lines.push('truncated  1: the bound was reached, so verify conservatively');
+  if (payload.code) lines.push(...renderCodeImpact(payload.code));
+  for (const { id } of payload.verification?.obligations ?? []) lines.push(`verification  ${id}`);
   return lines.join('\n');
+}
+
+function renderCodeImpact({ targets, importers, tests }) {
+  return [
+    ...(targets.length ? targets.map(({ file, symbol }) => `code file  ${file}${symbol ? '#' + symbol : ''}`) : ['no changed files']),
+    ...importers.map((path) => `code importer  ${path}`),
+    ...tests.map((path) => `code test  ${path}`),
+  ];
 }
 
 function renderSections(payload) {

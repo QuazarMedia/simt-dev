@@ -33,7 +33,7 @@ async function worktreeChanges(root) {
 }
 
 function candidatePaths(changes, policy) {
-  return filterAllowed(changes.filter(({ path }) => safePath(path)), policy).allowed;
+  return filterAllowed(changes.filter(({ path }) => safePath(path) && (policy?.allows?.(path) ?? true)), policy).allowed;
 }
 
 /** For readers that only need to identify a live path, with no content reads. */

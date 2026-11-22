@@ -254,3 +254,4 @@ in [architecture/history.md](architecture/history.md).
 | [243](decisions/ADR-243-impact-follows-bound-symbols-and-ranks-direct-dependents-first.md) | Impact follows bound symbols and ranks direct dependents first | accepted · 2026-11-22 · supersedes ADR-096 ruling 1 · supersedes ADR-096 ruling 2 |
 | [244](decisions/ADR-244-impact-combines-git-hunks-and-typed-dependency-evidence.md) | Impact combines Git hunks and typed dependency evidence | accepted · 2026-11-22 |
 | [245](decisions/ADR-245-precise-test-selection-requires-bound-git-hunks.md) | Precise test selection requires bound Git hunks | accepted · 2026-11-22 |
+| [246](decisions/ADR-246-code-and-knowledge-impact-join-by-exact-artifact-identity.md) | Code and knowledge impact join by exact artifact identity | accepted · 2026-11-22 |

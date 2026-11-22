@@ -61,6 +61,7 @@ export const output = {
       testTiers: { type: 'object' },
       cochange: { type: 'array', items: { type: 'object' } },
       conceptual: { type: 'array', items: { type: 'object' } },
+      knowledge: { type: 'object' },
     },
     required: ['root', 'file', 'symbol', 'importers', 'tests', 'governs', 'owners', 'consumers', 'truncated'],
   },

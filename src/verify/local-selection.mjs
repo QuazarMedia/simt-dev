@@ -29,34 +29,38 @@ function typedKinds(text, kind, gone) {
   return kinds;
 }
 
-async function codeClosure({ root, paths, indexed, read, work, scope, live }) {
+async function codeClosure({ root, paths, indexed, read, work, scope, live, imports }) {
   const sourcePaths = paths.filter((path) => langOf(path, root) !== '');
   if (sourcePaths.length === 0) return new Map();
-  const entries = [];
   const allowed = (path) => {
     const owner = resolveScope(work.scopes, path);
     return !denied(path) && !owner.ignored && (owner.scope === scope.id || owner.error?.kind === 'none');
   };
-  for (const path of new Set([...indexed.keys(), ...sourcePaths])) {
-    if (!allowed(path)) continue;
-    const lang = langOf(path, root);
-    if (lang === '') continue;
-    entries.push({ path, lang, text: await read(path) ?? '' });
+  if (imports) {
+    imports = imports.filter(({ src, dst }) => allowed(src) && allowed(dst));
+  } else {
+    const entries = [];
+    for (const path of new Set([...indexed.keys(), ...sourcePaths])) {
+      if (!allowed(path)) continue;
+      const lang = langOf(path, root);
+      if (lang === '') continue;
+      entries.push({ path, lang, text: await read(path) ?? '' });
+    }
+    imports = importEdges(entries);
   }
-  const imports = importEdges(entries);
   return new Map(sourcePaths.map((path) => [
     path, coverage({ imports }, [path], { root }).filter(live),
   ]));
 }
 
-export async function selectLocalVerification(inputRoot, { scopeId, staged = false, extraPaths = [] }) {
+export async function selectLocalVerification(inputRoot, { scopeId, staged = false, extraPaths = [], changes, imports, work }) {
   const root = await realpath(inputRoot);
-  const work = await readWork(root);
+  work ??= await readWork(root);
   if (!work.ok) return { error: work.problems[0].message, remedy: work.problems[0].remedy };
   const scope = work.scopes.find(({ id }) => id === scopeId);
   if (scope === undefined) return { error: `no declared work scope ${scopeId}`, remedy: 'run simt work inspect to see the declared scopes' };
 
-  const changes = await readChanges(root, { staged });
+  changes ??= await readChanges(root, { staged });
   const index = await gitPaths(root, ['ls-files', '--stage']);
   const indexed = new Map();
   for (const row of index) {
@@ -87,7 +91,7 @@ export async function selectLocalVerification(inputRoot, { scopeId, staged = fal
     if (staged) return git(root, ['cat-file', 'blob', indexed.get(path)], { allowFailure: true, maxBuffer: 256 * 1024 });
     return (await readLocalBytes(root, path))?.toString('utf8') ?? null;
   };
-  const closures = await codeClosure({ root, paths, indexed, read, work, scope, live });
+  const closures = await codeClosure({ root, paths, indexed, read, work, scope, live, imports: staged ? undefined : imports });
   const obligations = [];
   for (const path of paths) {
     const tests = closures.get(path) ?? [];

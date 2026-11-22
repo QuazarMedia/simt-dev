@@ -30,7 +30,7 @@ export const PROMPT_CAP_BYTES = 2048;
  * The order is fixed and identical in every packet. A reader who has to search for the
  * command is paying the cost the packet exists to remove.
  */
-export const SECTIONS = ['TASK', 'ADVICE', 'COMMANDS', 'KNOWLEDGE', 'FILES', 'TESTS', 'DECISIONS', 'FEDERATION', 'SKILLS', 'LESSONS', 'CAUTIONS'];
+export const SECTIONS = ['TASK', 'SUBTASKS', 'ADVICE', 'COMMANDS', 'KNOWLEDGE', 'FILES', 'TESTS', 'DECISIONS', 'FEDERATION', 'SKILLS', 'LESSONS', 'CAUTIONS'];
 
 /**
  * What each section is worth when something has to go.
@@ -63,6 +63,7 @@ const SECTION_VALUE = {
   FILES: 6,
   COMMANDS: 7,
   TASK: 8,
+  SUBTASKS: 8,
 };
 
 /**
@@ -137,7 +138,7 @@ function cutOrder(items) {
  * decide whether to ask for more — and a packet that shrank without saying so is the
  * failure this command was written to avoid.
  */
-function renderPacket(items, { cut = new Set(), budget = DEFAULT_BRIEF_BYTES } = {}) {
+export function packetLines(items, cut = new Set()) {
   const lines = [];
   for (const section of SECTIONS) {
     const kept = items.filter((item) => item.section === section && !cut.has(item.id));
@@ -145,6 +146,11 @@ function renderPacket(items, { cut = new Set(), budget = DEFAULT_BRIEF_BYTES } =
     lines.push(section);
     for (const item of kept) for (const line of item.text.split('\n')) lines.push(`  ${line}`);
   }
+  return lines;
+}
+
+function renderPacket(items, { cut = new Set(), budget = DEFAULT_BRIEF_BYTES } = {}) {
+  const lines = packetLines(items, cut);
   const lost = items.filter((item) => cut.has(item.id));
   if (lost.length > 0) {
     const where = SECTIONS.filter((section) => lost.some((item) => item.section === section)).map(

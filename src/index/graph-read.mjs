@@ -121,3 +121,24 @@ export async function readLiveSnapshot(root, { text, fielded, binding, tree, bin
     error,
   };
 }
+
+export async function readCochangeBasis(root) {
+  const { rows, error } = await readSqliteRows(root,
+    "select key, value from meta where key in ('last_cochange_sha', 'cochange_commits')");
+  if (error) return null;
+  const values = new Map(rows.map(({ key, value }) => [key, value]));
+  if (!values.has('last_cochange_sha') || !values.has('cochange_commits')) return null;
+  try {
+    const commits = JSON.parse(values.get('cochange_commits'));
+    return Array.isArray(commits) ? { head: values.get('last_cochange_sha'), commits } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function readCochange(root) {
+  const { rows, error } = await readSqliteRows(root,
+    "select src_path as src, dst_path as dst, 'cochange' as kind, confidence, confidence as weight, "
+      + 'lift, support, decayed_weight as decayedWeight from cochange order by src_path, confidence desc, lift desc, support desc, dst_path');
+  return withReadError(rows, error?.message?.includes('no such table: cochange') ? null : error);
+}

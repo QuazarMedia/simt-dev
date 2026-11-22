@@ -42,6 +42,7 @@ export async function mapCommand(args, flags) {
       text: !experimental && searching,
       fielded: experimental && searching,
       binding: experimental && searching,
+      cochange: experimental && searching,
       embed: flags.embed === true,
     });
     if (loaded.broken) throw new Error(loaded.indexError?.message ?? 'the index cannot be read');

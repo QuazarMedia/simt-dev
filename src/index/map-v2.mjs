@@ -48,7 +48,7 @@ export function prepareMapStructure(graph) {
     values.push(key);
     byName.set(name, values);
   }
-  const cochange = graph.edges.filter(({ kind }) => kind === 'cochange')
+  const cochange = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')]
     .map(({ src, dst, weight }) => ({ src: 'file:' + src, dst: 'file:' + dst, kind: 'cochange', weight }));
   return { nodes, byName, links: directionalGraph([...edges, ...cochange]) };
 }
@@ -164,7 +164,7 @@ export async function rankMapV2(root, graph, task, { explain = false, queryVecto
       ...row, score: row.score / high + (phrases.get(row.path)?.score ?? 0), phrase: phrases.get(row.path)?.phrase ?? [],
     }));
   }).sort(byScore).slice(0, LIMIT);
-  const changes = graph.edges.filter(({ kind }) => kind === 'cochange').sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
+  const changes = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')].sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
   const lists = [
     { id: 'entity', weight: 3, items: exact },
     { id: 'bm25f', weight: 2, items: lexical },

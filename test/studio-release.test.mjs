@@ -21,7 +21,7 @@ import { DISPOSITIONS, NAMED_SURFACES } from '../src/surface.mjs';
 
 const exec = promisify(execFile);
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const STUDIO_SHA = '45b5298';
+const STUDIO_SHA = 'b1711fb';
 const QUALIFIED = ['test/fixtures/studio/qualification-document.json', 'test/fixtures/studio/qualification-code.json'];
 const URL_LINE = /open (http:\/\/127\.0\.0\.1:(\d+)\/\?token=(\S+))/;
 const NO_ESTATE = Object.fromEntries(Object.entries({ ...process.env, SIMT_DEV_WORKSPACE: 'off' }).filter(([name]) => !/^npm_config_/i.test(name)));
@@ -40,14 +40,14 @@ function post(port, path, body, cookie) {
     const request = httpRequest({ host: '127.0.0.1', port, path, method: 'POST', headers: { cookie, 'content-type': 'application/json', 'content-length': Buffer.byteLength(JSON.stringify(body)) } }, (res) => {
       let text = '';
       res.on('data', (chunk) => { text += chunk; });
-      res.on('end', () => resolvePromise({ status: res.statusCode, headers: res.headers, body: text }));
+      res.on('end', () => resolvePromise({ status: res.statusCode, body: text }));
     });
     request.on('error', reject);
     request.end(JSON.stringify(body));
   });
 }
 
-async function installedStudio(bin, cwd, onRequest) {
+async function installedStudio(bin, cwd) {
   const child = spawn(bin, ['studio', '--no-open', '--port', '0'], { cwd, env: NO_ESTATE, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   let err = '';
@@ -68,8 +68,6 @@ async function installedStudio(bin, cwd, onRequest) {
   const exchange = await httpReq(started.port, { path: `/?token=${started.token}` });
   assert.equal(exchange.status, 303, exchange.body);
   const cookie = exchange.headers['set-cookie'][0].split(';')[0];
-  const original = await httpReq(started.port, { path: '/', headers: { cookie } });
-  if (onRequest) onRequest(original);
   return {
     ...started,
     cookie,

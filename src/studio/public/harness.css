@@ -1,1 +1,43 @@
-.harness-intro{margin-top:0;}.harness-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(16rem,1fr));gap:0.75rem;margin-top:0.75rem;}.harness-tile{padding:0.75rem;border:1px solid var(--line);border-left:3px solid var(--dim);border-radius:var(--radius);background:var(--bg);}.harness-head{display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem;}.harness-head h3{margin:0;font-size:0.95rem;}.harness-id{margin:0.35rem 0;color:var(--dim);}.harness-detection-only{border-left-color:var(--dim);}.harness-present{border-left-color:var(--ok);}.harness-untrusted{border-left-color:var(--warn);}.harness-drift,.harness-unreadable{border-left-color:var(--bad);}.harness-absent{border-left-color:var(--warn);}.harness-mcp{border-left-color:var(--accent);}.harness-none,.harness-other,.harness-skipped{border-left-color:var(--line);}.harness-feed{list-style:none;margin:0;padding:0;}.harness-event{display:flex;flex-wrap:wrap;gap:0.4rem;align-items:baseline;padding:0.45rem 0;border-bottom:1px solid var(--line);}.harness-verdict{font-weight:700;}.harness-deny .harness-verdict{color:var(--bad);}.harness-allow .harness-verdict{color:var(--ok);}.harness-rules{color:var(--dim);}.harness-message{flex-basis:100%;margin:0.25rem 0 0;font-size:0.8rem;}.harness-policies{margin:0;padding-left:1.1rem;}.harness-policy{margin-bottom:0.7rem;}.harness-policy p{margin:0.2rem 0;}
+/* The Harness wall: detection tiles, hook state, and the live policy feed. */
+
+.harness-intro { margin-top: 0; }
+.harness-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+.harness-tile {
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--dim);
+  border-radius: var(--radius);
+  background: var(--bg);
+}
+.harness-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.harness-head h3 { margin: 0; font-size: 0.95rem; }
+.harness-id { margin: 0.35rem 0; color: var(--dim); }
+.harness-detection-only { border-left-color: var(--dim); }
+.harness-present { border-left-color: var(--ok); }
+.harness-untrusted { border-left-color: var(--warn); }
+.harness-drift, .harness-unreadable { border-left-color: var(--bad); }
+.harness-absent { border-left-color: var(--warn); }
+.harness-mcp { border-left-color: var(--accent); }
+.harness-none, .harness-other, .harness-skipped { border-left-color: var(--line); }
+.harness-feed { list-style: none; margin: 0; padding: 0; }
+.harness-event {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: baseline;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.harness-verdict { font-weight: 700; }
+.harness-deny .harness-verdict { color: var(--bad); }
+.harness-allow .harness-verdict { color: var(--ok); }
+.harness-rules { color: var(--dim); }
+.harness-message { flex-basis: 100%; margin: 0.25rem 0 0; font-size: 0.8rem; }
+.harness-policies { margin: 0; padding-left: 1.1rem; }
+.harness-policy { margin-bottom: 0.7rem; }
+.harness-policy p { margin: 0.2rem 0; }

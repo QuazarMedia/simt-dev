@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import { simt } from './fixture.mjs';
 import { fixtureRepo, httpReq, session, startStudio, treeDigest } from './studio-fixture.mjs';
 import { calibrationView, bench, barChart, replayView } from '../src/studio/public/bench.js';
-import { benchInput, benchPayload } from '../src/studio/bench.mjs';
+import { benchPayload } from '../src/studio/bench.mjs';
 
 async function vault(files) {
   const root = await realpath(await fixtureRepo());
@@ -43,7 +43,7 @@ test('the report payload equals `bench report --json` and names the failing task
   assert.match(html, /data-failing-task="task-one"/);
   assert.match(html, /task-one/);
   assert.match(html, /resolved share by arm/);
-  assert.match(html, /<svg/);
+  assert.match(html, /<progress/);
 });
 
 test('a comparison renders paired deltas and the verdict verbatim', async () => {
@@ -63,7 +63,7 @@ test('a comparison renders paired deltas and the verdict verbatim', async () => 
   assert.deepEqual(payload, JSON.parse(cli.stdout));
   const html = bench(payload);
   assert.match(html, /Comparison: kernel vs bare/);
-  assert.match(html, /paired-bar/);
+  assert.match(html, /data-delta="resolved"/);
   assert.match(html, new RegExp(`data-delta="resolved"[\\s\\S]*${Number(payload.comparison.deltas.R).toFixed(3)}`));
   assert.match(html, new RegExp(payload.comparison.verdict));
 });
@@ -115,9 +115,9 @@ test('the bench routes serve the CLI documents and an offline input reads inside
 });
 
 test('the bar chart scales a share to the bar and an unmeasured recall is labelled', () => {
-  const svg = barChart('resolved', [{ label: 'a', value: 0.5 }]);
-  assert.match(svg, /width="95"/);
-  assert.match(svg, /50\.0%/);
+  const bars = barChart('resolved', [{ label: 'a', value: 0.5 }]);
+  assert.match(bars, /<progress max="1" value="0.5">/);
+  assert.match(bars, /50\.0%/);
   const html = bench({ ok: true, runCount: 0, pricesLoaded: false, arms: [], failures: [], mapRecall: { measured: false, reason: 'not run' } });
   assert.match(html, /Unmeasured/);
   assert.match(html, /not run/);

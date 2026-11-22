@@ -3,7 +3,7 @@
   "fixture": "document-corpus",
   "install": "npm-packed-tarball",
   "standalone": true,
-  "qualifiedSha": "45b5298",
+  "qualifiedSha": "b1711fb",
   "steps": [
     "studio opens on a loopback token exchange",
     "overview answers /api/status",
@@ -14,7 +14,7 @@
   ],
   "requests": ["/", "/api/status", "/api/helm", "/api/control", "/api/control/preview", "/api/control/apply"],
   "externalRequests": [],
-  "assets": { "files": 29, "bytes": 122682, "limitBytes": 122880 },
+  "assets": { "files": 25, "bytes": 122573, "limitBytes": 122880 },
   "keyboardWalkthrough": "recorded by the release review, both themes",
   "passed": true
 }

@@ -12,7 +12,7 @@ import { realpath } from 'node:fs/promises';
 import { simt } from './fixture.mjs';
 import { fixtureRepo, httpReq, session, startStudio, treeDigest } from './studio-fixture.mjs';
 import { catalogHtml, filterLibrary, formatBytes, lessonShelfHtml, skillPane } from '../src/studio/public/library.js';
-import { libraryPayload, librarySkill } from '../src/studio/library.mjs';
+import { librarySkill } from '../src/studio/library.mjs';
 
 const PAYLOAD = {
   ok: true,
@@ -79,17 +79,10 @@ test('the reading pane is the body skills show returned, escaped', () => {
 test('the library route serves both CLI documents and writes nothing', async (t) => {
   const root = await realpath(await fixtureRepo());
   const before = await treeDigest(root);
-  const payload = await libraryPayload(root);
   const lessons = await simt(['lessons', 'list', '--json'], { cwd: root });
   const skills = await simt(['skills', 'index', '--json'], { cwd: root });
   assert.equal(lessons.code, 0, lessons.stderr);
   assert.equal(skills.code, 0, skills.stderr);
-  assert.deepEqual(payload.lessons, JSON.parse(lessons.stdout));
-  // The workspace label is resolved from the process that asks; the catalog itself is
-  // the registry's answer, and that is what the view copies.
-  assert.deepEqual(payload.skills.skills, JSON.parse(skills.stdout).skills);
-  assert.equal(payload.skills.command, 'skills index');
-  assert.equal(await treeDigest(root), before);
 
   const studio = await startStudio(root);
   t.after(() => studio.stop());
@@ -97,8 +90,12 @@ test('the library route serves both CLI documents and writes nothing', async (t)
   const route = await httpReq(studio.port, { path: '/api/library', headers: { cookie } });
   assert.equal(route.status, 200, route.body);
   const served = JSON.parse(route.body);
-  assert.deepEqual(served.lessons, payload.lessons);
+  assert.deepEqual(served.lessons, JSON.parse(lessons.stdout));
+  // The workspace label is resolved from the process that asks; the catalog itself is
+  // the registry's answer, and that is what the view copies.
   assert.deepEqual(served.skills.skills, JSON.parse(skills.stdout).skills);
+  assert.equal(served.skills.command, 'skills index');
+  assert.equal(await treeDigest(root), before);
 
   const name = served.skills.skills[0].name;
   const pane = await httpReq(studio.port, { path: `/api/library/skill?name=${encodeURIComponent(name)}`, headers: { cookie } });

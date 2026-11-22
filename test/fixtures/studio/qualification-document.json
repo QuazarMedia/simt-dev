@@ -3,7 +3,7 @@
   "fixture": "document-corpus",
   "install": "npm-packed-tarball",
   "standalone": true,
-  "qualifiedSha": "a764c8a",
+  "qualifiedSha": "f6760f1",
   "steps": [
     "studio opens on a loopback token exchange",
     "overview answers /api/status",

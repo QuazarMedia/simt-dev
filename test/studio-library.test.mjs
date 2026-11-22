@@ -66,7 +66,7 @@ test('byte labels are the registry bytes, and the catalog names the deferred fla
 });
 
 test('the reading pane is the body skills show returned, escaped', () => {
-  const html = skillPane({ ok: true, bodyFrom: 'repo', body: 'SKILL.md', skill: { name: 'alpha', bytes: 2048, summary: 'first' }, bodyText: '<script>alert(1)</script>\nbody' });
+  const html = skillPane({ ok: true, name: 'alpha', bytes: 2048, summary: 'first', bodyFrom: 'repo', body: 'SKILL.md', bodyText: '<script>alert(1)</script>\nbody' });
   assert.match(html, /alpha/);
   assert.match(html, /2048 B/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;\nbody/);
@@ -74,6 +74,20 @@ test('the reading pane is the body skills show returned, escaped', () => {
   const refused = skillPane({ ok: false, error: 'no skill', remedy: 'choose one' });
   assert.match(refused, /Refused/);
   assert.match(refused, /no skill/);
+});
+
+test('the reading pane reads the top-level metadata the skill route returns', async () => {
+  const root = await fixtureRepo();
+  const skills = await simt(['skills', 'index', '--json'], { cwd: root });
+  assert.equal(skills.code, 0, skills.stderr);
+  const name = JSON.parse(skills.stdout).skills[0].name;
+  const payload = await librarySkill(root, name);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.skill, undefined, 'the route sends the skill fields at the top level');
+  const html = skillPane(payload);
+  assert.ok(html.includes(`<h2>${payload.name}</h2>`), html);
+  assert.ok(html.includes(formatBytes(payload.bytes)), html);
+  assert.ok(html.includes(payload.summary), html);
 });
 
 test('the library route serves both CLI documents and writes nothing', async (t) => {
@@ -104,6 +118,13 @@ test('the library route serves both CLI documents and writes nothing', async (t)
   assert.equal(shown.code, 0, shown.stderr);
   assert.deepEqual(JSON.parse(pane.body), JSON.parse(shown.stdout));
   assert.equal(JSON.parse(pane.body).bodyText, JSON.parse(shown.stdout).bodyText);
+  // The route is `skills show --json`: its metadata is top-level, and the pane must
+  // render that shape rather than a nested `skill` object the route never sends.
+  const panePayload = JSON.parse(pane.body);
+  const paneHtml = skillPane(panePayload);
+  assert.ok(paneHtml.includes(`<h2>${panePayload.name}</h2>`), paneHtml);
+  assert.ok(paneHtml.includes(formatBytes(panePayload.bytes)), paneHtml);
+  assert.doesNotMatch(paneHtml, /<h2>skill<\/h2>/);
 });
 
 test('a skill request without a name is a refusal, not an empty pane', async () => {

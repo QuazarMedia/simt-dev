@@ -95,7 +95,7 @@ export function library(payload) {
 /** One skill body, in the pane, exactly as `skills show --json` returned it. */
 export function skillPane(payload) {
   if (!payload?.ok) return refusalPanel(payload ?? { ok: false });
-  const skill = payload.skill ?? {};
+  const skill = payload;
   return `<article class="card skill-reading">
     <header><h2>${escapeHtml(skill.name ?? 'skill')}</h2>${payload.bodyFrom ? badge(payload.bodyFrom, 'neutral') : ''}</header>
     <p class="computed">${escapeHtml(formatBytes(skill.bytes))}${skill.deferred ? ' · deferred' : ''}</p>

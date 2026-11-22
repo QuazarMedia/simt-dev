@@ -238,3 +238,4 @@ in [architecture/history.md](architecture/history.md).
 | [227](decisions/ADR-227-control-is-the-writers-preview-confirmed-by-digest.md) | Control is the writer's preview, confirmed by digest | accepted · 2026-11-22 |
 | [228](decisions/ADR-228-the-studio-is-qualified-from-a-packed-install.md) | the studio is qualified from a packed install | accepted · 2026-11-22 |
 | [229](decisions/ADR-229-a-read-waits-for-a-transient-index-write-and-then-names-it.md) | a read waits for a transient index write, then names it | accepted · 2026-11-22 |
+| [230](decisions/ADR-230-a-commit-message-carries-what-the-diff-cannot.md) | a commit message carries what the diff cannot | accepted · 2026-11-22 |

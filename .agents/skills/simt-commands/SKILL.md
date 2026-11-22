@@ -21,7 +21,7 @@ add `--yes` and hope.
 
 ### Read-only commands (no flag needed)
 
-`brief`, `why`, `tests`, `gate`, `impact`, `map`, `check`, `status`,
+`brief`, `why`, `tests`, `gate`, `impact`, `map`, `check`, `status`, `studio`,
 `plan status|next`, `rules *`, `agents status`, `agent-hooks status`,
 `hooks status`, `evidence`, `evidence check`, `evidence validate`,
 `pr-body`, `explain`, `graph lint`,
@@ -75,6 +75,7 @@ Pick the command by what you need, not by what you remember:
 | Claim files for a session | `simt lease [<paths>...] --yes` | TTL; pre-edit hook refuses |
 | Measure token cost | `simt tokens` | Bytes a reader loads at session start |
 | Snapshot the repository | `simt status` | `--line` prints the last check's line |
+| Open the local dashboard | `simt studio` | Loopback only; Ctrl-C stops it and nothing is written |
 | Check what a commit claims | `simt evidence check <msg-file>` | A run this tree does not have |
 | Compare sibling repositories | `simt compare` | Adoption and drift matrix |
 | Check local model endpoints | `simt local doctor` | `--allow-remote` to probe |

@@ -965,10 +965,18 @@ beside the evidence that chose it. The row's accept figure (20% fewer turns, 15%
 against the kernel arm, at no loss of resolved rate) is **unmeasured**: it needs a bench run
 plus an installed agent CLI, and no harness is on this machine (`claude`, `codex`,
 `cursor-agent`, `gemini`, `aider` are all absent from `PATH`) — the same gap R15 records.
-`skills brief` and MCP's `skills_brief` keep their own contract: superseding them changes
-two accepted decisions (ADR-035 ruling 5 documents the no-input caveat, ADR-052 the
-`--skill` and budget behaviour) and the shape of an MCP output schema, and this row declares
-no ADR, so that retirement is left to a slice that carries one. What the packet does not do
+`skills brief` and MCP's `skills_brief` kept their own contract while this row was open:
+superseding them changes two accepted decisions (ADR-035 ruling 5 documents the no-input
+caveat, ADR-052 the `--skill` and budget behaviour) and the shape of an MCP output schema,
+and this row declared no ADR, so the retirement was deferred to a slice that carried one.
+**That deferred retirement landed in `91f4cbc` under ADR-226**: `skills brief`, its
+`skills select` alias and MCP's `skills_brief` are one view of `brief --only skills`, and
+the v1 engine, `selectWithinBudget` and the second output schema are gone. The view is
+pinned by `node --test test/mcp.test.mjs` (the two surfaces at budgets 1,024 and 0),
+`node --test test/parity.test.mjs` (the same document on both), `node --test
+test/mcp-session.test.mjs` (schema and the cold-index remedy), and `node --test
+test/resolve.test.mjs test/workspace.test.mjs` (no body is inlined; `skills show` reads it).
+What the packet does not do
 is deliberate too: the TESTS section lists what the index already knows, because a brief is
 delivered on every prompt submit and R29's bar is 300 ms — `simt tests <path>` remains the
 authority for multi-line and dynamic imports, and the packet names it.

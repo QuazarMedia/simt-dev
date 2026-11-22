@@ -73,6 +73,23 @@ function refusal(res, status, error, remedy) {
   res.end(body);
 }
 
+/** One bounded JSON body, read only for the two control routes. */
+async function controlBody(req) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > 1024 * 1024) throw new Error('the control body is over the 1 MiB bound');
+    chunks.push(chunk);
+  }
+  if (chunks.length === 0) return {};
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch (error) {
+    throw new Error(`the control body is not JSON (${error.message})`);
+  }
+}
+
 /**
  * Start the studio server on the loopback interface.
  *
@@ -97,8 +114,9 @@ export async function startStudioServer({ port = STUDIO_DEFAULT_PORT, root } = {
     if (origin !== undefined && origin !== `http://${authority}` && origin !== `http://localhost:${boundPort}`) {
       return refusal(res, 403, 'STUDIO_FOREIGN_ORIGIN', 'requests must come from the studio page itself');
     }
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      return refusal(res, 405, 'STUDIO_READ_ONLY', 'the studio reads; no route accepts a write');
+    const controlPost = req.method === 'POST' && String(req.url ?? '').startsWith('/api/control/');
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !controlPost) {
+      return refusal(res, 405, 'STUDIO_READ_ONLY', 'the studio reads; only /api/control accepts a write');
     }
 
     const url = new URL(req.url, `http://${authority}`);
@@ -137,15 +155,23 @@ export async function startStudioServer({ port = STUDIO_DEFAULT_PORT, root } = {
     }
 
     if (url.pathname.startsWith('/api/')) {
+      let body = null;
+      if (req.method === 'POST') {
+        try {
+          body = await controlBody(req);
+        } catch (error) {
+          return refusal(res, 400, 'STUDIO_CONTROL_BODY', error.message);
+        }
+      }
       let answer;
       try {
-        answer = await apiAnswer(root, url);
+        answer = await apiAnswer(root, url, body);
       } catch (error) {
         return refusal(res, 500, 'STUDIO_API_FAILED', `the read failed: ${error.message}`);
       }
-      const body = JSON.stringify(answer.document);
+      const answerBody = JSON.stringify(answer.document);
       res.writeHead(answer.status, { ...SECURITY_HEADERS, 'content-type': 'application/json; charset=utf-8' });
-      return res.end(req.method === 'HEAD' ? undefined : body);
+      return res.end(req.method === 'HEAD' ? undefined : answerBody);
     }
 
     let rel;

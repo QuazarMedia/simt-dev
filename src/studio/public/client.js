@@ -11,16 +11,7 @@ export class DoorRefusal extends Error {
   }
 }
 
-export async function readDoor(path) {
-  let res;
-  try {
-    res = await fetch(path, { headers: { accept: 'application/json' } });
-  } catch {
-    throw new DoorRefusal(
-      { ok: false, error: 'the studio socket did not answer', remedy: 'check the terminal that started the studio; restart it if it stopped' },
-      0,
-    );
-  }
+async function answerOf(res) {
   let payload = null;
   try {
     payload = await res.json();
@@ -34,4 +25,31 @@ export async function readDoor(path) {
     throw new DoorRefusal({ ok: false, error: 'the studio answered with a body that is not JSON', remedy: 'restart the studio; the shell and its server ship together' }, res.status);
   }
   return payload;
+}
+
+export async function postDoor(path, body) {
+  let res;
+  try {
+    res = await fetch(path, {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    });
+  } catch {
+    throw new DoorRefusal({ ok: false, error: 'the studio socket did not answer', remedy: 'check the terminal that started the studio; restart it if it stopped' }, 0);
+  }
+  return answerOf(res);
+}
+
+export async function readDoor(path) {
+  let res;
+  try {
+    res = await fetch(path, { headers: { accept: 'application/json' } });
+  } catch {
+    throw new DoorRefusal(
+      { ok: false, error: 'the studio socket did not answer', remedy: 'check the terminal that started the studio; restart it if it stopped' },
+      0,
+    );
+  }
+  return answerOf(res);
 }

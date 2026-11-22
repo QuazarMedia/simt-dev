@@ -12,6 +12,7 @@ import { run, renderJson } from '../run.mjs';
 import { checkRepo } from '../commands/sync.mjs';
 import { boardPayload } from './board.mjs';
 import { evidenceChains } from './evidence.mjs';
+import { CONTROL_ALLOWLIST, controlApply, controlPreview } from './control.mjs';
 import { HELM_UNRUNNABLE, helmCatalog, helmRow } from './helm.mjs';
 import { harnessPayload } from './harness.mjs';
 import { knowledgeGraph } from './knowledge.mjs';
@@ -67,9 +68,35 @@ function denied(status, error, remedy) {
  *
  * @param {string} root the repository the studio was opened on
  * @param {URL} url the request URL, already parsed against the loopback authority
+ * @param {object} [body] the JSON body of a control request
  * @returns {Promise<{status: number, document: object}>}
  */
-export async function apiAnswer(root, url) {
+export async function apiAnswer(root, url, body = null) {
+  if (url.pathname === '/api/control') {
+    const document = await sealedDocument('control', async () => {
+      emitJson({ ok: true, command: 'control', root, commands: CONTROL_ALLOWLIST });
+      return EXIT.OK;
+    });
+    return { status: 200, document };
+  }
+
+  if (url.pathname === '/api/control/preview' || url.pathname === '/api/control/apply') {
+    const action = url.pathname.endsWith('/preview') ? 'preview' : 'apply';
+    const payload = action === 'preview' ? await controlPreview(root, body) : await controlApply(root, body);
+    const status = payload.ok
+      ? 200
+      : payload.error === 'the write plan changed after preview'
+        ? 409
+        : /allowlist/.test(payload.error ?? '')
+          ? 403
+          : 400;
+    const document = await sealedDocument(`control ${action}`, async () => {
+      emitJson({ ...payload, command: `control ${action}` });
+      return payload.ok ? EXIT.OK : EXIT.FAIL;
+    });
+    return { status, document };
+  }
+
   const route = ROUTES.get(url.pathname);
   if (!route) {
     return denied(404, 'STUDIO_UNKNOWN_ROUTE', `the studio serves ${[...ROUTES.keys()].join(', ')}`);

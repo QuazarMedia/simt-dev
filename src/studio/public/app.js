@@ -6,6 +6,7 @@
 import { readDoor } from './client.js';
 import { badge, card, emptyState, escapeHtml, loading, refusalPanel } from './components.js';
 import { board } from './board.js';
+import { controlRoom } from './control-room.js';
 import { budget, sessionPathError } from './budget.js';
 import { constellation, layoutGraph, rankPanel, whyPanel } from './constellation.js';
 import { custody } from './custody.js';
@@ -374,6 +375,7 @@ const routes = new Map([
   ['/harness', { view: harnessRoom }],
   ['/budget', { view: budgetRoom }],
   ['/helm', { view: helmRoom }],
+  ['/control', { view: controlRoom }],
   ['/library', { view: later('Library') }],
   ['/bench', { view: later('Bench') }],
 ]);

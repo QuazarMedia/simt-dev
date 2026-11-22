@@ -1,6 +1,7 @@
 import { BM25F_FIELDS } from './bm25f.mjs';
+import { BINDING_VERSION } from './bind.mjs';
 import { readSqliteBatch, readSqliteRows } from './persist.mjs';
-import { SYMBOL_GRAPH_QUERIES } from './symbol-persist.mjs';
+import { symbolGraphQueries } from './symbol-persist.mjs';
 
 /**
  * Read wrappers return arrays with the read error attached:
@@ -28,6 +29,13 @@ const SYMBOLS_SQL = `select s.path as path, n.name as name, json_extract(n.props
 // endpoint.
 const EDGES_SQL = `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
   from edges e join nodes ns on ns.id = e.src_id where coalesce(e.props, '') = '' order by src, dst, kind`;
+
+export async function readSourceLineFacts(root) {
+  const { rows } = await readSqliteRows(root, `select s.path, s.revision as blob,
+    json_extract(s.props, '$.lines') as lines, json_extract(s.props, '$.generated') as generated
+    from sources s where s.kind = 'blob' and json_type(s.props, '$.lines') is not null`);
+  return new Map(rows.map((row) => [row.path, row]));
+}
 
 /** File rows, sorted by path. The same blobs read back as the same rows. */
 export async function readFiles(root) {
@@ -69,8 +77,29 @@ export async function readGraph(root) {
   };
 }
 
+export async function readStagedImports(root, tree, paths) {
+  const { results, error } = await readSqliteBatch(root, [
+    ["select value from meta where key = 'tree'"],
+    [`with recursive upstream(path, depth) as (
+      select value, 0 from json_each(?)
+      union
+      select substr(n.key, 6), upstream.depth + 1
+      from upstream join edges e on e.kind = 'import' and e.dst_key = upstream.path
+      join nodes n on n.id = e.src_id where upstream.depth < 2
+    )
+    select substr(n.key, 6) as src, e.dst_key as dst, e.kind
+    from edges e join nodes n on n.id = e.src_id
+    where e.kind = 'import' and (
+      e.dst_key in (select path from upstream where depth < 2)
+      or n.key in (select 'file:' || path from upstream where depth = 0)
+    )`, [JSON.stringify(paths)]],
+  ]);
+  const [metadata, edges] = results ?? [[], []];
+  return error || metadata[0]?.value !== tree ? null : edges;
+}
+
 export async function readSymbolGraph(root) {
-  const { results, error } = await readSqliteBatch(root, SYMBOL_GRAPH_QUERIES);
+  const { results, error } = await readSqliteBatch(root, symbolGraphQueries());
   const [edges, metadata] = results ?? [[], []];
   return decodeSymbolGraph(edges, metadata, error);
 }
@@ -78,9 +107,11 @@ export async function readSymbolGraph(root) {
 function decodeSymbolGraph(edges, metadata, error) {
   const values = new Map(metadata.map(({ key, value }) => [key, JSON.parse(value)]));
   return {
-    edges: edges.map(({ src, kind, dst, path, props }) => ({ src, kind, dst, path, ...JSON.parse(props) })),
+    edges: edges.map(({ src, kind, dst, path, props }) => ({ src, kind, dst, path, ...(props === null ? { viaBarrels: [], lines: [] } : JSON.parse(props)) })),
     bindingCoverage: values.get('binding_coverage') ?? null,
+    version: values.get('binding_version') ?? null,
     unresolved: values.get('binding_unresolved') ?? [],
+    starExports: values.get('binding_star_exports') ?? [],
     error,
   };
 }
@@ -94,11 +125,15 @@ export async function readFts(root) {
   return withReadError(rows, error);
 }
 
-export async function readLiveSnapshot(root, { text, fielded, binding }) {
+export async function readLiveSnapshot(root, { text, fielded, binding, tree, bindingEdits, lightweight, rangePaths = [] }) {
+  const chunks = binding ? `, case when ? or (select value from meta where key = 'tree') is not ?
+    or (select value from meta where key = 'binding_version') is not ?
+    or s.path in (select value from json_each(?))
+    then json_extract(s.props, '$.bindings') end as bindings` : '';
   const queries = [
     [`select ${FILE_COLUMNS}, json_extract(s.props, '$.imports') as imports,
       json_extract(s.props, '$.resolution') as resolution
-      ${binding ? ", json_extract(s.props, '$.bindings') as bindings" : ''} ${FILE_SOURCE}`],
+      ${chunks} ${FILE_SOURCE}`, binding ? [Number(bindingEdits), tree, String(BINDING_VERSION), JSON.stringify(rangePaths)] : []],
     [SYMBOLS_SQL],
     [EDGES_SQL],
     ["select key, value from meta where key in ('tree', 'build', 'fts_fields')"],
@@ -107,17 +142,36 @@ export async function readLiveSnapshot(root, { text, fielded, binding }) {
   if (fielded) queries.push([`select f.kind, substr(n.key, 6) as ref, ${BM25F_FIELDS.map((field) => `f.${field}`).join(', ')}
     from fts f join nodes n on n.id = f.node_id where (select value from meta where key = 'fts_fields') = '1'
     order by ref, f.rowid`]);
-  if (binding) queries.push(...SYMBOL_GRAPH_QUERIES);
+  if (binding) queries.push(...symbolGraphQueries({ lightweight: lightweight && !bindingEdits }));
   const { results, error } = await readSqliteBatch(root, queries);
   const [files, symbols, edges, meta, ...extra] = results ?? [[], [], [], []];
   const fts = text ? extra.shift() ?? [] : [];
   const fieldedRows = fielded ? extra.shift() ?? [] : [];
   return {
-    files: files.map(({ imports, bindings, ...file }) => ({
-      ...file, imports: JSON.parse(imports ?? '[]'), ...(bindings ? JSON.parse(bindings) : {}),
-    })),
+    files: files.map(({ imports, ...file }) => ({ ...file, imports: JSON.parse(imports ?? '[]') })),
     symbols, edges, fts, fieldedRows, meta: Object.fromEntries(meta.map(({ key, value }) => [key, value])),
     binding: binding ? decodeSymbolGraph(extra[0] ?? [], extra[1] ?? [], error) : null,
     error,
   };
+}
+
+export async function readCochangeBasis(root) {
+  const { rows, error } = await readSqliteRows(root,
+    "select key, value from meta where key in ('last_cochange_sha', 'cochange_commits')");
+  if (error) return null;
+  const values = new Map(rows.map(({ key, value }) => [key, value]));
+  if (!values.has('last_cochange_sha') || !values.has('cochange_commits')) return null;
+  try {
+    const commits = JSON.parse(values.get('cochange_commits'));
+    return Array.isArray(commits) ? { head: values.get('last_cochange_sha'), commits } : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function readCochange(root) {
+  const { rows, error } = await readSqliteRows(root,
+    "select src_path as src, dst_path as dst, 'cochange' as kind, confidence, confidence as weight, "
+      + 'lift, support, decayed_weight as decayedWeight from cochange order by src_path, confidence desc, lift desc, support desc, dst_path');
+  return withReadError(rows, error?.message?.includes('no such table: cochange') ? null : error);
 }

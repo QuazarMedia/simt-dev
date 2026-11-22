@@ -10,6 +10,10 @@ import { dirname, join } from 'node:path';
 
 import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
+import { writeCochange } from './cochange.mjs';
+import { writeCitations } from './commit-citations.mjs';
+import { writeGovernance } from './governance-persist.mjs';
+import { BINDING_VERSION } from './bind.mjs';
 import { BM25F_FIELDS } from './bm25f.mjs';
 import { lexicalWriter } from './lexical-store.mjs';
 import { persistSymbolGraph } from './symbol-persist.mjs';
@@ -222,6 +226,7 @@ const EDGES_DDL = `create table if not exists edges(
 // table has.
 const INDEXES = `
 create index if not exists idx_edges_dst on edges(dst_id, kind);
+create index if not exists idx_edges_dst_key on edges(kind, dst_key, src_id);
 create index if not exists idx_edges_owner on edges(owner_source_id);
 create index if not exists idx_nodes_source on nodes(source_id);
 create index if not exists idx_nodes_kind_name on nodes(kind, name);
@@ -402,6 +407,9 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
         imports: Array.isArray(row.imports) ? row.imports : [],
         bindings: row.bindings,
         resolution: row.resolution ?? 'none',
+        hasLineFacts: row.hasLineFacts,
+        lines: row.lines,
+        generated: row.generated,
       }));
     }
     const deleteSource = db.prepare('delete from sources where id = ?');
@@ -465,7 +473,11 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     const upsertMeta = db.prepare(
       'insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value',
     );
-    if (next.length || removed.length || meta.edgeOwners?.length) persistSymbolGraph(db);
+    const priorBinding = db.prepare("select value from meta where key = 'binding_version'").get()?.value;
+    if (next.length || removed.length || meta.edgeOwners?.length || priorBinding !== String(BINDING_VERSION)) persistSymbolGraph(db);
+    if (meta.cochange) writeCochange(db, meta.cochange);
+    if (meta.governance) writeGovernance(db, meta.governance);
+    if (meta.citations) writeCitations(db, meta.citations);
     upsertMeta.run('schema', SCHEMA_V);
     if (meta.fielded || invalidatedFielded) {
       const ready = meta.fielded ? '1' : '0';

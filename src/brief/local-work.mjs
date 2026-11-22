@@ -2,13 +2,55 @@ import { collectCorpus } from '../knowledge/collect.mjs';
 import { rankCorpus } from '../knowledge/query.mjs';
 import { CLI } from '../name.mjs';
 import { EXIT, fail } from '../output/index.mjs';
+import { shellWord } from '../sys/proc.mjs';
 import { selectLocalVerification } from '../verify/local-selection.mjs';
 import { localVerificationStatus } from '../verify/local-run.mjs';
 import { readWork } from '../work/effective.mjs';
-import { buildPacket, collect, DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES } from './packet.mjs';
+import { buildPacket, collect, keptSections, DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES } from './packet.mjs';
 import { buildProofPacket } from './proof.mjs';
+import { decomposePrompt, maskPrompt, MAX_SUBTASKS } from './decompose.mjs';
 
-const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
+function questionList(task, retrieval) {
+  if (retrieval !== 'v2') return [task];
+  const clauses = decomposePrompt(task);
+  if (clauses.length > 1) return clauses.map(({ text }) => text);
+  const { masked } = maskPrompt(task);
+  const questions = [];
+  let begin = 0;
+  for (const separator of masked.matchAll(/\?\s+(?=\p{L})/gu)) {
+    if (questions.length === MAX_SUBTASKS - 1) break;
+    questions.push(task.slice(begin, separator.index + 1).trim());
+    begin = separator.index + separator[0].length;
+  }
+  questions.push(task.slice(begin).trim());
+  return questions;
+}
+
+function proofSources(corpus, questions, retrieval) {
+  const multi = questions.length > 1;
+  const matches = new Map();
+  for (const [index, question] of questions.entries()) {
+    const ranked = rankCorpus(corpus, { query: question, limit: 4, retrieval });
+    const seen = new Set();
+    for (const { citation } of [...ranked.exact, ...ranked.ranked]) {
+      if (!citation || seen.has(citation.path) || !/\.(?:md|markdown)$/iu.test(citation.path)) continue;
+      seen.add(citation.path);
+      const id = multi ? citation.path + '#' + (citation.anchor ?? citation.lineStart) : citation.path;
+      const obligation = multi ? 'question ' + (index + 1) : id;
+      const command = CLI + ' knowledge sections ' + shellWord(citation.path);
+      const row = matches.get(id) ?? {
+        id, text: citation.path + (citation.anchor ? '#' + citation.anchor : '') + ' (' + citation.authorityBasis + ') · ' + command,
+        authority: citation.authorityBasis === 'reviewed' ? 2 : 1,
+        obligations: [], lineage: citation.path,
+        revision: { ref: citation.path, digest: citation.revision },
+        anchor: { path: citation.path, startLine: citation.lineStart + 1, endLine: citation.lineEnd },
+      };
+      row.obligations.push(obligation);
+      matches.set(id, row);
+    }
+  }
+  return { matches, multi, required: multi ? questions.map((_, index) => 'question ' + (index + 1)) : [...matches.keys()] };
+}
 
 export async function assembleScopedBrief({ root, task, budget, workScope, retrieval = 'v1' }) {
   const work = await readWork(root);
@@ -19,26 +61,14 @@ export async function assembleScopedBrief({ root, task, budget, workScope, retri
   if (collected.error) return { error: fail(collected.error, EXIT.CONFIG, collected.remedy) };
   const ceiling = Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES);
   const committed = collected.corpus.units.filter(({ provenance }) => provenance === 'committed');
-  const ranked = rankCorpus({ ...collected.corpus, units: committed }, { query: task, limit: 4, retrieval });
-  const matches = new Map();
-  for (const { citation } of [...ranked.exact, ...ranked.ranked]) {
-    if (!citation || matches.has(citation.path) || !/\.(?:md|markdown)$/i.test(citation.path)) continue;
-    const command = `${CLI} knowledge sections ${quote(citation.path)}`;
-    matches.set(citation.path, {
-      id: citation.path,
-      text: `${citation.path}${citation.anchor ? `#${citation.anchor}` : ''} (${citation.authorityBasis}) · ${command}`,
-      authority: citation.authorityBasis === 'reviewed' ? 2 : 1,
-      obligations: [citation.path],
-      revision: { ref: citation.path, digest: citation.revision },
-      anchor: { path: citation.path, startLine: citation.lineStart + 1, endLine: citation.lineEnd },
-    });
-  }
-  const proof = buildProofPacket([...matches.values()], { budget: ceiling, required: [...matches.keys()] });
+  const questions = questionList(task, retrieval);
+  const { matches, multi, required } = proofSources({ ...collected.corpus, units: committed }, questions, retrieval);
+  const proof = buildProofPacket([...matches.values()], { budget: ceiling, required, diverse: multi });
   const selection = await selectLocalVerification(root, { scopeId: workScope });
   const status = selection.error ? null : await localVerificationStatus(selection);
   const packet = collect();
   packet.add('TASK', `local scope ${workScope}`);
-  const flag = `--scope ${quote(workScope)}`;
+  const flag = `--scope ${shellWord(workScope)}`;
   packet.add('COMMANDS', `${CLI} verify status --changed ${flag}`);
   if (status !== null && selection.obligations.length > 0) {
     const passed = status.results.filter(({ state }) => state === 'pass').length;
@@ -62,18 +92,20 @@ export async function assembleScopedBrief({ root, task, budget, workScope, retri
   };
   const cut = new Set(packed.cut);
   const kept = packet.items.filter(({ id }) => !cut.has(id));
-  const sections = {};
-  for (const item of kept) {
-    sections[item.section] ??= [];
-    sections[item.section].push(item.text);
-  }
+  const sections = keptSections(packet.items, cut);
   const shown = new Set(kept.filter(({ section }) => section === 'KNOWLEDGE').map(({ text }) => text));
   const citations = proof.citations.filter(({ id }) => shown.has(matches.get(id).text));
+  const covered = new Set(citations.flatMap(({ id }) => matches.get(id).obligations));
+  const omittedObligations = required.filter((obligation) => !covered.has(obligation));
   return {
     root, kind: 'work', basis: 'declared local scope', task, scope: scope.paths, workScope, budget: ceiling,
     items: packet.items, packed, sections,
     ...(retrieval === 'v2' ? { retrieval } : {}),
-    proof: { complete: matches.size > 0 && citations.length === matches.size,
-      citations, omittedObligations: [...matches.keys()].filter((path) => !citations.some(({ id }) => id === path)) },
+    proof: { complete: matches.size > 0 && omittedObligations.length === 0 && !proof.overBudget,
+      citations, omittedObligations,
+      ...(multi ? { questions: questions.map((text, index) => ({ id: index + 1, text,
+        citations: citations.filter(({ id }) => matches.get(id).obligations.includes('question ' + (index + 1))).map(({ id }) => id),
+      })) } : {}),
+    },
   };
 }

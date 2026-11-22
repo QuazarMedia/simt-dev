@@ -113,6 +113,13 @@ export function gateRunnable(gate, capability = {}) {
     // fact about a file that does not exist and implies a fix that cannot be taken.
     return {
       runnable: false,
+      ...(capability.error ? {
+        cause: { id: 'runner-manifest', detail: 'package.json cannot be read for gate scripts',
+          remedy: 'repair package.json or restore it from version control' },
+      } : foreign ? {
+        cause: { id: `runner:${capability.runner}`, detail: `the configured gates require npm scripts and the repository runs ${runnerName(capability.runner)}`,
+          remedy: 'configure gates.commands for the repository runner' },
+      } : {}),
       why: foreign
         ? `this repo runs ${runnerName(capability.runner)}, not npm, so "${spell}" cannot run here`
         : `no "${script}" script in package.json`,
@@ -123,6 +130,8 @@ export function gateRunnable(gate, capability = {}) {
     if (!(capability.binaries ?? []).includes(tool)) {
       return {
         runnable: false,
+        cause: { id: `tool:${tool}`, detail: `${tool} is unavailable to the configured gates`,
+          remedy: 'install the declared tool or configure the gate command for the repository runner' },
         why: foreign
           ? `${tool} is not installed, and this repo has no node_modules/.bin to install it into`
           : `${tool} is not installed in node_modules/.bin`,
@@ -336,6 +345,7 @@ export function unrunnableGates(manifest, capability) {
       gate: name,
       detail: `declares gate "${name}", which this repo cannot run: ${verdict.why}`,
       remedy: gateRemedy(gate, { existing: true, runner: capability.runner }),
+      ...(verdict.cause ? { cause: verdict.cause } : {}),
     });
   }
   return findings;

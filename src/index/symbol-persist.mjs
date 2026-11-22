@@ -1,8 +1,8 @@
-import { bindSymbols } from './bind.mjs';
+import { bindSymbols, BINDING_VERSION } from './bind.mjs';
 import { canonicalJson } from '../util/canonical.mjs';
 
-const EDGE_SQL = `select e.src_id as srcId, src.key as src, e.kind, e.dst_key as dst,
-  e.dst_id as dstId, e.props, s.path
+const edgeSql = (props = 'e.props') => `select e.src_id as srcId, src.key as src, e.kind, e.dst_key as dst,
+  e.dst_id as dstId, ${props}, s.path
   from edges e join nodes src on src.id = e.src_id join sources s on s.id = e.owner_source_id
   where e.props is not null and e.props != ''`;
 
@@ -11,15 +11,16 @@ function edgeIdentity({ src, kind, dst }) {
 }
 
 export function persistSymbolGraph(db) {
-  const files = db.prepare(`select path, lang, json_extract(props, '$.bindings') as bindings
-    from sources where kind = 'blob' order by path`).all().map(({ path, lang, bindings }) => ({
-    path, lang, ...(bindings == null ? {} : JSON.parse(bindings)),
+  const files = db.prepare(`select path, lang, json_extract(props, '$.bindings') as bindings,
+    json_extract(props, '$.imports') as imports
+    from sources where kind = 'blob' order by path`).all().map(({ path, lang, bindings, imports }) => ({
+    path, lang, imports: JSON.parse(imports ?? '[]'), ...(bindings == null ? {} : JSON.parse(bindings)),
   }));
   const symbols = db.prepare(`select s.path, n.name, n.line, json_extract(n.props, '$.sig') as sig,
     json_extract(n.props, '$.exported') as exported
     from nodes n join sources s on s.id = n.source_id
     where s.kind = 'blob' and n.kind = 'symbol' order by s.path, n.line, n.name`).all();
-  const { ownerRows, bindingCoverage, unresolved } = bindSymbols(files, symbols);
+  const { ownerRows, bindingCoverage, unresolved, starExports } = bindSymbols(files, symbols);
   const nodeIds = new Map();
   const owners = new Map();
   for (const row of db.prepare(`select n.id, n.key, s.id as ownerId, s.path, n.kind
@@ -41,7 +42,7 @@ export function persistSymbolGraph(db) {
 
   // A changed target can keep the same key but receive a different node ID.
   // Reconcile that edge along with changed bindings, keeping unaffected rows.
-  const oldEdges = new Map(db.prepare(EDGE_SQL).all().map((row) => [edgeIdentity(row), row]));
+  const oldEdges = new Map(db.prepare(edgeSql()).all().map((row) => [edgeIdentity(row), row]));
   const upsert = db.prepare(`insert into edges(src_id, kind, dst_key, dst_id, weight, owner_source_id, trust, props)
     values (?, ?, ?, ?, 1, ?, 'observed', ?)
     on conflict(src_id, kind, dst_key) do update set dst_id = excluded.dst_id, props = excluded.props`);
@@ -63,9 +64,14 @@ export function persistSymbolGraph(db) {
   const upsertMeta = db.prepare('insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value');
   upsertMeta.run('binding_coverage', canonicalJson(bindingCoverage));
   upsertMeta.run('binding_unresolved', canonicalJson(unresolved));
+  upsertMeta.run('binding_star_exports', canonicalJson(starExports));
+  upsertMeta.run('binding_version', String(BINDING_VERSION));
 }
 
-export const SYMBOL_GRAPH_QUERIES = [
-  [`${EDGE_SQL} order by src, e.kind, dst`],
-  ["select key, value from meta where key in ('binding_coverage', 'binding_unresolved')"],
-];
+export function symbolGraphQueries({ lightweight = false } = {}) {
+  return [
+    [`${edgeSql(lightweight ? 'null as props' : undefined)} order by src, e.kind, dst`],
+    [lightweight ? "select key, value from meta where key in ('binding_coverage', 'binding_version')"
+      : "select key, value from meta where key in ('binding_coverage', 'binding_version', 'binding_unresolved', 'binding_star_exports')"],
+  ];
+}

@@ -2,9 +2,9 @@ import { realpath } from 'node:fs/promises';
 
 import { gitPaths } from '../sys/git.mjs';
 import { cmp } from '../util/sort.mjs';
-import { bindSymbols } from './bind.mjs';
+import { bindSymbols, BINDING_VERSION, symbolNodePaths } from './bind.mjs';
 import { createImportResolver, extract, resolveImports } from './extract.mjs';
-import { readLiveSnapshot } from './graph-read.mjs';
+import { readCochange, readLiveSnapshot } from './graph-read.mjs';
 import { buildOverlay, filterAllowed, readWorktreeFile, revisionOf } from './overlay.mjs';
 import { treeDigest } from './persist.mjs';
 import {
@@ -32,13 +32,17 @@ async function worktreeChanges(root) {
 
 }
 
-function candidatePaths(changes, policy) {
-  return filterAllowed(changes.filter(({ path }) => safePath(path)), policy).allowed;
+export function candidatePaths(changes, policy) {
+  return filterAllowed(changes.filter(({ path }) => safePath(path) && (policy?.allows?.(path) ?? true)), policy).allowed;
+}
+
+export function readWorktreeState(root) {
+  return Promise.all([lsFiles(root), worktreeChanges(root)]);
 }
 
 /** For readers that only need to identify a live path, with no content reads. */
 export async function livePaths(root, { policy } = {}) {
-  const [listed, dirty] = await Promise.all([lsFiles(root), worktreeChanges(root)]);
+  const [listed, dirty] = await readWorktreeState(root);
   const paths = new Set(candidatePaths(listed, policy).map(({ path }) => path));
   for (const change of candidatePaths(dirty, policy)) {
     if (change.status === 'deleted') paths.delete(change.path);
@@ -78,17 +82,22 @@ function edgeKey({ src, kind, dst }) {
  * Callers on a latency-sensitive surface can refuse the transient cold build.
  */
 export async function loadLiveGraph(root, options = {}) {
-  const { build = true, text = false, fielded = false, binding = false, embed = false, policy, retainTargets = [] } = options;
-  const [snapshot, listed, changes, embeddings] = await Promise.all([
-    readLiveSnapshot(root, { text, fielded, binding }), lsFiles(root), worktreeChanges(root),
-    embed ? readEmbeddings(root) : [],
+  const { build = true, text = false, fielded = false, nativeLexical = false, binding = false,
+    embed = false, cochange = false, policy, retainTargets = [], rangePaths = [],
+    gitState = readWorktreeState(root), checkScope = false } = options;
+  const snapshotState = binding || nativeLexical ? Promise.resolve(gitState).then(([listed, dirty]) => readLiveSnapshot(root, {
+    text, fielded: fielded && !nativeLexical, binding, tree: treeDigest(listed),
+    bindingEdits: dirty.some(({ path }) => langOf(path, root) !== ''), lightweight: nativeLexical, rangePaths,
+  })) : readLiveSnapshot(root, { text, fielded });
+  const [snapshot, [listed, changes], embeddings, changesets] = await Promise.all([
+    snapshotState, gitState, embed ? readEmbeddings(root) : [], cochange ? readCochange(root) : [],
   ]);
   const result = { files: [], symbols: [], edges: [], fts: [], fieldedRows: [], embeddings: [] };
   if (snapshot.error || (!build && !snapshot.meta.build)) {
     return { ...result, cold: true, broken: Boolean(snapshot.error), indexError: snapshot.error ?? null };
   }
 
-  const base = new Map(snapshot.files.map((file) => [file.path, file]));
+  const base = new Map(candidatePaths(snapshot.files, policy).map((file) => [file.path, file]));
   const eligible = candidatePaths(listed, policy);
   const staged = new Map(eligible.map((file) => [file.path, file]));
   const allowed = candidatePaths(changes, policy);
@@ -124,17 +133,22 @@ export async function loadLiveGraph(root, options = {}) {
   const changedPathSet = paths.size !== base.size || [...paths].some((path) => !base.has(path));
   const resolvePaths = new Set([...paths, ...retainTargets]);
   const resolveImport = createImportResolver(resolvePaths);
-  const rebind = binding && (overlay.nodes.length > 0 || changedPathSet || mismatched || problems.size > 0
-    || !snapshot.binding?.bindingCoverage);
+  const dirtyCode = [...overlayNodes.keys(), ...problems, ...stagedChanges
+    .filter(({ path, blob }) => blob !== base.get(path)?.blob).map(({ path }) => path)]
+    .some((path) => base.get(path)?.lang || langOf(path, root));
+  const canRebind = binding && (dirtyCode || (changedPathSet && !nativeLexical) || snapshot.binding?.version !== BINDING_VERSION);
   const evidence = [];
+  const wantedRanges = new Set(rangePaths);
+  const ranges = new Map();
   for (const path of [...paths].sort(cmp)) {
     const old = base.get(path);
     const entry = staged.get(path);
     const node = overlayNodes.get(path);
-    const body = reads.get(path) ?? blobBodies.get(entry?.blob);
+    const stagedBody = blobBodies.get(entry?.blob);
+    const body = reads.get(path) ?? stagedBody ?? undefined;
     const stagedSame = entry && entry.blob === old?.blob;
     const lang = old?.lang || langOf(path, root);
-    const missingRead = problems.has(path) || (!stagedSame && !node && body === undefined && lang && entry?.mode !== '120000');
+    const missingRead = problems.has(path) || (!stagedSame && !node && stagedBody === undefined && lang && entry?.mode !== '120000');
     if (missingRead) problems.add(path);
     const file = {
       path, lang, blob: node ? null : entry?.blob ?? null,
@@ -155,7 +169,12 @@ export async function loadLiveGraph(root, options = {}) {
     result.symbols.push(...selected.symbols);
     result.fts.push(...selected.fts);
     result.fieldedRows.push(...selected.fielded);
-    if (rebind) evidence.push(selected.file);
+    if (canRebind || wantedRanges.has(path)) {
+      const { bindings, ...source } = selected.file;
+      const parsed = bindings ? { ...source, ...JSON.parse(bindings) } : source;
+      if (canRebind) evidence.push(parsed);
+      if (wantedRanges.has(path)) ranges.set(path, parsed.chunk?.scopes ?? []);
+    }
     const useCached = !regenerated && (!changedPathSet && retainTargets.length === 0 || selected.file.resolution === 'adapter');
     const edges = useCached ? cachedEdges.get(path) ?? [] : resolveImports(path, selected.file.imports ?? [], resolvePaths, lang, resolveImport);
     result.edges.push(...edges.map((edge) => ({ ...edge, provenance: node ? 'worktree' : 'committed' })));
@@ -163,8 +182,8 @@ export async function loadLiveGraph(root, options = {}) {
   if (embed) result.embeddings = embeddings.filter(({ path }) => paths.has(path) && !reads.has(path)
     && !problems.has(path) && staged.get(path)?.blob === base.get(path)?.blob);
   let symbolGraph = snapshot.binding;
-  if (rebind) {
-    const { ownerRows, bindingCoverage, unresolved } = bindSymbols(evidence, result.symbols);
+  if (canRebind) {
+    const { ownerRows, bindingCoverage, unresolved, starExports } = bindSymbols(evidence, result.symbols);
     const fromCache = new Map((snapshot.binding?.edges ?? []).map((edge) => [edgeKey(edge), edge]));
     const edges = [...ownerRows].flatMap(([path, owner]) => owner.edges.map((edge) => {
       const old = fromCache.get(edgeKey(edge));
@@ -172,13 +191,20 @@ export async function loadLiveGraph(root, options = {}) {
         || old.lines.join('\0') !== edge.lines.join('\0');
       return { path, ...edge, provenance: live ? 'worktree' : 'committed' };
     }));
-    symbolGraph = { edges, bindingCoverage, unresolved };
+    symbolGraph = { edges, bindingCoverage, unresolved, starExports, version: BINDING_VERSION };
   } else if (symbolGraph) {
-    symbolGraph.edges = symbolGraph.edges.map((row) => ({ ...row, provenance: 'committed' }));
+    const nodes = base.size === snapshot.files.length && !changedPathSet ? null : symbolNodePaths(paths, symbolGraph.edges);
+    symbolGraph.edges = symbolGraph.edges.filter(({ src, dst }) => !nodes || (nodes.has(src) && nodes.has(dst)))
+      .map((row) => ({ ...row, provenance: 'committed' }));
+    symbolGraph.unresolved = symbolGraph.unresolved.filter(({ path }) => paths.has(path));
+    symbolGraph.starExports = symbolGraph.starExports.filter((path) => paths.has(path));
   }
   const stale = problems.size > 0 || (!build && mismatched);
   return {
-    ...result, symbolGraph, stale,
+    ...result, symbolGraph, stale, ranges,
+    ...(checkScope ? { previousEdges: snapshot.edges } : {}),
+    cochange: changesets.filter(({ src, dst }) => paths.has(src) && paths.has(dst)),
+    nativeLexical: nativeLexical && snapshot.meta.fts_fields === '1',
     freshness: { state: stale ? 'stale' : 'current', base: snapshot.meta.build ? mismatched ? 'stale' : 'current' : 'cold' },
     basis: {
       index: { build: snapshot.meta.build ?? null, tree: snapshot.meta.tree ?? null },

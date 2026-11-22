@@ -5,17 +5,17 @@
 // block would be the whole section: the core rules are consecutive bullets, and
 // marking one of them must not take its neighbours with it.
 //
-// `import-direction` records nothing about which way an import may point. The
-// index has the edges . A direction still has to be named before the prose
-// can leave, or the line would say Enforced and nothing would be enforcing it.
+// An import-direction marker only activates a policy declared in the manifest.
+// Projection without that context keeps the instruction.
 
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 
+import { architectureProblem, graphLimitsProblem } from '../manifest/architecture.mjs';
 import { CLI } from '../name.mjs';
-import { livePaths } from '../index/live.mjs';
-import { readWorktreeFile } from '../index/overlay.mjs';
+import { loadLiveGraph, readWorktreeState } from '../index/live.mjs';
 import { git, gitPaths } from '../sys/git.mjs';
+import { changedNeighborhood, readCheckSources } from './check-sources.mjs';
 
 export const CHECK_MARKER = 'simt-check';
 
@@ -112,7 +112,7 @@ export function foldChecks(body) {
  * @param {{id: string, source: string, body: string}[]} rules
  * @param {object|null} manifest
  */
-export async function runDeclaredChecks(root, rules, manifest) {
+export async function runDeclaredChecks(root, rules, manifest, { changed = false } = {}) {
   const declared = [];
   const seen = new Set();
   for (const rule of rules) {
@@ -130,22 +130,60 @@ export async function runDeclaredChecks(root, rules, manifest) {
     }
   }
   const findings = [];
+  const architecture = manifest?.architecture;
+  const graphLimits = manifest?.limits?.graph;
+  const hasArchitecture = architecture !== undefined && architectureProblem(architecture) === null
+    && declared.some(({ name }) => name === 'import-direction');
+  const hasLimits = graphLimits !== undefined && graphLimitsProblem(graphLimits) === null
+    && (graphLimits.cycles || graphLimits.brokenImports || graphLimits.deadExports
+      || graphLimits.maxFanIn !== undefined || graphLimits.maxFanOut !== undefined);
+  const needsGraph = hasArchitecture || hasLimits || changed;
+  const needsLines = declared.some(({ name }) => name === 'max-file-lines');
+  const gitState = needsGraph || needsLines ? await readWorktreeState(root).catch((error) => {
+    if (!needsGraph || /not a git repository/u.test(error.stderr ?? '')) return null;
+    throw error;
+  }) : null;
+  let scope;
+  if (needsGraph && gitState) {
+    const live = await loadLiveGraph(root, {
+      binding: hasLimits && graphLimits.deadExports === true, gitState, checkScope: changed,
+    });
+    if (live.broken && (hasArchitecture || hasLimits)) {
+      findings.push({ file: 'simt.json', status: 'invalid', detail: 'cannot read the import graph',
+        remedy: 'run `simt index` to rebuild the local index' });
+    }
+    if (changed) scope = changedNeighborhood(gitState[1], live);
+    if (!live.broken && (hasArchitecture || hasLimits)) {
+      const files = new Map(live.files.map(({ path, lang }) => [path, lang]));
+      const allEdges = live.edges.filter(({ kind }) => kind === 'import');
+      const edges = allEdges.filter(({ dst }) => files.has(dst));
+      const graph = { ...live, root: await realpath(root), files, allEdges, edges, scope };
+      if (hasArchitecture) {
+        const { architectureFindings } = await import('./graph-checks.mjs');
+        findings.push(...await architectureFindings(graph, architecture));
+      }
+      if (hasLimits) {
+        const { graphInvariantFindings } = await import('./graph-invariants.mjs');
+        findings.push(...await graphInvariantFindings(graph, graphLimits));
+      }
+    }
+  }
   for (const check of declared) {
-    findings.push(...(await runOne(root, check, manifest)));
+    if (check.name === 'max-file-lines') findings.push(...await fileLines(root, manifest, gitState, scope));
+    else if (check.name !== 'import-direction') findings.push(...await runOne(root, check));
+    else if (architecture === undefined) {
+      findings.push({
+        file: check.source,
+        status: 'check-unbuilt',
+        detail: 'import-direction has no direction to enforce; the index records imports and no rule names which way they may point',
+        remedy: 'leave the instruction in the rule until a direction is named',
+      });
+    }
   }
   return findings;
 }
 
-async function runOne(root, check, manifest) {
-  if (check.name === 'import-direction') {
-    return [{
-      file: check.source,
-      status: 'check-unbuilt',
-      detail: 'import-direction has no direction to enforce; the index records imports and no rule names which way they may point',
-      remedy: 'leave the instruction in the rule until a direction is named',
-    }];
-  }
-  if (check.name === 'max-file-lines') return fileLines(root, check, manifest);
+async function runOne(root, check) {
   if (check.name === 'required-file') return requiredFile(root, check);
   const diff = await workDiff(root);
   if (diff === null) return [];
@@ -162,7 +200,7 @@ function isTextFile(rel) {
   return dot !== -1 && TEXT_EXTENSIONS.has(rel.slice(dot).toLowerCase());
 }
 
-async function fileLines(root, check, manifest) {
+async function fileLines(root, manifest, gitState, scope) {
   const limits = manifest?.limits?.fileLines ?? {};
   const exclude = limits.exclude;
   if (exclude !== undefined && !Array.isArray(exclude)) {
@@ -175,31 +213,14 @@ async function fileLines(root, check, manifest) {
   }
   const warnAt = Number.isInteger(limits.warn) ? limits.warn : DEFAULT_WARN;
   const errorAt = Number.isInteger(limits.error) ? limits.error : DEFAULT_ERROR;
-  const files = await tracked(root);
-  if (files === null) return [];
-  const base = await realpath(root);
+  if (!gitState) return [];
   const findings = [];
   const prefixes = Array.isArray(exclude) ? exclude.filter((g) => typeof g === 'string' && g !== '') : [];
   const skipText = limits.excludeTextFiles === true;
-  for (const rel of files) {
-    // A committed dependency is not a file this repository wrote. Counting it
-    // fails every install of this package, because the package's own sources
-    // are longer than the ceiling the consumer declared.
-    if (rel.split('/').includes('node_modules')) continue;
-    if (exempt(rel, prefixes)) continue;
-    if (skipText && isTextFile(rel)) continue;
-    let text;
-    try {
-      text = await readWorktreeFile(base, rel);
-    } catch {
-      continue;
-    }
-    if (text === null || text.includes(0)) continue;
-    const source = text.toString('utf8');
-    // The region marker is this tool naming itself as the generator. A path the
-    // repository names is the other exemption; a filename that looks generated is not.
-    if (source.includes('simt:generated')) continue;
-    const lines = lineCount(source);
+  const sources = await readCheckSources(root, gitState, (path) =>
+    (!scope || scope.has(path)) && !path.split('/').includes('node_modules') && !exempt(path, prefixes) && !(skipText && isTextFile(path)));
+  for (const { file: rel, lines, generated } of sources) {
+    if (lines === null || generated) continue;
     if (lines > errorAt) {
       findings.push({
         file: rel,
@@ -348,22 +369,8 @@ function units(body) {
   return out;
 }
 
-function lineCount(text) {
-  if (text.length === 0) return 0;
-  const n = text.split('\n').length;
-  return text.endsWith('\n') ? n - 1 : n;
-}
-
 function exempt(rel, prefixes) {
   return prefixes.some((prefix) => rel === prefix || rel.startsWith(prefix.endsWith('/') ? prefix : `${prefix}/`));
-}
-
-async function tracked(root) {
-  try {
-    return await livePaths(root);
-  } catch {
-    return null;
-  }
 }
 
 async function workDiff(root) {

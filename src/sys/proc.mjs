@@ -16,6 +16,11 @@
 
 import { spawn } from 'node:child_process';
 
+/** Encode one POSIX shell argument without allowing interpolation. */
+export function shellWord(value) {
+  return "'" + String(value).replaceAll("'", "'\\''") + "'";
+}
+
 /** The most output one run may accumulate before the oldest bytes are dropped. */
 const DEFAULT_MAX_OUTPUT_BYTES = 8 << 20;
 

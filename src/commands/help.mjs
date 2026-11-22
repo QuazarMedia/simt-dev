@@ -175,9 +175,9 @@ ${CLI} workspace compare      org-wide matrix across every sibling repo
                            repos that have not adopted yet;
                            --concurrency <n> caps the rows built at once)
 ${CLI} index                   rebuild the local file index from git blob hashes
-${CLI} why <subject>         what governs a path: a decision whose Affects line names
-                           it, a rule whose scope matches it, a skill, a gate or
-                           a lesson. A subject is also ADR-NNN, rule:<id>,
+${CLI} why <subject>...     what governs paths, directories and symbols, with witness paths
+                           (--changed selects paths from the Git diff).
+                           A subject is also ADR-NNN, rule:<id>,
                            skill:<name> or a finding code, and each answers
                            through the command that owned that question. With no
                            subject, the Affects tokens this tree cannot resolve
@@ -190,8 +190,10 @@ ${CLI} tests <path>          the tests that exercise a file: an import, the conv
                            --changed reads from the diff
 ${CLI} gate [path...]        the tests a change reaches, and only those
                            (--changed reads the diff instead of the paths)
-${CLI} impact <file|symbol>  who a change reaches: importers, their tests,
-                           what governs it, and a contract another repository references
+${CLI} impact <file|symbol|file#symbol>... [--retrieval v2]
+                           who a change reaches: importers, tests, governance and consumers
+                           (--changed uses Git hunks, --task resolves names in a prompt,
+                           and --all also shows conceptual matches when dependents exist)
 ${CLI} map [--task "<text>"] [--level outline|names|signatures]
                            the files this task is most likely to touch, within
                            --budget bytes (default 2048; 0 is unlimited). outline
@@ -332,6 +334,9 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --paths <globs>         comma-separated path globs used for path resolution
 --proof                 brief --json: report whether the packet proves what it kept
 --strict                gate: refuse a change whose tests could not be proven
+--precise              gate and tests --run: use bound symbols from a Git diff when supported
+--conservative         gate and tests --run: use the full file import closure
+--with-knowledge       impact: report declared knowledge dependencies of the target paths
                         to run (the default answer stays compatible)
 --root <path>           repository root (default: cwd)
 --base <ref>           pr-body: the ref the body diffs against
@@ -382,7 +387,8 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --search <task>         index: BM25 rows for a task, from the open cache
 --rank <task>           index: files ranked for a task, from the open cache
 --query <text>          knowledge rank: the question the units are ranked against
---retrieval <v1|v2>     knowledge rank, brief --scope: select the retrieval policy
+--retrieval <v1|v2>     select the retrieval policy for brief, map, index, impact, why or knowledge rank
+--subtask <n>           brief: open one subtask from a composite packet
 --where <k=v,...>       knowledge rank|why --scope: the scope dimensions the question
                         requires, e.g. jurisdiction=DE,product=acme
 --refs <ids>            knowledge impact: the changed claim or artifact ids, comma separated

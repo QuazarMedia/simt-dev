@@ -61,3 +61,23 @@ export function sparseTfIdfCosine(first, second) {
   const denominator = norm(a) * norm(b);
   return denominator > 0 ? Math.min(1, dot / denominator) : 0;
 }
+
+export function* conceptualPartners(rows, sources, { exclude = new Set() } = {}) {
+  const files = collectFileTerms(rows);
+  const frequencies = new Map();
+  for (const terms of files.values()) {
+    for (const term of terms.keys()) frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
+  }
+  const stats = { documents: files.size, terms: new Map([...frequencies].map(([term, df]) => [term, { df }])) };
+  const signatures = [...sources].sort(cmp).map((path) => [path, topFileSignature(files.get(path) ?? [], stats)]);
+  const vocabulary = new Set(signatures.flatMap(([, signature]) => signature.map(({ term }) => term)));
+  if (!vocabulary.size) return;
+  for (const [path, counts] of files) {
+    if (sources.has(path) || exclude.has(path) || [...counts.keys()].every((term) => !vocabulary.has(term))) continue;
+    const signature = topFileSignature(counts, stats);
+    for (const [source, anchor] of signatures) {
+      const score = sparseTfIdfCosine(anchor, signature);
+      if (score > 0) yield { path, source, score };
+    }
+  }
+}

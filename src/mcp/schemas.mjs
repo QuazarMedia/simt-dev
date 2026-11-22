@@ -42,6 +42,29 @@ export const ERROR_SHAPE = {
 };
 
 export const output = {
+  impact: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      file: { type: 'string' },
+      symbol: { type: 'string' },
+      importers: { type: 'array', items: { type: 'string' } },
+      tests: { type: 'array', items: { type: 'string' } },
+      governs: { type: 'array', items: { type: 'object' } },
+      owners: { type: 'array', items: { type: 'string' } },
+      consumers: { type: 'array', items: { type: 'object' } },
+      truncated: { type: 'boolean' },
+      targets: { type: 'array', items: { type: 'object' } },
+      symbols: { type: 'array', items: { type: 'object' } },
+      tiers: { type: 'object' },
+      structural: { type: 'object' },
+      testTiers: { type: 'object' },
+      cochange: { type: 'array', items: { type: 'object' } },
+      conceptual: { type: 'array', items: { type: 'object' } },
+      knowledge: { type: 'object' },
+    },
+    required: ['root', 'file', 'symbol', 'importers', 'tests', 'governs', 'owners', 'consumers', 'truncated'],
+  },
   doctor: {
     // The `doctor --json` document minus its envelope: the same findings, the
     // same workspace answer, the same fingerprint. 
@@ -270,6 +293,8 @@ export const output = {
             status: { type: 'string' },
             detail: { type: ['string', 'null'] },
             remedy: { type: ['string', 'null'] },
+            rootCause: { type: 'object' },
+            causedBy: { type: 'string' },
           },
           required: ['file', 'status'],
         },
@@ -333,6 +358,15 @@ export const output = {
       sections: { type: 'object', additionalProperties: { type: 'array', items: { type: 'string' } } },
       text: { type: 'string' },
       note: { type: ['string', 'null'] },
+      retrieval: { type: 'string', enum: ['v2'] },
+      subtasks: { type: 'array', items: { type: 'object' } },
+      lanes: { type: 'array', items: { type: 'object' } },
+      overlaps: { type: 'array', items: { type: 'object' } },
+      taskOrder: { type: 'object' },
+      constraints: { type: 'array', items: { type: 'object' } },
+      subtaskCoverage: { type: 'array', items: { type: 'object' } },
+      drillDown: { type: 'array', items: { type: 'object' } },
+      selectedSubtask: { type: 'integer' },
     },
     required: ['root', 'kind', 'basis', 'task', 'scope', 'budget', 'bytes', 'before', 'floorHeld', 'cut', 'sections', 'text'],
   },

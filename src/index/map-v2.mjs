@@ -1,9 +1,9 @@
 import { cmp } from '../util/sort.mjs';
 import { symbolKey, symbolNodePaths } from './bind.mjs';
-import { BM25F_FIELDS, fieldQueryTerms } from './bm25f.mjs';
+import { BM25F_FIELDS, fieldQueryTerms, scoreFtsBm25F } from './bm25f.mjs';
 import { directionalGraph, expandDirectional } from './directional.mjs';
-import { searchEntityCandidates } from './entities.mjs';
-import { collectFileTerms, sparseTfIdfCosine, topFileSignature } from './lexical.mjs';
+import { exactEntityCandidates, searchEntityCandidates } from './entities.mjs';
+import { conceptualPartners } from './lexical.mjs';
 import { rrfFuse } from './map.mjs';
 import { searchWithFeedback } from './prf.mjs';
 import { searchFtsBm25F } from './store.mjs';
@@ -35,7 +35,8 @@ function centrality(files, edges) {
   }).sort(byScore);
 }
 
-function structuralHits(graph, paths, anchors, lexical, changes) {
+export function prepareMapStructure(graph) {
+  const paths = graph.files.map(({ path }) => path);
   const edges = graph.symbolGraph?.edges ?? [];
   const nodes = symbolNodePaths(paths, edges);
   const byName = new Map();
@@ -47,6 +48,12 @@ function structuralHits(graph, paths, anchors, lexical, changes) {
     values.push(key);
     byName.set(name, values);
   }
+  const cochange = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')]
+    .map(({ src, dst, weight }) => ({ src: 'file:' + src, dst: 'file:' + dst, kind: 'cochange', weight }));
+  return { nodes, byName, links: directionalGraph([...edges, ...cochange]) };
+}
+
+function structuralHits({ nodes, byName, links }, paths, anchors, lexical) {
   const seeds = [];
   for (const { path, matches: hits } of anchors.slice(0, SEED_CAP)) {
     const keys = new Set(hits.flatMap((hit) => byName.get(JSON.stringify([path, hit.matched])) ?? []));
@@ -57,12 +64,11 @@ function structuralHits(graph, paths, anchors, lexical, changes) {
   for (const { path, score } of lexical.slice(0, Math.max(0, SEED_CAP - seeds.length))) {
     if (max > 0) seeds.push({ node: `file:${path}`, score: 0.65 * score / max });
   }
-  const cochange = changes.map(({ src, dst, weight }) => ({ src: `file:${src}`, dst: `file:${dst}`, kind: 'cochange', weight }));
-  const ranked = expandDirectional(directionalGraph([...edges, ...cochange]), seeds);
+  const ranked = expandDirectional(links, seeds);
   const best = new Map();
   for (const { node, score, witness } of ranked) {
     const path = nodes.get(node);
-    if (path && !best.has(path)) best.set(path, { path, score, witness });
+    if (paths.has(path) && !best.has(path)) best.set(path, { path, score, witness });
   }
   return [...best.values()].sort(byScore).slice(0, LIMIT);
 }
@@ -85,17 +91,7 @@ function couplingHits(rows, changes, anchors, paths) {
     if (sources.has(src)) record(dst, 'evolutionary', Math.min(1, weight), src);
     if (sources.has(dst)) record(src, 'evolutionary', Math.min(1, weight), dst);
   }
-  const files = collectFileTerms(rows);
-  const frequencies = new Map();
-  for (const terms of files.values()) for (const term of terms.keys()) frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
-  const stats = { documents: files.size, terms: new Map([...frequencies].map(([term, df]) => [term, { df }])) };
-  const signatures = [...sources].sort(cmp).map((path) => [path, topFileSignature(files.get(path) ?? [], stats)]);
-  const vocabulary = new Set(signatures.flatMap(([, signature]) => signature.map(({ term }) => term)));
-  for (const [path, counts] of files) {
-    if (sources.has(path) || [...counts.keys()].every((term) => !vocabulary.has(term))) continue;
-    const signature = topFileSignature(counts, stats);
-    for (const [anchor, candidate] of signatures) record(path, 'conceptual', sparseTfIdfCosine(candidate, signature), anchor);
-  }
+  for (const { path, source, score } of conceptualPartners(rows, sources)) record(path, 'conceptual', score, source);
   return [...best.values()].map((row) => ({ ...row, score: row.conceptual + row.evolutionary })).sort(byScore).slice(0, LIMIT);
 }
 
@@ -128,46 +124,56 @@ function explainRanks(ranked, lists, fields) {
   return [...evidence.values()];
 }
 
-export async function rankMapV2(root, graph, task, { explain = false, queryVector = null } = {}) {
+export async function rankMapV2(root, graph, task, { explain = false, queryVector = null, coupling = true, structure = null, exactOnly = false, feedbackEnabled = true, directional = true } = {}) {
   const paths = new Set(graph.files.map(({ path }) => path));
-  const structural = centrality(paths, graph.edges);
   if (!task.trim()) {
+    const structural = centrality(paths, graph.edges);
     const ranked = structural.map((row) => ({ ...row, rank: row.score, resolver: 0 }));
     const evidence = explain ? explainRanks(ranked, [{ id: 'centrality', weight: 1, items: structural }], new Map()) : [];
     return { ranked, evidence, matched: 0, feedback: null };
   }
-  const fts = graph.fieldedRows;
+  const fts = graph.nativeLexical ? undefined : graph.fieldedRows;
+  const overlayRows = graph.nativeLexical ? graph.fieldedRows : [];
   const [entities, original] = await Promise.all([
-    searchEntityCandidates(root, task, { ...graph, fts }),
+    exactOnly ? exactEntityCandidates(task, graph) : searchEntityCandidates(root, task, { ...graph, fts }),
     searchFtsBm25F(root, task, { fts }),
   ]);
-  const feedback = await searchWithFeedback(root, task, { ranking: original, graph, anchors: entities.anchors, fts });
-  const exact = entities.candidates.filter(({ tier }) => tier <= 2);
+  const changed = new Set(overlayRows.map(({ ref }) => ref));
+  const valid = ({ path }) => paths.has(path) && !changed.has(path);
+  const ranking = graph.nativeLexical ? original.filter(valid) : original;
+  const feedback = feedbackEnabled
+    ? await searchWithFeedback(root, task, { ranking, graph, anchors: entities.anchors, fts })
+    : { ranking, reason: 'disabled', expansion: [] };
+  const exact = entities.candidates.filter(({ tier, path }) => tier <= 2 && paths.has(path));
   const matched = new Set(entities.candidates.filter(({ tier }) => tier <= 3).map(({ path }) => path));
   const phrases = new Map(entities.candidates.map(({ path, phrase, components }) => [path, { phrase, score: components.proximity }]));
-  const high = feedback.ranking[0]?.score || 1;
-  const lexical = feedback.ranking.filter(({ path }) => paths.has(path)).map((row) => ({
-    ...row, score: row.score / high + (phrases.get(row.path)?.score ?? 0), phrase: phrases.get(row.path)?.phrase ?? [],
-  })).sort(byScore).slice(0, LIMIT);
-  const changes = graph.edges.filter(({ kind }) => kind === 'cochange').sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
+  const primary = feedback.ranking.filter(valid);
+  const local = scoreFtsBm25F(overlayRows, task);
+  const lexical = [primary, local].flatMap((rows) => {
+    const high = rows[0]?.score || 1;
+    return rows.filter(({ path }) => paths.has(path)).map((row) => ({
+      ...row, score: row.score / high + (phrases.get(row.path)?.score ?? 0), phrase: phrases.get(row.path)?.phrase ?? [],
+    }));
+  }).sort(byScore).slice(0, LIMIT);
+  const changes = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')].sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
   const lists = [
     { id: 'entity', weight: 3, items: exact },
     { id: 'bm25f', weight: 2, items: lexical },
-    { id: 'directional', weight: 1, items: structuralHits(graph, paths, exact, lexical, changes) },
-    { id: 'coupling', weight: 0.6, items: couplingHits(fts, changes, exact.length ? exact : lexical, paths) },
+    { id: 'directional', weight: 1, items: directional ? structuralHits(structure ?? prepareMapStructure(graph), paths, exact, lexical) : [] },
+    { id: 'coupling', weight: 0.6, items: coupling ? couplingHits(fts ?? overlayRows, changes, exact.length ? exact : lexical, paths) : [] },
   ];
   if (queryVector && graph.embeddings?.length) {
     const embedded = rankByCosine(graph.embeddings, queryVector).filter(({ path }) => paths.has(path));
     lists.push({ id: 'embedding', weight: 1.5, items: embedded.slice(0, LIMIT) });
   }
-  if (lists.every(({ items }) => items.length === 0)) lists.push({ id: 'centrality', weight: 1, items: structural });
+  if (lists.every(({ items }) => items.length === 0)) lists.push({ id: 'centrality', weight: 1, items: centrality(paths, graph.edges) });
   const tier = new Map(exact.map(({ path, tier: value }) => [path, value]));
   const ranked = rrfFuse(lists).map((row) => ({ ...row, resolver: Number(matched.has(row.path)) }))
     .sort((a, b) => (tier.get(a.path) ?? 3) - (tier.get(b.path) ?? 3) || b.rank - a.rank || cmp(a.path, b.path));
   return {
     ranked,
     matched: matched.size,
-    evidence: explain ? explainRanks(ranked, lists, matchedFields(fts, task, new Set(ranked.map(({ path }) => path)))) : [],
+    evidence: explain ? explainRanks(ranked, lists, matchedFields(fts ?? overlayRows, task, new Set(ranked.map(({ path }) => path)))) : [],
     feedback: { reason: feedback.reason, expansion: feedback.expansion },
   };
 }

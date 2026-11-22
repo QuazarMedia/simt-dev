@@ -19,6 +19,7 @@
 import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { SECTIONS, DEFAULT_BRIEF_BYTES, explainPacket } from '../brief/packet.mjs';
+import { explainComposite, parseSubtaskId } from '../brief/drilldown.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { retrievalMode } from '../index/retrieval-mode.mjs';
 import { commandRoot } from '../repo-root.mjs';
@@ -49,24 +50,28 @@ export async function briefCommand(args, flags, commands = []) {
   if (flags.scope !== undefined && (typeof flags.scope !== 'string' || flags.scope === '' || flags.paths !== undefined)) {
     return fail('a scoped brief needs a scope id without --paths', EXIT.USAGE, `run: ${CLI} brief "<task>" --scope <id>`);
   }
-  const retrieval = retrievalMode(flags.retrieval);
-  if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
-  if (retrieval === 'v2' && flags.scope === undefined) {
-    return fail('fielded brief retrieval needs a work scope', EXIT.USAGE, `run: ${CLI} brief "<task>" --scope <id> --retrieval v2`);
+  const subtask = parseSubtaskId(flags.subtask);
+  if (Number.isNaN(subtask)) return fail('subtask must be a positive integer', EXIT.USAGE, 'use --subtask <n>');
+  const retrieval = retrievalMode(flags.retrieval ?? (subtask === null ? undefined : 'v2'));
+  if (subtask !== null && (flags.scope !== undefined || retrieval === 'v1')) {
+    return fail('subtask selection requires a composite brief', EXIT.USAGE, 'use --retrieval v2 without --scope');
   }
+  if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
   const result = await assembleBrief({
     root: commandRoot(flags),
     task: String(args[0] ?? flags.task ?? ''),
     paths: flags.paths === undefined ? null : flags.paths,
     budget,
     retrieval,
+    subtask,
     flags,
     commands,
     proof: flags.proof === true,
     workScope: flags.scope ?? null,
     only: only === null ? null : only.toUpperCase(),
   });
-  if (result.error) return result.error;
+  if (result.error) return typeof result.error === 'number' ? result.error
+    : fail(result.error.message, result.error.exitCode, result.error.remedy);
   // Unreachable from here — only a delivered brief asks for a cold index to be reported
   // rather than built — but a silent empty packet would be the worst way to find out.
   if (result.cold) {
@@ -81,6 +86,8 @@ export async function briefCommand(args, flags, commands = []) {
   }
   const { root, kind, basis, task, scope, budget: ceiling, items, packed, sections } = result;
   const cut = new Set(packed.cut);
+  const explanation = flags.explain === true
+    ? (result.composite ? explainComposite(result) : explainPacket(items, { cut })) : undefined;
 
   if (isJson(flags)) {
     emitJson(
@@ -100,15 +107,16 @@ export async function briefCommand(args, flags, commands = []) {
         floorHeld: packed.floorHeld,
         cut: packed.cut,
         sections,
-        explain: flags.explain === true ? explainPacket(items, { cut }) : undefined,
+        explain: explanation,
         proof: result.proof,
+        ...result.composite,
         text: packed.text,
       },
     );
     return EXIT.OK;
   }
 
-  const body = flags.explain === true ? [packed.text, '', 'EXPLAIN', ...explainPacket(items, { cut })] : [packed.text];
+  const body = explanation ? [packed.text, '', 'EXPLAIN', ...explanation] : [packed.text];
   emit(body.join('\n'));
   return EXIT.OK;
 }

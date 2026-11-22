@@ -108,12 +108,15 @@ export const BOOL_FLAGS = new Set([
   // Off by default because a path is the change the caller named, and the diff
   // is a different question.
   'changed',
+  'with-knowledge',
   'staged',
   'public',
   // gate: treat an unproven selection as a failure. Off by default because the answer
   // `nothing-selected` with exit 0 predates the flag and every existing consumer reads
   // it; a repository that wants the stricter verdict opts in (ADR-198).
   'strict',
+  'precise',
+  'conservative',
   // tests: `--run` asks the gate's question — the tests a change reaches — under the
   // name that already means tests, so a reader does not have to learn a second verb.
   'run',
@@ -202,6 +205,7 @@ export const VALUE_FLAGS = new Set([
   'page',
   'journal',
   'task',
+  'subtask',
   // plan next: stay inside one tier, or one wave, or both. A value, not a switch,
   // because the answer to "which tier" is the whole question.
   'tier',

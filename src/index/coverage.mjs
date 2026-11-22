@@ -12,7 +12,11 @@
 // edges the index stores. Each caller keeps its default; what changes is that there is
 // now one implementation of each.
 
-import { selectTests } from './gate.mjs';
+import { reverseImportClosure, selectTests } from './gate.mjs';
+import { impactTopology, traceImpact } from './impact.mjs';
+import { targetsForHunks } from './impact-targets.mjs';
+import { isTestPath } from '../testing/paths.mjs';
+import { cmp } from '../util/sort.mjs';
 import { testEdges, testsFor } from './tests.mjs';
 
 /**
@@ -55,4 +59,56 @@ export function coverage(graph, paths, { transitive = true, cochange = false, ro
     for (const test of testsFor(path, edges, { cochange })) found.add(test);
   }
   return [...found].sort();
+}
+
+const MIN_BINDING_COVERAGE = 0.9;
+
+export function preciseCoverage(graph, paths, hunks, { root = null, fallbackReason = null } = {}) {
+  const imports = graph.edges;
+  const closure = reverseImportClosure(paths, imports);
+  const conservative = [...closure].filter((path) => isTestPath(path, root)).sort(cmp);
+  const fallback = (reason) => ({
+    selected: conservative,
+    selection: { mode: 'conservative', reason, hubMediatedSkipped: [], otherSkipped: 0 },
+  });
+  if (fallbackReason) return fallback(fallbackReason);
+  const hunkPaths = new Set((hunks ?? []).map(({ path }) => path));
+  if (hunkPaths.size !== paths.length || paths.some((path) => !hunkPaths.has(path))) {
+    return fallback('complete Git hunk evidence is unavailable');
+  }
+  if (graph.stale) return fallback('some live graph observations are stale or unreadable');
+  const targets = targetsForHunks(hunks, graph);
+  if (targets.some(({ symbol }) => !symbol)) return fallback('the diff includes edits outside a single bound source scope per hunk');
+  const changed = new Set(paths);
+  const topology = impactTopology(graph);
+  const reached = traceImpact(topology, targets, { root, limit: Infinity });
+  const uncertain = graph.symbolGraph?.unresolved ?? [];
+  const onPath = ({ path }) => closure.has(path);
+  if (graph.symbolGraph?.starExports?.some((path) => closure.has(path))) return fallback('a star re-export is on the import path');
+  if (reached.conservativeFallback || uncertain.some((row) => row.kind === 'dynamic-import' && onPath(row))) {
+    return fallback('a dynamic or unresolved import is on the path');
+  }
+  const languages = new Set(graph.files.filter(onPath).map(({ lang }) => lang));
+  if ([...languages].some((lang) => (reached.bindingCoverage[lang]?.ratio ?? 0) < MIN_BINDING_COVERAGE)) {
+    return fallback('binding coverage is below 90% along the import path');
+  }
+  const selected = new Set(reached.tests);
+  for (const { src, dst, kind } of imports) {
+    if ((!kind || kind === 'import') && changed.has(dst) && isTestPath(src, root)) selected.add(src);
+  }
+  for (const path of paths) if (isTestPath(path, root)) selected.add(path);
+  if (!selected.size && conservative.length) return fallback('the symbol graph did not prove any test');
+  const fileReach = traceImpact(topology, paths.map((file) => ({ file })), { root, limit: Infinity });
+  const omitted = new Set(conservative.filter((path) => !selected.has(path)));
+  const skipped = fileReach.tiers.hubMediated.filter(({ path }) => omitted.has(path))
+    .map(({ path }) => path).sort(cmp);
+  return {
+    selected: [...selected].sort(cmp),
+    selection: {
+      mode: 'precise',
+      reason: null,
+      hubMediatedSkipped: skipped,
+      otherSkipped: omitted.size - skipped.length,
+    },
+  };
 }

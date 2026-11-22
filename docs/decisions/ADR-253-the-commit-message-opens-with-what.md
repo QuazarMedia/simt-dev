@@ -2,7 +2,7 @@
 simt-affects: ["rules/mdc/slice-commit.mdc"]
 simt-supersedes: []
 ---
-# ADR-241 — The commit message opens with What
+# ADR-253 — The commit message opens with What
 
 Status: accepted · 2026-11-22
 

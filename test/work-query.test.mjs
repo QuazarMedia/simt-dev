@@ -368,3 +368,17 @@ test('the opt-in fielded policy reaches file input, repository rank and scoped b
   assert.deepEqual(fielded.excluded, [{ id: null, reason: 'permission' }]);
   assert.match(refusal(await simt([...args, '--retrieval', 'future'])), /unknown retrieval mode/);
 });
+
+test('an experimental scoped brief retains committed citations for each question', async () => {
+  const root = await repo();
+  await build(root);
+  const task = 'What is the device checkout retention? What is デバイスの保管期間?';
+  const result = await simt(['brief', task, '--scope', 'handbook', '--retrieval', 'v2', '--root', root, '--json']);
+  assert.equal(result.code, 0, result.stdout);
+  const answer = JSON.parse(result.stdout);
+  assert.equal(answer.proof.complete, true, answer.text);
+  assert.deepEqual(answer.proof.questions.map(({ id }) => id), [1, 2]);
+  assert.ok(answer.proof.questions[0].citations.some((id) => id.includes('retention-')));
+  assert.ok(answer.proof.questions[1].citations.some((id) => id.includes('checkout.jp.md')));
+  assert.ok(answer.bytes <= 2048);
+});

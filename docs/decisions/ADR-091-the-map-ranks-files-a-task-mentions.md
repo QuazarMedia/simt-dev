@@ -1,6 +1,6 @@
 # ADR-091 — The map ranks the files a task mentions, and the files next to them
 
-Status: **accepted** · 2026-10-18 · filed as R22 (plan 0003) · measurement updated by ADR-225
+Status: **accepted** · 2026-10-18 · filed as R22 (plan 0003) · measurement updated by ADR-225 · ruling 1 narrowed by ADR-252
 
 **Affects:** `src/index/map.mjs`, `src/commands/map.mjs`, `src/commands/bench.mjs`,
 `test/map.test.mjs`

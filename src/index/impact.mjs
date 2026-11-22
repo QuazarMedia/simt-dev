@@ -6,10 +6,17 @@
 // answer a reader can use.
 
 import { isTestPath } from '../testing/paths.mjs';
+import { symbolKey, symbolNodePaths } from './bind.mjs';
 import { coverage } from './coverage.mjs';
+import { createImportResolver } from './extract.mjs';
 import { cmp } from '../util/sort.mjs';
 
+export const CODEOWNERS_PATHS = ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS'];
 const IMPACT_LIMIT = 64;
+const HUB_DEGREE_THRESHOLD = 32;
+const DEGREE_POWER = 0.55;
+const RELATIONS = new Set(['calls_symbol', 'refs_symbol', 'imports_symbol', 'reexports_symbol', 'inherits']);
+const TIERS = ['direct', 'transitive', 'hubMediated'];
 
 const CONTRACT_EXT = new Set(['json', 'yaml', 'yml']);
 
@@ -64,6 +71,136 @@ export function filesExporting(name, symbols) {
     if (symbol.exported && symbol.name === name) found.add(symbol.path);
   }
   return [...found].sort();
+}
+
+function connect(graph, key, node) {
+  let neighbors = graph.get(key);
+  if (!neighbors) graph.set(key, neighbors = new Set());
+  neighbors.add(node);
+}
+
+/** Prepare topology once for every target in a change set. */
+export function impactTopology(graph, retained = []) {
+  const languages = new Map(graph.files.map(({ path, lang }) => [path, lang]));
+  const files = new Set([...languages.keys(), ...retained]);
+  const resolve = createImportResolver(files);
+  const binding = graph.symbolGraph;
+  const edges = binding?.edges ?? [];
+  const nodes = symbolNodePaths(files, edges);
+  const callers = new Map();
+  const moduleUses = new Map();
+  const imports = new Map();
+  const outgoing = new Map();
+  const uncertain = new Map();
+  const fallback = new Set();
+  let unknownDynamic = false;
+  for (const row of binding?.unresolved ?? []) {
+    if (row.kind === 'dynamic-import' || row.kind === 'file-import') {
+      const target = resolve(row.path, row.spec, languages.get(row.path));
+      if (target) {
+        connect(imports, target, row.path);
+        connect(outgoing, row.path, target);
+        connect(uncertain, target, row.path);
+      } else if (row.kind === 'dynamic-import' && !row.spec) unknownDynamic = true;
+    } else {
+      fallback.add(row.path);
+    }
+  }
+  for (const { src, dst, kind } of graph.edges) {
+    if ((kind && kind !== 'import') || !files.has(dst)) continue;
+    connect(imports, dst, src);
+    connect(outgoing, src, dst);
+    if (fallback.has(src) || !binding?.bindingCoverage?.[languages.get(src)]) connect(uncertain, dst, src);
+  }
+  for (const { src, dst, kind } of edges) {
+    if (!RELATIONS.has(kind) || !nodes.has(src) || !nodes.has(dst)) continue;
+    connect(callers, dst, src);
+    if (src.startsWith('file:') && (kind === 'calls_symbol' || kind === 'refs_symbol')) {
+      connect(moduleUses, dst, src);
+    }
+  }
+  return {
+    nodes, imports, callers, moduleUses, uncertain, unknownDynamic,
+    bindingCoverage: binding?.bindingCoverage ?? {},
+    isHub: (path) => Math.max(imports.get(path)?.size ?? 0, outgoing.get(path)?.size ?? 0) > HUB_DEGREE_THRESHOLD,
+  };
+}
+
+function byStrength(a, b) {
+  return b.impactScore - a.impactScore || a.hop - b.hop;
+}
+
+function byImpact(a, b) {
+  return a.tier - b.tier || byStrength(a, b) || cmp(a.path, b.path);
+}
+
+export function traceImpact(topology, targets, { root = null, limit = IMPACT_LIMIT } = {}) {
+  const { nodes, imports, callers, moduleUses, uncertain, bindingCoverage, unknownDynamic, isHub } = topology;
+  const seeds = new Set(targets.map(({ file }) => file));
+  const best = new Map();
+  const states = [new Map(), new Map()];
+  const queue = [];
+  let conservativeFallback = unknownDynamic && targets.some(({ symbol }) => symbol);
+  function enqueue(node, path, hop, throughHub, impactScore) {
+    const row = { node, path, hop, throughHub, impactScore, tier: throughHub ? 2 : hop === 1 ? 0 : 1 };
+    const previous = best.get(path);
+    if (hop && !seeds.has(path) && (!previous || byImpact(row, previous) < 0)) best.set(path, row);
+    const state = states[Number(throughHub)];
+    const old = state.get(node);
+    if (old && byStrength(old, row) <= 0) return;
+    state.set(node, row);
+    queue.push(row);
+  }
+  for (const { file, symbol, lines = [] } of targets) {
+    const keys = symbol ? lines.map((line) => symbolKey(file, symbol, line)).filter((key) => nodes.has(key)) : [];
+    if (!keys.length) {
+      conservativeFallback ||= Boolean(symbol);
+      enqueue(file, file, 0, false, 1);
+    } else {
+      for (const key of keys) enqueue(key, file, 0, false, 1);
+    }
+  }
+  for (const row of queue) {
+    const { node, path, hop, throughHub, impactScore } = row;
+    if (states[Number(throughHub)].get(node) !== row) continue;
+    const mediated = throughHub || (hop > 0 && isHub(path));
+    const score = impactScore / Math.max(1, imports.get(path)?.size ?? 0) ** DEGREE_POWER;
+    if (node === path) {
+      for (const src of imports.get(path) ?? []) enqueue(src, src, hop + 1, mediated, score);
+      continue;
+    }
+    for (const src of callers.get(node) ?? []) {
+      const owner = nodes.get(src);
+      const nextHop = hop + Number(owner !== path);
+      enqueue(src, owner, nextHop, mediated, score);
+      // A module-level expression can initialize an export without a bound
+      // caller symbol. Preserve downstream tests through that specific module.
+      if (owner !== path && moduleUses.get(node)?.has(src) && imports.get(owner)?.size) {
+        conservativeFallback = true;
+        enqueue(owner, owner, nextHop, mediated, score);
+      }
+    }
+    for (const src of uncertain.get(path) ?? []) {
+      conservativeFallback = true;
+      enqueue(src, src, hop + 1, mediated, score);
+    }
+  }
+  const tiers = Object.fromEntries(TIERS.map((tier) => [tier, []]));
+  const importers = [];
+  const tests = [];
+  let truncated = false;
+  let suppressedHubMediated = 0;
+  for (const { path, hop, tier, impactScore } of [...best.values()].sort(byImpact)) {
+    const list = isTestPath(path, root) ? tests : importers;
+    if (list.length >= limit) {
+      truncated = true;
+      if (tier === 2) suppressedHubMediated += 1;
+      continue;
+    }
+    list.push(path);
+    tiers[TIERS[tier]].push({ path, hop, impactScore });
+  }
+  return { importers, tests, truncated, tiers, suppressedHubMediated, bindingCoverage, conservativeFallback };
 }
 
 /**

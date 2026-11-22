@@ -147,3 +147,20 @@ test('the budget is bounded by the measured cap, and the builder is deterministi
   const source = await readFile(new URL('../src/brief/proof.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+test('diverse proof selects separate lineage for comparable evidence for two questions', () => {
+  const cited = (id, path, obligation, mandatory = false) => unit(id, 'A reviewed source for the question', [obligation], {
+    anchor: { path, startLine: 1, endLine: 1 },
+    authority: 2,
+    mandatory,
+  });
+  const units = [
+    cited('first', 'docs/a.md', 'first', true),
+    cited('a-duplicate', 'docs/a.md', 'second'),
+    cited('z-independent', 'docs/b.md', 'second'),
+  ];
+  const report = buildProofPacket(units, { required: ['first', 'second'], diverse: true });
+  assert.equal(report.complete, true);
+  assert.deepEqual(report.selected, ['first', 'z-independent']);
+  assert.deepEqual(report.citations.map(({ anchor }) => anchor.path), ['docs/a.md', 'docs/b.md']);
+});

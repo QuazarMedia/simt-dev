@@ -91,10 +91,10 @@ simt bench run --yes                                                            
 simt bench world --input <file>                                                            # run the seeded world model and ask the oracle what the effects should be
 
 # brief
-simt brief "<task>" [--only <section>] [--scope <id>]                                      # the packet for a task: rules, skills and the files it names, within a budget
+simt brief "<task>" [--only <section>] [--scope <id>] [--retrieval v2] [--subtask <n>]     # the packet for a task: rules, skills and the files it names, within a budget
 
 # check
-simt check                                                                                 # report stale or missing generated regions and every check finding
+simt check [--changed]                                                                     # report stale or missing generated regions and every check finding
 
 # work
 simt work graduate (--input <file> | --scope <id>)                                         # whether repeated traces can be proposed as a procedure, and what still blocks it
@@ -136,7 +136,7 @@ simt evidence validate --input <file>                                           
 simt explain <CODE>                                                                        # what one check finding code means, and how to fix it
 
 # gate
-simt gate --changed                                                                        # the tests a change reaches over the import closure, and only those
+simt gate --changed [--precise | --conservative]                                           # the tests a change reaches over the import closure, and only those
 
 # graph
 simt graph lint [--spec agentskills]                                                       # check the skill registry against the skills on disk
@@ -154,7 +154,7 @@ simt hooks status                                                               
 simt ignore [--yes] [--diff]                                                               # render the one ignore list into every harness ignore file
 
 # impact
-simt impact <file|symbol>                                                                  # who a change reaches over the import closure: importers, their tests and the contract
+simt impact <file|symbol|file#symbol>... | --changed | --task "<prompt>"                   # trace the import closure, tests and related evidence for a change
 
 # index
 simt index [--open] [--search <task>] [--embed] [--retrieval v2]                           # rebuild the index, or ask the open cache for rows and ranks
@@ -168,7 +168,7 @@ simt knowledge build --scope <id> [--yes]                                       
 simt knowledge debt (--input <file> | --scope <id>)                                        # rank stale and unsupported knowledge by consequence per effort
 simt knowledge derivations --input <file>                                                  # which outputs a source, template or skill change puts in question
 simt knowledge export (--input <file> | --scope <id>)                                      # a bounded, permission-filtered packet another repository can read offline
-simt knowledge impact (--input <file> --refs <ids> | --changed --scope <id>)               # what a change reaches over typed edges, and where the graph is unknown
+simt knowledge impact (--input <file> --refs <ids> | --changed [--scope <id>])             # what a change reaches over typed edges, and where the graph is unknown
 simt knowledge import --input <file> [--scope <id>]                                        # validate an exported packet as data, and never execute it
 simt knowledge rank (--input <file> | --scope <id>) --query "<question>"                   # rank evidence units by authority and quality, and report what was excluded
 simt knowledge sections <file.md>                                                          # the retrieval units a long document yields, with anchors and byte ranges
@@ -257,7 +257,7 @@ simt studio [--port <n>] [--no-open]                                            
 simt sync --yes                                                                            # re-render the generated regions from the rule content
 
 # tests
-simt tests <path> [--cochange]  |  --run [--changed]                                       # the stored test edges that exercise a file; --run asks the gate instead
+simt tests <path> [--cochange]  |  --run [--changed] [--precise]                           # the stored test edges that exercise a file; --run asks the gate instead
 
 # tokens
 simt tokens [--repos] [--session]                                                          # count tokens per instruction file and per skill
@@ -266,6 +266,6 @@ simt tokens [--repos] [--session]                                               
 simt undo --yes                                                                            # restore the last journaled set of writes, if untouched
 
 # why
-simt why [<subject>]                                                                       # what governs a path, rule, decision, skill or finding code
+simt why [<subject>...] | --changed                                                        # what governs paths, symbols, rules, decisions, skills or finding codes
 ```
 <!-- simt:commands:end -->

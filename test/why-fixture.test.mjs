@@ -80,7 +80,7 @@ test('a fixture repository lists every governor and reports an unresolved token'
     process.chdir(here);
   }
 
-  const directory = await capture(() => whyCommand([join(root, 'src')], { root }, []));
+  const directory = await capture(() => whyCommand([join(root, 'src')], { root, retrieval: 'v1' }, []));
   assert.equal(directory.code, 2, 'a directory is not silently treated as a file');
   assert.match(directory.stderr, /src is a directory/);
 

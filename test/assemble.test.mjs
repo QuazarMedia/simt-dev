@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { assembleBrief } from '../src/brief/assemble.mjs';
+import { reindex } from '../src/index/store.mjs';
 import { git, tempDir } from './fixture.mjs';
 
 /** A repository with one source file, one test that imports it, and a test script. */
@@ -132,7 +133,7 @@ test('a budget of zero is the whole packet, and no delivery may ask for it', asy
 
 test('an index that predates the tree warns instead of quoting yesterday', async () => {
   const root = await repo();
-  await assembleBrief({ root, task: 'fix the keep helper in src/keep.mjs' });
+  await reindex(root);
   // A commit the build did not see: `build: false` is the delivery's setting, so the packet
   // has to say the index is old rather than quote a file list from before the change.
   await writeFile(join(root, 'src', 'keep.mjs'), 'export function keep(value) {\n  return value + 1;\n}\n');

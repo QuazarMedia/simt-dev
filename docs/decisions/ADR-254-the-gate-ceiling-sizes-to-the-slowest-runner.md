@@ -2,7 +2,7 @@
 simt-affects: ["test/studio-server.test.mjs", "docs/decisions/ADR-228-the-studio-is-qualified-from-a-packed-install.md"]
 ---
 
-# ADR-242 — the gate ceiling sizes to the slowest runner, not the authoring machine
+# ADR-254 — the gate ceiling sizes to the slowest runner, not the authoring machine
 
 Status: accepted · 2026-11-22
 

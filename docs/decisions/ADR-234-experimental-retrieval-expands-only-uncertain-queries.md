@@ -30,4 +30,4 @@ topic in the same repository.
 
 - Paired experiments can compare expansion methods and audit each new term.
 - The baseline map policy remains available during qualification under
-  ADR-231.
+  ADR-241.

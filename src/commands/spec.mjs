@@ -49,8 +49,8 @@ export const SPEC = [
   { path: 'bench probes', usage: '--yes', summary: 'run the deterministic probes against a workspace', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task","yes"], writes: 'repo' },
   { path: 'bench report', usage: '[--compare a b]', summary: 'summarise the runs recorded in the vault', defaultFor: 'bench', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench run', usage: '--yes', summary: 'run agents against the mined tasks', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task","yes"], writes: 'repo' },
-  { path: 'brief', usage: '"<task>" [--only <section>] [--scope <id>]', mcp: { name: 'brief', flags: ['budget', 'only', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","only","paths","proof","task","scope","retrieval"], },
-  { path: 'check', mcp: { name: 'check', flags: [] }, summary: 'report stale or missing generated regions and every check finding', flags: ["check","diff","dry-run","frozen","surfaces"], },
+  { path: 'brief', usage: '"<task>" [--only <section>] [--scope <id>] [--retrieval v2] [--subtask <n>]', mcp: { name: 'brief', flags: ['budget', 'only', 'paths', 'retrieval', 'subtask', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","only","paths","proof","task","scope","retrieval","subtask"], },
+  { path: 'check', usage: '[--changed]', mcp: { name: 'check', flags: ['changed'] }, summary: 'report stale or missing generated regions and every check finding', flags: ["changed","check","diff","dry-run","frozen","surfaces"], },
   { path: 'work inspect', mcp: { name: 'work_inspect', flags: [] }, summary: "what this repository's work consists of, and which validations are actually available", flags: [], },
   // The write the read above proposes: one scope, named explicitly, previewed before it
   // lands. It refuses an id or path it did not write, so a re-run is a no-op rather than a
@@ -69,7 +69,7 @@ export const SPEC = [
   { path: 'evidence', summary: 'the runs recorded against the tree on disk', aliases: ['evidence show'], flags: [], },
   { path: 'evidence check', usage: '<msg-file>', summary: 'a commit message claiming a run this tree does not have', flags: [], },
   { path: 'explain', usage: '<CODE>', summary: 'what one check finding code means, and how to fix it', flags: [], },
-  { path: 'gate', usage: '--changed', summary: 'the tests a change reaches over the import closure, and only those', flags: ["changed","strict"], },
+  { path: 'gate', usage: '--changed [--precise | --conservative]', summary: 'the tests a change reaches over the import closure, and only those', flags: ['changed', 'conservative', 'precise', 'strict'], },
   { path: 'graph lint', usage: '[--spec agentskills]', summary: 'check the skill registry against the skills on disk', defaultFor: 'graph', aliases: ['skills lint'], flags: ["spec","workspace"], },
   { path: 'harness detect', usage: '[--user]', summary: 'which harness is installed, and what it carries', defaultFor: 'harness', flags: ["at","reader","table","user"], },
   { path: 'harness loaders', usage: '[--table]', summary: 'the instruction files each harness loads, and what they cost', flags: ["at","reader","table","user"], },
@@ -77,7 +77,7 @@ export const SPEC = [
   { path: 'hooks run', usage: '<event>', summary: "run one git event's gates now, as git would", writes: 'repo', flags: ["yes","diff","dry-run","agent"], },
   { path: 'hooks status', summary: 'what each git event routes to; --agent reports each harness instead', defaultFor: 'hooks', flags: ["agent","diff","dry-run"], },
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
-  { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches over the import closure: importers, their tests and the contract', flags: [], },
+  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>"', mcp: { name: 'impact', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace the import closure, tests and related evidence for a change', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'] }, },
   { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v2]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2"] }, },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated
@@ -89,7 +89,7 @@ export const SPEC = [
   { path: 'knowledge rank', usage: '(--input <file> | --scope <id>) --query "<question>"', summary: 'rank evidence units by authority and quality, and report what was excluded', flags: ["input","limit","query","scope","where","retrieval"], },
   { path: 'knowledge derivations', usage: '--input <file>', summary: 'which outputs a source, template or skill change puts in question', flags: ["input"], },
   { path: 'knowledge debt', usage: '(--input <file> | --scope <id>)', summary: 'rank stale and unsupported knowledge by consequence per effort', flags: ["input","weights","scope"], },
-  { path: 'knowledge impact', usage: '(--input <file> --refs <ids> | --changed --scope <id>)', summary: 'what a change reaches over typed edges, and where the graph is unknown', flags: ["input","limit","refs","changed","scope"], },
+  { path: 'knowledge impact', usage: '(--input <file> --refs <ids> | --changed [--scope <id>])', summary: 'what a change reaches over typed edges, and where the graph is unknown', flags: ["input","limit","refs","changed","scope"], },
   { path: 'knowledge sections', usage: '<file.md>', summary: 'the retrieval units a long document yields, with anchors and byte ranges', flags: ["limit"], },
   // The one knowledge writer: it derives a corpus from files the repository already declared,
   // so it takes the scope, not a file list - an undeclared path has no authority to enter it.
@@ -167,7 +167,7 @@ export const SPEC = [
   // writes, so the flag asked a question the default answer answers. It keeps working and
   // says what replaced it, rather than disappearing from under a script.
   { path: 'sync', usage: '--yes', summary: 're-render the generated regions from the rule content', writes: 'repo', deprecated: { check: 'sync' }, flags: ["yes","baselines","check","diff","dry-run","surfaces","explain"], },
-  { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the stored test edges that exercise a file; --run asks the gate instead', flags: ["cochange","run","changed"], },
+  { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed] [--precise]', summary: 'the stored test edges that exercise a file; --run asks the gate instead', flags: ['changed', 'cochange', 'conservative', 'precise', 'run', 'strict'], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'verify plan', usage: '--input <file>', mcp: { name: 'verify_plan', flags: [] }, summary: 'the next observation worth making, and the point at which there is not one', flags: ["input"], },
   { path: 'verify select', usage: '(--input <file> | (--changed | --staged) --scope <id>)', mcp: { name: 'verify_select', flags: [] }, summary: 'the narrowest checks that prove a change, and whether a Git hook may run them', flags: ["input","changed","staged","scope"], },
@@ -175,7 +175,7 @@ export const SPEC = [
   { path: 'verify status', usage: '(--input <file> | --changed --scope <id> [--input <attestations>])', mcp: { name: 'verify_status', flags: [] }, summary: 'closure over recorded obligations, and what is unresolved', defaultFor: 'verify', flags: ["input","changed","scope"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff","dry-run"], },
   { path: 'workspace upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', aliases: ['upgrade'], flags: ["yes","all","diff","workspace","dry-run"], },
-  { path: 'why', usage: '[<subject>]', summary: 'what governs a path, rule, decision, skill or finding code', flags: [], },
+  { path: 'why', usage: '[<subject>...] | --changed', summary: 'what governs paths, symbols, rules, decisions, skills or finding codes', flags: ['changed', 'retrieval'], values: { retrieval: ['v1', 'v2'] }, },
 ];
 
 

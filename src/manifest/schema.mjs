@@ -26,6 +26,7 @@ import { join } from 'node:path';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { SUPPORTED_WORK_VERSIONS, WORK_VERSION, validateWork } from '../work/config.mjs';
 import { runnerSpecProblem } from '../testing/contract.mjs';
+import { architectureProblem, graphLimitsProblem } from './architecture.mjs';
 
 /** Absent means 1: the field arrived after the file did, and every file predates it. */
 const MANIFEST_VERSION = 1;
@@ -91,10 +92,12 @@ export const KEYS = [
   { key: 'id', owner: 'tool', since: '0.7.0', check: (v) => (typeof v === 'string' && v.length > 0 ? null : 'id must be a non-empty string') },
   { key: 'version', owner: 'tool', since: '0.9.0', check: (v) => (Number.isInteger(v) && v >= 1 ? null : 'version must be an integer of at least 1') },
   { key: 'stack', owner: 'tool', since: '0.7.0', check: (v) => (isStringList(v) ? null : 'stack must be a list of profile ids') },
+  { key: 'architecture', owner: 'repo', since: '0.13.0', check: architectureProblem },
   { key: 'limits', owner: 'repo', since: '0.7.0', check: (v) => (isObject(v) ? null : 'limits must be an object') },
   // {warn, error, excludeTextFiles, exclude} - ADR-005's two tiers plus the paths a
   // repository opts out of, all of which the repository owns and `init` keeps.
   { key: 'limits.fileLines', owner: 'repo', since: '0.7.0', check: (v) => (isObject(v) && isPositiveInt(v.warn) && isPositiveInt(v.error) && v.error >= v.warn ? null : 'limits.fileLines must be {warn, error} with error >= warn') },
+  { key: 'limits.graph', owner: 'repo', since: '0.13.0', check: graphLimitsProblem },
   { key: 'limits.coverage', owner: 'repo', since: '0.7.0', check: (v) => (v === null || (typeof v === 'number' && v >= 0 && v <= 100) ? null : 'limits.coverage must be null or a percentage') },
   { key: 'gates', owner: 'repo', since: '0.7.0', check: (v) => (isObject(v) ? null : 'gates must be an object of gate name to command') },
   // The gate lists and their options were read without a shape before this boundary: a

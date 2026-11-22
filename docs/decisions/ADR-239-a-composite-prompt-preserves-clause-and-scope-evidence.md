@@ -29,4 +29,4 @@ explicit path can crowd out the other requested changes.
 
 - Later packing can show which clauses received evidence and which were
   grouped for the budget.
-- The existing single-task packet remains the baseline under ADR-231.
+- The existing single-task packet remains the baseline under ADR-241.

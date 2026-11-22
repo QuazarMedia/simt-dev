@@ -101,10 +101,10 @@ in [architecture/history.md](architecture/history.md).
 | [088](decisions/ADR-088-a-marked-line-is-enforced-by-a-checker.md) | A marked line is enforced by a checker | accepted · 2026-10-18 · filed as R19 (plan 0003) · ruling 3 narrowed by ADR-090 |
 | [089](decisions/ADR-089-the-local-index-is-a-cache-of-git-blobs.md) | The local index is a cache of git blobs | accepted · 2026-10-18 · filed as R20 (plan 0003) · ruling 2 narrowed by ADR-201 (2026-11-21): an unchanged blob is still not re-read, but its edges are re-resolved when the tracked path set or the language table changes. |
 | [090](decisions/ADR-090-an-optional-adapter-is-off-until-named.md) | An optional adapter is off until a repository names it | accepted · 2026-10-18 · filed as R21 (plan 0003) |
-| [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | accepted · 2026-10-18 · filed as R22 (plan 0003) · measurement updated by ADR-225 |
+| [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | accepted · 2026-10-18 · filed as R22 (plan 0003) · measurement updated by ADR-225 · ruling 1 narrowed by ADR-252 |
 | [092](decisions/ADR-092-tests-are-imports-conventions-and-coverage.md) | A test is an import, a conventional neighbour, or a coverage record | accepted · 2026-10-18 · filed as R24 (plan 0003) |
 | [093](decisions/ADR-093-why-names-what-governs-a-file.md) | why names what governs a file | accepted · 2026-10-18 · filed as R25 (plan 0003) |
-| [094](decisions/ADR-094-a-change-runs-the-tests-that-import-it.md) | a change runs the tests that import it | accepted · 2026-10-18 · filed as R16 (plan 0003) |
+| [094](decisions/ADR-094-a-change-runs-the-tests-that-import-it.md) | a change runs the tests that import it | accepted · 2026-10-18 · filed as R16 (plan 0003) · ruling 1 narrowed by ADR-252 |
 | [095](decisions/ADR-095-gate-output-keeps-the-failures.md) | gate output keeps the failures | accepted · 2026-10-18 · filed as R18 (plan 0003) |
 | [096](decisions/ADR-096-impact-names-who-a-change-reaches.md) | impact names who a change reaches | accepted · 2026-10-18 · filed as R23 (plan 0003) |
 | [097](decisions/ADR-097-the-channels-publish-by-hand-and-the-version-rides-in-as-an-input.md) | the channels publish by hand, and the version rides in as an input | accepted · 2026-10-25 · ruling 3's Homebrew precondition is superseded by ADR-098, which also restates what each channel now waits on |
@@ -236,10 +236,9 @@ in [architecture/history.md](architecture/history.md).
 | [225](decisions/ADR-225-a-recall-figure-names-the-tree-it-measured.md) | A recall figure names the tree it measured | accepted · 2026-11-21 |
 | [226](decisions/ADR-226-the-skills-brief-is-a-view-of-the-packet.md) | The skills brief is a view of the packet, not a second packet | accepted · 2026-11-21 |
 | [227](decisions/ADR-227-control-is-the-writers-preview-confirmed-by-digest.md) | Control is the writer's preview, confirmed by digest | accepted · 2026-11-22 |
-| [228](decisions/ADR-228-the-studio-is-qualified-from-a-packed-install.md) | the studio is qualified from a packed install | accepted · 2026-11-22 · the /api/check 200 ms value is superseded by ADR-242 (300 ms); the method stands |
+| [228](decisions/ADR-228-the-studio-is-qualified-from-a-packed-install.md) | the studio is qualified from a packed install | accepted · 2026-11-22 · the /api/check 200 ms value is superseded by ADR-254 (300 ms); the method stands |
 | [229](decisions/ADR-229-a-read-waits-for-a-transient-index-write-and-then-names-it.md) | a read waits for a transient index write, then names it | accepted · 2026-11-22 |
 | [230](decisions/ADR-230-a-commit-message-carries-what-the-diff-cannot.md) | a commit message carries what the diff cannot | accepted · 2026-11-22 |
-| [231](decisions/ADR-231-deterministic-retrieval-benchmarks-keep-gold-separate-from-prompts.md) | Deterministic retrieval benchmarks keep gold separate from prompts | accepted · 2026-11-22 |
 | [232](decisions/ADR-232-experimental-retrieval-shares-one-identifier-and-field-weight-policy.md) | Experimental retrieval shares one identifier and field-weight policy | accepted · 2026-11-22 |
 | [233](decisions/ADR-233-lexical-coupling-measures-current-file-rarity.md) | Lexical coupling measures current file rarity | accepted · 2026-11-22 |
 | [234](decisions/ADR-234-experimental-retrieval-expands-only-uncertain-queries.md) | Experimental retrieval expands only uncertain queries | accepted · 2026-11-22 |
@@ -249,5 +248,17 @@ in [architecture/history.md](architecture/history.md).
 | [238](decisions/ADR-238-experimental-graph-retrieval-follows-directional-evidence.md) | Experimental graph retrieval follows directional evidence | accepted · 2026-11-22 |
 | [239](decisions/ADR-239-a-composite-prompt-preserves-clause-and-scope-evidence.md) | A composite prompt preserves clause and scope evidence | accepted · 2026-11-22 |
 | [240](decisions/ADR-240-a-composite-packet-rewards-diminishing-evidence-returns.md) | A composite packet rewards diminishing evidence returns | accepted · 2026-11-22 |
-| [241](decisions/ADR-241-the-commit-message-opens-with-what.md) | The commit message opens with What | accepted · 2026-11-22 |
-| [242](decisions/ADR-242-the-gate-ceiling-sizes-to-the-slowest-runner.md) | the gate ceiling sizes to the slowest runner, not the authoring machine | accepted · 2026-11-22 |
+| [241](decisions/ADR-241-deterministic-retrieval-benchmarks-keep-gold-separate-from-prompts.md) | Deterministic retrieval benchmarks keep gold separate from prompts | accepted · 2026-11-22 |
+| [242](decisions/ADR-242-co-change-confidence-comes-from-bounded-untangled-history.md) | Co-change confidence comes from bounded untangled history | accepted · 2026-11-22 |
+| [243](decisions/ADR-243-impact-follows-bound-symbols-and-ranks-direct-dependents-first.md) | Impact follows bound symbols and ranks direct dependents first | accepted · 2026-11-22 · supersedes ADR-096 ruling 1 · supersedes ADR-096 ruling 2 |
+| [244](decisions/ADR-244-impact-combines-git-hunks-and-typed-dependency-evidence.md) | Impact combines Git hunks and typed dependency evidence | accepted · 2026-11-22 |
+| [245](decisions/ADR-245-precise-test-selection-requires-bound-git-hunks.md) | Precise test selection requires bound Git hunks | accepted · 2026-11-22 |
+| [246](decisions/ADR-246-code-and-knowledge-impact-join-by-exact-artifact-identity.md) | Code and knowledge impact join by exact artifact identity | accepted · 2026-11-22 |
+| [247](decisions/ADR-247-governance-applies-only-with-current-path-and-stack-evidence.md) | Governance applies only with current path and stack evidence | accepted · 2026-11-22 · supersedes ADR-093 ruling 2 · supersedes ADR-093 ruling 3 |
+| [248](decisions/ADR-248-governance-witnesses-carry-typed-paths-and-commit-citations.md) | Governance witnesses carry typed paths and commit citations | accepted · 2026-11-22 |
+| [249](decisions/ADR-249-import-direction-is-repository-policy.md) | Import direction is repository policy | accepted · 2026-11-22 · D34 |
+| [250](decisions/ADR-250-structural-checks-are-opt-in.md) | Structural checks are opt-in | accepted · 2026-11-22 · D35 |
+| [251](decisions/ADR-251-check-reuses-staged-source-evidence.md) | Check reuses staged source evidence | accepted · 2026-11-22 · D36 |
+| [252](decisions/ADR-252-retrieval-defaults-follow-paired-evidence.md) | Retrieval defaults follow paired evidence | accepted · 2026-11-22 · D39 |
+| [253](decisions/ADR-253-the-commit-message-opens-with-what.md) | The commit message opens with What | accepted · 2026-11-22 |
+| [254](decisions/ADR-254-the-gate-ceiling-sizes-to-the-slowest-runner.md) | the gate ceiling sizes to the slowest runner, not the authoring machine | accepted · 2026-11-22 |

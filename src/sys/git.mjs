@@ -76,7 +76,9 @@ export async function gitText(root, args, options = {}) {
 
 /** NUL-separated stdout split into paths. `-z` is added here, so a caller cannot forget it. */
 export async function gitPaths(root, args, options = {}) {
-  const stdout = await git(root, [...args, '-z'], options);
+  const separator = args.indexOf('--');
+  const end = separator < 0 ? args.length : separator;
+  const stdout = await git(root, [...args.slice(0, end), '-z', ...args.slice(end)], options);
   if (stdout === null) return null;
   return stdout.split('\0').filter(Boolean);
 }

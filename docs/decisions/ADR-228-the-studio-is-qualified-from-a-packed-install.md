@@ -4,7 +4,7 @@ simt-affects: ["src/surface.mjs", "src/studio/server.mjs", "src/docs/reference.m
 
 # ADR-228 — the studio is qualified from a packed install
 
-Status: accepted · 2026-11-22 · the `/api/check` 200 ms value is superseded by ADR-242 (300 ms); the method stands
+Status: accepted · 2026-11-22 · the `/api/check` 200 ms value is superseded by ADR-254 (300 ms); the method stands
 
 ## Context
 

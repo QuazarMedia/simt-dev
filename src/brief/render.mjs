@@ -66,7 +66,7 @@ function optionCost({ text }) {
   return text.split('\n').reduce((sum, line) => sum + bytes(line) + 3, 0);
 }
 
-export function buildCompactPacket(items, { budget = DEFAULT_BRIEF_BYTES, footer = simpleFooter } = {}) {
+export function buildCompactPacket(items, { budget = DEFAULT_BRIEF_BYTES, footer = simpleFooter, footerBytes = null } = {}) {
   const ordered = [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || cmp(a.id, b.id));
   const candidates = ordered.map((item) => {
     if (!SECTIONS.includes(item.section)) throw new Error('unknown brief section ' + item.section);
@@ -87,7 +87,7 @@ export function buildCompactPacket(items, { budget = DEFAULT_BRIEF_BYTES, footer
     return { before, after: bytes(text), text, cut: selection.cut, trace: selection.trace, utility: selection.utility };
   }
 
-  const footEstimate = bytes(simpleFooter(ordered, ordered, budget));
+  const footEstimate = footerBytes ?? bytes(simpleFooter(ordered, ordered, budget));
   const reserved = headerBytes(candidates) + footEstimate;
   const capacity = Math.max(1, budget - reserved);
   const choose = (value) => packSubmodular(candidates, { budget: Math.max(1, value), facetFloors: FACET_FLOORS });

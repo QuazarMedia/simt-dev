@@ -17,7 +17,10 @@ import { readLocalConfig } from '../local/config.mjs';
 import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
-import { readFts, withReadError } from './graph-read.mjs';
+import { sourceLineFacts } from './source-lines.mjs';
+import { buildCochange } from './cochange.mjs';
+import { CITATIONS_BASIS_SQL, prepareCitations } from './commit-citations.mjs';
+import { readCochangeBasis, readFts, withReadError } from './graph-read.mjs';
 export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols } from './graph-read.mjs';
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
 import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
@@ -284,7 +287,7 @@ export async function reindex(root, opts = {}) {
   const changed = [];
   for (const entry of listed) {
     const old = prior.get(entry.path);
-    if (!force && old && old.blob === entry.blob) continue;
+    if (!force && old && old.blob === entry.blob && old.hasLineFacts) continue;
     changed.push(entry);
   }
   const sizes = await blobSizes(root, changed.map((entry) => entry.blob));
@@ -312,6 +315,8 @@ export async function reindex(root, opts = {}) {
       lang,
       bytes: sizes.get(entry.blob) ?? 0,
       pkg: packages.get(entry.path) ?? '',
+      ...(texts.has(entry.blob) ? sourceLineFacts(text) : {}),
+      hasLineFacts: true,
       // Kept so a later build can re-resolve this file's edges without its bytes.
       imports: Array.isArray(pulled.imports) ? pulled.imports : [],
       bindings: { namedImports: pulled.namedImports ?? [], reexports: pulled.reexports ?? [], chunk: pulled.chunk },
@@ -356,6 +361,12 @@ export async function reindex(root, opts = {}) {
     fetchImpl: opts.fetchImpl,
   });
   const tree = treeDigest(listed);
+  const { prepareGovernance } = await import('./governance-store.mjs');
+  const [cochange, governance, citations] = await Promise.all([
+    readCochangeBasis(root).then((basis) => buildCochange(root, basis, paths, { refresh: force || resolutionChanged })),
+    prepareGovernance(root, listed),
+    readSqliteRows(root, CITATIONS_BASIS_SQL).then(({ rows }) => prepareCitations(root, rows[0]?.value)),
+  ]);
   const build = digestOfParts(['index-build-v1', tree, inputs, resolution]);
   await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree, {
     inputs,
@@ -364,6 +375,9 @@ export async function reindex(root, opts = {}) {
     edgeOwners,
     fielded,
     fieldedRows,
+    cochange,
+    governance,
+    citations,
     embedBasis: embedBuild.basis ?? null,
   });
   const counts = await countSqlite(root);
@@ -506,6 +520,7 @@ async function readBuildRows(root) {
     root,
     `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
       json_extract(s.props, '$.pkg') as pkg,
+      json_extract(s.props, '$.hasLineFacts') as hasLineFacts,
       json_extract(s.props, '$.imports') as imports,
       json_extract(s.props, '$.resolution') as resolution
       from sources s where s.kind = 'blob' order by s.path`,

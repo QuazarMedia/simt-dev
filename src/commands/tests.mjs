@@ -1,18 +1,19 @@
 // `simt tests [path]` lists the tests that exercise a file (ADR-092).
 //
 // Imports combine the staged graph with current edits. Coverage is read from
-// named reports, and co-change uses the last 200 non-merge commits.
+// named reports, and optional co-change uses the bounded history miner.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
+import { buildCochange } from '../index/cochange.mjs';
+import { readCochangeBasis } from '../index/graph-read.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
-import { coverage } from '../index/coverage.mjs';
-import { HISTORY, parseCoverage, testEdges } from '../index/tests.mjs';
+import { parseCoverage, testEdges, testsFor } from '../index/tests.mjs';
 import { commandRoot } from '../repo-root.mjs';
-import { git } from '../sys/git.mjs';
+import { isTestPath } from '../testing/paths.mjs';
 
 const COVERAGE_PATHS = [
   'coverage/lcov.info',
@@ -31,30 +32,35 @@ export async function testsCommand(args, flags) {
   // reimplemented: two selections that disagree is the defect this row exists to prevent,
   // and the gate keeps the sentence its own output makes about an empty selection.
   if (flags.run === true) return (await import('./gate.mjs')).gateCommand(args, flags);
+  if (flags.precise === true || flags.conservative === true) {
+    return fail('change selection flags need the gate', EXIT.USAGE, `run: ${CLI} tests --run --changed`);
+  }
   if (args.length > 1) return fail(`unknown tests argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} tests [path]`);
   const root = commandRoot(flags);
+  const target = args[0];
+  const withHistory = flags.cochange === true || !target;
   let graph;
   try {
-    graph = await loadLiveGraph(root);
+    graph = await loadLiveGraph(root, { cochange: withHistory });
     if (graph.broken) throw new Error(graph.indexError?.message ?? 'the index cannot be read');
   } catch (error) {
     return fail(`could not map tests in this repository (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
   }
   const { files, edges: imports } = graph;
-  const [reports, commits] = await Promise.all([coverageTexts(root), history(root)]);
   const paths = new Set(files.map((file) => file.path));
-  const edges = testEdges({ files, imports, coverage: reports, commits }, { root });
-  const target = args[0];
-  if (!target) return summarise(root, flags, edges);
-  if (!paths.has(target)) {
+  if (target && !paths.has(target)) {
     return fail(`not in the index: ${target}`, EXIT.USAGE, `pass a path ${CLI} index knows`);
   }
-  const tests = coverage({ files, imports, coverage: reports, commits }, [target], {
-    root,
-    transitive: false,
-    cochange: flags.cochange === true,
-  });
-  const payload = { ok: true, command: 'tests', root, path: target, tests };
+  const [reports, partners] = await Promise.all([
+    coverageTexts(root),
+    withHistory ? livePartners(root, paths, graph.cochange) : [],
+  ]);
+  const direct = testEdges({ files, imports, coverage: reports }, { root });
+  const coupled = partners.filter(({ src, dst }) => !isTestPath(src, root) && isTestPath(dst, root));
+  if (!target) return summarise(root, flags, direct.length, coupled.length);
+  const cochange = flags.cochange === true ? coupled.filter(({ src }) => src === target) : null;
+  const tests = [...new Set([...testsFor(target, direct), ...(cochange ?? []).map(({ dst }) => dst)])];
+  const payload = { ok: true, command: 'tests', root, path: target, tests, ...(cochange ? { cochange } : {}) };
   if (isJson(flags)) {
     emitJson(payload);
     return EXIT.OK;
@@ -64,13 +70,12 @@ export async function testsCommand(args, flags) {
   return EXIT.OK;
 }
 
-function summarise(root, flags, edges) {
-  let test = 0;
-  let cochange = 0;
-  for (const edge of edges) {
-    if (edge.kind === 'test') test += 1;
-    else if (edge.kind === 'cochange') cochange += 1;
-  }
+async function livePartners(root, paths, cached) {
+  const history = await buildCochange(root, await readCochangeBasis(root), paths);
+  return history?.rows ?? cached ?? [];
+}
+
+function summarise(root, flags, test, cochange) {
   const payload = { ok: true, command: 'tests', root, test, cochange };
   present(payload, () => `test      ${test}\ncochange  ${cochange}`, flags);
   return EXIT.OK;
@@ -87,25 +92,4 @@ async function coverageTexts(root) {
     }
   }
   return texts;
-}
-
-async function history(root) {
-  let stdout = '';
-  try {
-    stdout = await git(root, ['log', '-n', String(HISTORY), '--no-merges', '--name-only', '--pretty=format:%x1e'], {
-      maxBuffer: 16 << 20,
-    });
-  } catch {
-    return [];
-  }
-  const commits = [];
-  for (const block of stdout.split('\x1e')) {
-    const paths = [];
-    for (const line of block.split('\n')) {
-      const path = line.trim();
-      if (path) paths.push(path);
-    }
-    if (paths.length > 0) commits.push(paths);
-  }
-  return commits;
 }

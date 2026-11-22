@@ -125,63 +125,25 @@ function regionVerdict(action) {
  */
 export async function plan(root, flags = {}) {
   const desired = await desiredRegion(root, flags);
+  return projectionTargets(root, flags, desired, true);
+}
+
+async function projectionTargets(root, flags, desired, includeLock) {
   const { stack, facts, profiles, fallback, notes, body, meta, all, manifest } = desired;
-  const target = await targetFor(root, root, body, meta);
-
-  // Per-rule content projects to every editor the repo selected, not only Cursor. The
-  // body is identical on each; only the frontmatter the editor reads before any rule
-  // text differs. `rule.file` names the canonical source, not a destination — the
-  // destination belongs to the surface.
-  const mdc = await mdcTargets(root, meta.sha, manifest, flags);
-
   const surfaces = resolveSurfaces(manifest, flags);
-
-  // Profiles that narrowed out of the region, written as files for the surfaces whose
-  // scoping key was read in the vendor's own documentation. Only when EVERY selected
-  // surface can scope: a profile that left the region while a reader could not narrow
-  // would be a rule that reader never loads, and `desiredRegion` already kept it in the
-  // region in that case, which is why `narrowing` is the gate here too.
-  const scoped =
+  const [target, mdc, scoped, baselines, packages, lock] = await Promise.all([
+    targetFor(root, root, body, meta),
+    mdcTargets(root, meta.sha, manifest, flags),
     desired.narrowing === true
-      ? await scopedTargets(root, desired.scoped ?? [], meta.sha, surfaces, notes)
-      : { targets: [] };
-
-  // The baselines are the same list shape as every other target, so `sync` writes
-  // them and reports them in the same plan it prints for AGENTS.md and the rule
-  // files. A file the reader was not shown is a file they approve by reading the diff
-  // afterwards, which is the one review step this tool exists to make unnecessary.
-  const baselines = await baselineTargets(root, meta.sha, { adopt: flags.baselines === true });
-
-  // A monorepo projects once per package as well as once at the root. The nested
-  // regions come after the root's and before the rule files, because the root is
-  // what a reader meets first and a plan that listed a package's region before the
-  // root's would read as though the packages were the repository.
-  const packages = await packageRegions(root, flags, profiles);
+      ? scopedTargets(root, desired.scoped ?? [], meta.sha, surfaces, notes)
+      : { targets: [] },
+    baselineTargets(root, meta.sha, { adopt: flags.baselines === true }),
+    packageRegions(root, flags, profiles),
+    includeLock ? lockTargetFor(root, flags) : null,
+  ]);
   const nested = await Promise.all(
     packages.regions.map((r) => targetFor(root, join(root, r.path), r.body, r.meta, `${r.path}/${PRIMARY_TARGET}`)),
   );
-
-  // The lock records the two digests a frozen check compares (ADR-086). It is a target
-  // like every other: `plan` produces it, so preview, `--diff`, the journal, the idle
-  // test and `init` all inherit it. Computing it here rather than in `sync` is what makes
-  // a deleted lock show up in the plan as a write instead of vanishing from it — the
-  // `sync` that printed "wrote simt-dev.lock.json" and then "nothing written" .
-  const lock = await computeLock(root, flags);
-  const lockText = `${JSON.stringify(lock, null, 2)}\n`;
-  const previous = await readLockText(root);
-  const previousLockText = previous.text ?? '';
-  const lockExists = previous.text !== null;
-  const lockTarget = {
-    file: LOCK_FILE,
-    path: join(root, LOCK_FILE),
-    kind: 'lock',
-    surface: null,
-    exists: lockExists,
-    action: !lockExists ? 'create' : previousLockText === lockText ? 'unchanged' : 'update',
-    bytes: Buffer.byteLength(lockText),
-    previousBytes: Buffer.byteLength(previousLockText),
-    text: lockText,
-  };
 
   return {
     root,
@@ -193,11 +155,28 @@ export async function plan(root, flags = {}) {
     surfaceSource: surfaces.source,
     surfaceProblems: surfaces.problems,
     rules: all,
-    targets: [target, ...nested, ...mdc.targets, ...scoped.targets, ...baselines.targets, lockTarget],
+    targets: [target, ...nested, ...mdc.targets, ...scoped.targets, ...baselines.targets, ...(lock ? [lock] : [])],
     packages: packages.regions.map((r) => ({ path: r.path, profiles: r.profiles })),
     mdcProblems: mdc.problems,
     crossRefs: desired.crossRefs,
     notes: [...notes, ...mdc.notes, ...packages.notes],
+  };
+}
+
+async function lockTargetFor(root, flags) {
+  const [lock, previous] = await Promise.all([computeLock(root, flags), readLockText(root)]);
+  const text = `${JSON.stringify(lock, null, 2)}\n`;
+  const exists = previous.text !== null;
+  return {
+    file: LOCK_FILE,
+    path: join(root, LOCK_FILE),
+    kind: 'lock',
+    surface: null,
+    exists,
+    action: !exists ? 'create' : previous.text === text ? 'unchanged' : 'update',
+    bytes: Buffer.byteLength(text),
+    previousBytes: Buffer.byteLength(previous.text ?? ''),
+    text,
   };
 }
 
@@ -347,7 +326,12 @@ function targetFindings(target) {
 /** Check one repo without writing. Returns findings rather than an exit code,
  *  so commands/check decides severity and commands/sync decides whether to act. */
 export async function checkTargets(root, flags = {}) {
-  const projection = await plan(root, flags);
+  const desired = await desiredRegion(root, flags);
+  // A frozen check compares the lock separately. Check findings never use a writer's lock target.
+  const [projection, workflowPlan, dependabot, tsconfig, toolchain, all, budgetTotal, declared] = await Promise.all([
+    projectionTargets(root, flags, desired, false), planWorkflow(root), planDependabot(root),
+    checkTsconfig(root), checkToolchain(root), loadMdcRules(), alwaysOnBytes(root), readDeclared(root),
+  ]);
   const findings = [];
   // The plan's own targets, in the order a reader meets them: the root region, then the
   // packages. Nothing here rebuilds a file.
@@ -377,7 +361,6 @@ export async function checkTargets(root, flags = {}) {
   // Two `.github` files, one ownership rule, so one loop over both. The gate and the
   // dependency-updates config fail for the same reason and are fixed the same way,
   // and listing them separately is how the second copy of this rule gets written.
-  const workflowPlan = await planWorkflow(root);
   // a workflow that exists but cannot resolve simt-dev by any path the
   // locator tries is a green tick on a gate that never runs. The locator tries
   // `$SIMT_DEV_BIN`, the pinned devDependency, the release binary and `simt`
@@ -395,7 +378,7 @@ export async function checkTargets(root, flags = {}) {
   }
   for (const [plan, what] of [
     [workflowPlan, 'nothing gates it'],
-    [await planDependabot(root), 'nothing watches its dependencies'],
+    [dependabot, 'nothing watches its dependencies'],
   ]) {
     if (plan.action === 'create') {
       findings.push({
@@ -423,19 +406,17 @@ export async function checkTargets(root, flags = {}) {
   // `extends` lets a child override every key it sets. So absence is reported from the
   // plan like the `.github` files, and the two things a base file structurally cannot
   // fix come from `checkTsconfig` with their own remedies.
-  findings.push(...(await checkTsconfig(root)));
+  findings.push(...tsconfig);
 
   // What the repository pins, read and never written: the version floor, the package
   // manager and the `.nvmrc` are the repository's decisions, so every finding here names
   // the command that records one rather than a value this tool would have had to invent.
-  findings.push(...(await checkToolchain(root)));
+  findings.push(...toolchain);
 
   // A rule with a defect is a gate failure even when its files happen to be
   // correct, because the next `sync` will not reproduce it.
   // Selection must match `plan` exactly, or the gate reports a rule absent that
   // `sync` was never going to write — a permanently red check nothing can fix.
-  const all = await loadMdcRules();
-  const desired = await desiredRegion(root, flags);
   const { stack, facts, manifest } = desired;
 
   // The budget, both halves of it, and in that order: what this repository agreed to
@@ -450,7 +431,6 @@ export async function checkTargets(root, flags = {}) {
   //
   // Both are non-blocking, for the reason ADR-072 gave for the first and ADR-083 for the
   // second: the remedy is a decision about the number, not a missing file.
-  const budgetTotal = await alwaysOnBytes(root);
   if (budgetTotal !== null) {
     const over = budgetFinding(budgetTotal.bytes, manifest?.budget, manifest?.mode);
     if (over) findings.push({ ...over, file: MANIFEST_FILE, detail: over.detail });
@@ -460,7 +440,6 @@ export async function checkTargets(root, flags = {}) {
     findings.push(budgetCutFinding({ file: PRIMARY_TARGET, ...packed }));
   }
 
-  const declared = await readDeclared(root);
   const resolved = resolveSurfaces(manifest, flags);
   for (const p of resolved.problems) {
     findings.push({ file: `${MANIFEST_FILE}`, status: 'invalid', detail: p, remedy: `known surfaces: ${SURFACE_IDS.join(', ')}` });

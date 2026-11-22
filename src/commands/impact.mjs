@@ -7,95 +7,175 @@
 import { readFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 
-import { EXIT, fail, present } from '../output/index.mjs';
+import { EXIT, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { discover } from '../compare/discover.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
 import {
+  CODEOWNERS_PATHS,
   contractReferences,
   dependents,
   filesExporting,
+  impactTopology,
   isContractPath,
   ownersOf,
   relatedContracts,
+  traceImpact,
 } from '../index/impact.mjs';
+import { targetsForHunks, targetsForTask } from '../index/impact-targets.mjs';
+import { conceptualPartners } from '../index/lexical.mjs';
+import { retrievalMode } from '../index/retrieval-mode.mjs';
 import { governs, sourceRoots } from '../index/govern.mjs';
 import { decisionRecords, ruleScopes } from './why.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { gitPaths } from '../sys/git.mjs';
+import { readChangeHunks } from '../sys/changes.mjs';
+import { cmp } from '../util/sort.mjs';
 
 const TEXT_EXT = new Set(['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'json', 'yaml', 'yml', 'md', 'toml', 'xml', 'py', 'go', 'kt', 'java', 'rs']);
 const READ_CAP = 256 * 1024;
 const FILE_CAP = 2000;
+const USAGE = `run: ${CLI} impact <file|symbol>...  |  --changed  |  --task "<prompt>"`;
+
+function issue(message, exitCode = EXIT.USAGE, remedy = USAGE) {
+  return Object.assign(new Error(message), { exitCode, remedy });
+}
 
 export async function impactCommand(args, flags, commands = []) {
-  if (args.length > 1) return fail(`unknown impact argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} impact <file|symbol>`);
-  const target = args[0];
-  if (!target) return fail(`a file or a symbol is required`, EXIT.USAGE, `run: ${CLI} impact <file|symbol>`);
-  const root = commandRoot(flags);
+  try {
+    const payload = await impactFacts(commandRoot(flags), args, flags, commands);
+    const knowledge = payload.knowledge && !isJson(flags)
+      ? (await import('../index/unified-impact.mjs')).renderKnowledgeBridge(payload.knowledge) : [];
+    present(payload, () => render(payload, knowledge), flags);
+    return EXIT.OK;
+  } catch (error) {
+    if (error.exitCode === undefined) throw error;
+    return fail(error.message, error.exitCode, error.remedy);
+  }
+}
+
+export async function impactFacts(root, args, flags = {}, commands = []) {
+  const changed = flags.changed === true;
+  const task = typeof flags.task === 'string' ? flags.task.trim() : '';
+  if (Number(args.length > 0) + Number(changed) + Number(Boolean(task)) !== 1) {
+    throw issue('choose paths or symbols, --changed, or --task');
+  }
+  const advanced = changed || task || args.length > 1 || flags.all === true || args.some((target) => target.includes('#'));
+  const retrieval = retrievalMode(flags.retrieval ?? (advanced ? 'v2' : undefined));
+  if (retrieval === null) throw issue('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+  if (retrieval === 'v1' && advanced) throw issue('this query requires retrieval v2', EXIT.USAGE, 'pass --retrieval v2');
+  const precise = retrieval === 'v2';
+  let changes = [];
+  try {
+    if (changed) changes = await readChangeHunks(root);
+  } catch (error) {
+    throw issue(`could not read the diff (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository that has a commit');
+  }
+  const gone = changes.filter(({ status }) => status === 'D').map(({ path }) => path);
+  const rangePaths = changes.filter(({ hunks }) => hunks.length > 0).map(({ path }) => path);
   let graph;
   try {
-    graph = await loadLiveGraph(root);
+    graph = await loadLiveGraph(root, { binding: precise, cochange: precise, retainTargets: gone, rangePaths });
     if (graph.broken) throw new Error(graph.indexError?.message ?? 'the index cannot be read');
   } catch (error) {
-    return fail(`could not read the tree (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
+    throw issue(`could not read the tree (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
   }
   const files = new Set(graph.files.map(({ path }) => path));
-  const { edges: imports, symbols } = graph;
-  const resolved = resolveTarget(target, files, symbols);
-  if (resolved.error) return resolved.error;
-  const reach = dependents(resolved.file, imports);
-  const [governanceItems, owners, consumers] = await Promise.all([
-    governance(root, resolved.file, files, commands),
-    readOwners(root, resolved.file),
-    consumersFor(root, flags, files, resolved, reach.importers),
-  ]);
-  const truncated = reach.truncated || consumers.truncated;
-  const payload = {
+  const targets = changed ? targetsForHunks(changes, graph) : task ? targetsForTask(task, graph)
+    : unique(args.map((target) => resolveTarget(target, files, graph.symbols, precise)), ({ file, symbol }) => JSON.stringify([file, symbol]));
+  if (task && !targets.length) throw issue('the task names no unambiguous file or symbol', EXIT.USAGE, `run: ${CLI} map --task "<prompt>"`);
+  const focus = targets[0];
+  const sources = new Set(targets.map(({ file }) => file));
+  const reach = precise ? traceImpact(impactTopology(graph, gone), targets, { root }) : dependents(focus.file, graph.edges);
+  const [governanceItems, owners, consumers, extra] = targets.length ? await Promise.all([
+    governance(root, sources, files, commands),
+    readOwners(root, sources),
+    consumersFor(root, flags, files, targets, reach.importers),
+    precise ? impactChannels(root, graph, reach, sources, flags.all === true) : {},
+  ]) : [[], [], { references: [], truncated: false }, impactChannelsEmpty()];
+  const knowledge = flags.withKnowledge === true
+    ? await (await import('../index/unified-impact.mjs')).knowledgeForImpact(root, { files: [...sources], graph, gone, changed })
+    : null;
+  return {
     ok: true,
     command: 'impact',
     root,
-    file: resolved.file,
-    symbol: resolved.symbol,
-    importers: reach.importers,
-    tests: reach.tests,
+    file: focus?.file ?? '',
+    symbol: focus?.symbol ?? '',
+    ...reach,
     governs: governanceItems,
     owners,
     consumers: consumers.references,
-    truncated,
+    truncated: reach.truncated || consumers.truncated || (extra.cochangeTruncated ?? false),
+    ...(precise ? { ...extra, targets, symbols: targets.filter(({ symbol }) => symbol) } : {}),
+    ...(knowledge ? { knowledge } : {}),
     ...(graph.basis.overlay.applied ? { provenance: graph.basis } : {}),
   };
-  present(payload, () => render(payload), flags);
-  return EXIT.OK;
 }
 
-function resolveTarget(target, files, symbols) {
-  if (files.has(target)) return { file: target, symbol: '' };
-  const exported = filesExporting(target, symbols);
-  if (exported.length === 1) return { file: exported[0], symbol: target };
-  if (exported.length === 0) {
-    return { error: fail(`not a file or an export: ${target}`, EXIT.USAGE, `pass a path git tracks, or the name of one export`) };
+function unique(rows, key = (value) => value) {
+  return [...new Map(rows.map((row) => [key(row), row])).values()];
+}
+
+function impactChannelsEmpty() {
+  return { structural: { direct: [], transitive: [], hubMediated: [] },
+    testTiers: { direct: [], transitive: [], hubMediated: [] }, cochange: [], conceptual: [] };
+}
+
+async function impactChannels(root, graph, reach, sources, all) {
+  const { structural, testTiers } = impactChannelsEmpty();
+  const tests = new Set(reach.tests);
+  const exclude = new Set([...reach.importers, ...reach.tests]);
+  for (const [tier, rows] of Object.entries(reach.tiers)) {
+    for (const row of rows) (tests.has(row.path) ? testTiers : structural)[tier].push(row);
   }
-  return {
-    error: fail(
-      `${target} is exported by ${exported.join(', ')}`,
-      EXIT.USAGE,
-      `pass the path of the export you mean`,
-    ),
-  };
+  const cochange = (graph.cochange ?? []).filter(({ src, dst }) => sources.has(src) && !sources.has(dst) && !exclude.has(dst))
+    .sort((a, b) => b.confidence - a.confidence || b.lift - a.lift || b.support - a.support || cmp(a.dst, b.dst) || cmp(a.src, b.src));
+  for (const { dst } of cochange) exclude.add(dst);
+  const conceptual = [];
+  if (all || (!reach.importers.length && !reach.tests.length)) {
+    const lexical = await loadLiveGraph(root, { fielded: true });
+    const best = new Map();
+    for (const row of conceptualPartners(lexical.fieldedRows, sources, { exclude })) {
+      if (row.score > (best.get(row.path)?.score ?? 0)) best.set(row.path, row);
+    }
+    conceptual.push(...[...best.values()].sort((a, b) => b.score - a.score || cmp(a.path, b.path)).slice(0, 3));
+  }
+  return { structural, testTiers, cochange: cochange.slice(0, 64), cochangeTruncated: cochange.length > 64, conceptual };
 }
 
-async function governance(root, file, files, commands) {
+function resolveTarget(target, files, symbols, precise) {
+  if (files.has(target)) return { file: target, symbol: '' };
+  const split = target.lastIndexOf('#');
+  const qualified = precise && split > 0 && files.has(target.slice(0, split));
+  const name = qualified ? target.slice(split + 1) : target;
+  const candidates = qualified ? symbols.filter(({ path }) => path === target.slice(0, split)) : symbols;
+  const exported = filesExporting(name, candidates);
+  if (exported.length === 1) {
+    const file = exported[0];
+    const lines = candidates.filter((row) => row.path === file && row.name === name && row.exported).map(({ line }) => line);
+    return { file, symbol: name, lines };
+  }
+  if (exported.length === 0) {
+    throw issue(`not a file or an export: ${target}`, EXIT.USAGE, 'pass a path git tracks, or the name of one export');
+  }
+  throw issue(`${target} is exported by ${exported.join(', ')}`, EXIT.USAGE,
+    precise ? `pass <file>#${name} to select one export` : 'pass the path of the export you mean');
+}
+
+async function governance(root, paths, files, commands) {
   const [records, rules] = await Promise.all([decisionRecords(root), ruleScopes(root)]);
   const ctx = { files, commands: new Set(commands), roots: sourceRoots(files) };
-  return governs(file, { records, rules, ctx });
+  return unique([...paths].flatMap((file) => governs(file, { records, rules, ctx })),
+    ({ kind, id, detail }) => JSON.stringify([kind, id, detail]));
 }
 
-async function readOwners(root, file) {
-  for (const path of ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS']) {
+async function readOwners(root, paths) {
+  for (const path of CODEOWNERS_PATHS) {
     try {
-      return ownersOf(await readFile(join(root, path), 'utf8'), file);
+      const text = await readFile(join(root, path), 'utf8');
+      return unique([...paths].flatMap((file) => ownersOf(text, file)));
     } catch {
       // The next location may hold the file. GitHub reads the first that exists.
     }
@@ -103,7 +183,7 @@ async function readOwners(root, file) {
   return [];
 }
 
-async function contractsFor(root, files, resolved, importers) {
+async function contractsFor(root, files, targets, importers) {
   const contracts = [];
   for (const path of files) {
     if (!isContractPath(path) && !mightSniff(path)) continue;
@@ -116,10 +196,10 @@ async function contractsFor(root, files, resolved, importers) {
     if (!isContractPath(path) && !sniffs(text)) continue;
     contracts.push({ path, text });
   }
-  return relatedContracts(contracts, { file: resolved.file, symbol: resolved.symbol, importers });
+  return unique(targets.flatMap(({ file, symbol }) => relatedContracts(contracts, { file, symbol, importers })));
 }
 
-async function consumersFor(root, flags, paths, target, importers) {
+async function consumersFor(root, flags, paths, targets, importers) {
   const workspace = await resolveWorkspace({ ...flags, repoRoot: root });
   if (!workspace.root) return { references: [], truncated: false };
   const found = await discover(workspace.root);
@@ -127,7 +207,7 @@ async function consumersFor(root, flags, paths, target, importers) {
   const here = resolve(root);
   const siblings = found.repos.filter((repo) => resolve(repo) !== here);
   if (!siblings.length) return { references: [], truncated: false };
-  const contracts = await contractsFor(root, paths, target, importers);
+  const contracts = await contractsFor(root, paths, targets, importers);
   if (!contracts.length) return { references: [], truncated: false };
   const files = [];
   let truncated = false;
@@ -156,14 +236,22 @@ async function consumersFor(root, flags, paths, target, importers) {
   return { references: refs.references, truncated: truncated || refs.truncated };
 }
 
-function render(payload) {
-  const lines = [`file      ${payload.file}`];
-  if (payload.symbol) lines.push(`symbol    ${payload.symbol}`);
-  for (const path of payload.importers) lines.push(`importer  ${path}`);
-  for (const path of payload.tests) lines.push(`test      ${path}`);
+function render(payload, knowledge) {
+  const targets = payload.targets ?? [payload];
+  if (!targets.length) return 'no changed files';
+  const lines = targets.flatMap(({ file, symbol }) => [`file      ${file}`, ...(symbol ? [`symbol    ${symbol}`] : [])]);
+  const tiers = new Map(Object.entries(payload.tiers ?? {}).flatMap(([tier, rows]) =>
+    rows.map(({ path, hop }) => [path, `  (${tier}, hop ${hop})`])));
+  for (const path of payload.importers) lines.push(`importer  ${path}${tiers.get(path) ?? ''}`);
+  for (const path of payload.tests) lines.push(`test      ${path}${tiers.get(path) ?? ''}`);
+  for (const { src, dst, confidence } of payload.cochange ?? []) lines.push(`cochange  ${dst}  (${src}, ${confidence.toFixed(3)})`);
+  for (const { path, score } of payload.conceptual ?? []) lines.push(`concept   ${path}  (${score.toFixed(3)})`);
+  if (payload.conservativeFallback) lines.push('fallback  unresolved bindings; file-level edges used where available');
+  if (payload.suppressedHubMediated) lines.push(`hub paths omitted  ${payload.suppressedHubMediated}`);
   for (const hit of payload.governs) lines.push(`${hit.kind.padEnd(10)}${hit.id}  ${hit.detail}`);
   for (const owner of payload.owners) lines.push(`owner     ${owner}`);
   for (const consumer of payload.consumers) lines.push(`consumer  ${consumer.repo}/${consumer.path}  ${consumer.contract}`);
+  lines.push(...knowledge);
   if (payload.truncated) lines.push('truncated  1');
   return lines.join('\n');
 }

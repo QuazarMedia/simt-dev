@@ -18,7 +18,7 @@ import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
 import { extract, resolveImports } from './extract.mjs';
-import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
+import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
 // names the extensions that RESOLVE to a language (JavaScript claims `.ts` for extraction
 // but not for resolution), so a record's extraction and resolution cannot desynchronize.
@@ -613,23 +613,8 @@ export async function searchFtsBm25F(root, task, { fts, fields = BM25F_FIELDS } 
   if (fts !== undefined) return withReadError(scoreFtsBm25F(fts, task, { fields }), fts.error);
   const terms = fieldQueryTerms(task);
   if (!terms.length) return [];
-  // Score and collapse sections in SQLite so one large file cannot fill the
-  // result cap or force every matching section over the storage boundary.
-  const phrases = terms.map(ftsQuote).join(' OR ');
-  const match = fields === BM25F_FIELDS ? phrases : `{${fields.join(' ')}} : (${phrases})`;
-  const { rows, error } = await readSqliteRows(root,
-    `with hits as materialized (
-       select f.kind, substr(n.key, 6) as path, f.rowid as section,
-         -bm25(fts, ${BM25F_WEIGHTS.join(', ')}) as score
-       from fts f join nodes n on n.id = f.node_id
-       where fts match ? and (select value from meta where key = 'fts_fields') = '1'
-     ), ranked as (
-       select kind, path, score, row_number() over (partition by path order by score desc, section) as position
-       from hits
-     )
-     select kind, path, score from ranked where position = 1
-     order by score desc, path asc limit ?`,
-    [match, FTS_LIMIT], { legacySql: null });
+  const [sql, params] = fieldSearchStatement(terms, fields);
+  const { rows, error } = await readSqliteRows(root, sql, params, { legacySql: null });
   return withReadError(bestFieldHits(rows), error);
 }
 

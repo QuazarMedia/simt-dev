@@ -292,6 +292,65 @@ footer {
   font-size: 0.8rem;
 }
 
+.pulse-intro { margin-top: 0; }
+.pulse-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+  color: var(--dim);
+  font-size: 0.85rem;
+}
+
+.pulse-controls select {
+  font: inherit;
+  background: var(--bg);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+}
+
+.pulse-ribbon {
+  list-style: none;
+  display: flex;
+  gap: 0.5rem;
+  overflow-x: auto;
+  padding: 0.5rem 0;
+  margin: 0;
+}
+
+.pulse-event {
+  min-width: 12rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--dim);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 0.8rem;
+  animation: pulse-in 180ms ease-out;
+}
+
+.pulse-accent { border-left-color: var(--accent); }
+.pulse-ok { border-left-color: var(--ok); }
+.pulse-warn { border-left-color: var(--warn); }
+.pulse-bad { border-left-color: var(--bad); }
+
+.pulse-link {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.1rem 0.35rem;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.pulse-glyph { grid-row: span 2; color: var(--accent); }
+.pulse-kind { color: var(--dim); }
+.pulse-subject { overflow-wrap: anywhere; }
+.pulse-time { display: block; margin-top: 0.35rem; color: var(--dim); font-size: 0.7rem; }
+
+@keyframes pulse-in { from { opacity: 0; transform: translateY(2px); } }
+
 code, kbd {
   padding: 0 0.35em;
   border: 1px solid var(--line);

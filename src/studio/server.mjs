@@ -13,6 +13,7 @@ import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { apiAnswer } from './api.mjs';
+import { streamEvents } from './events.mjs';
 import { within } from '../trust/paths.mjs';
 
 const STUDIO_HOST = '127.0.0.1';
@@ -119,6 +120,20 @@ export async function startStudioServer({ port = STUDIO_DEFAULT_PORT, root } = {
 
     if (!sameSecret(cookieValue(req.headers.cookie), token)) {
       return refusal(res, 401, 'STUDIO_NO_SESSION', 'open the URL the running studio printed; it carries the one-time token');
+    }
+
+    if (url.pathname === '/api/events') {
+      return streamEvents({
+        root,
+        req,
+        res,
+        headers: {
+          ...SECURITY_HEADERS,
+          'content-type': 'text/event-stream; charset=utf-8',
+          connection: 'keep-alive',
+          'x-accel-buffering': 'no',
+        },
+      });
     }
 
     if (url.pathname.startsWith('/api/')) {

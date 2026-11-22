@@ -6,6 +6,7 @@
 import { readDoor } from './client.js';
 import { badge, card, emptyState, escapeHtml } from './components.js';
 import { overview } from './overview.js';
+import { pulse } from './pulse.js';
 import { createRouter } from './router.js';
 
 const THEME_KEY = 'simt-studio-theme';
@@ -45,6 +46,71 @@ async function home() {
 
 const later = (name) => () => emptyState({ title: name, hint: 'This room is not part of this build yet.' });
 
+let pulseSource = null;
+function closePulse() {
+  if (pulseSource) {
+    pulseSource.close();
+    pulseSource = null;
+  }
+}
+
+// The Pulse is the one room that keeps a socket open after its first render. The stream
+// is replaced on every return to the room, and a resync clears the ribbon before the
+// server's replay arrives; nothing else in the shell owns an EventSource.
+function pulseRoom() {
+  closePulse();
+  const state = { events: [], kind: 'all', connected: true };
+  const markup = () => `<div id="pulse-room">${pulse(state.events, { kind: state.kind, connected: state.connected })}</div>`;
+  const bindFilter = () => {
+    const select = document.getElementById('pulse-kind');
+    select?.addEventListener('change', () => {
+      state.kind = select.value;
+      draw();
+    });
+  };
+  const draw = () => {
+    const view = document.getElementById('view');
+    if (!view || !document.getElementById('pulse-room')) return;
+    view.innerHTML = markup();
+    bindFilter();
+  };
+
+  setTimeout(() => {
+    if (location.hash !== '#/pulse' || !document.getElementById('pulse-room')) return;
+    bindFilter();
+    const source = new EventSource('/api/events');
+    pulseSource = source;
+    source.onopen = () => {
+      state.connected = true;
+    };
+    source.onerror = () => {
+      state.connected = false;
+      draw();
+    };
+    source.onmessage = (message) => {
+      try {
+        const event = JSON.parse(message.data);
+        state.events = [...state.events.slice(-199), event];
+        state.connected = true;
+        draw();
+      } catch {
+        // A malformed line is already reported by the log reader; the feed keeps its
+        // last good state rather than replacing the room with an exception.
+      }
+    };
+    source.addEventListener('resync', () => {
+      state.events = [];
+      draw();
+    });
+  }, 0);
+
+  return markup();
+}
+
+window.addEventListener('hashchange', () => {
+  if (location.hash !== '#/pulse') closePulse();
+});
+
 // The snapshot is the view's spine: its refusal refuses the room. The check and work
 // reads fail alone, each confined to its own card, the way the snapshot's slots do.
 const alone = (path) => readDoor(path).catch((error) => error.payload ?? {
@@ -65,7 +131,7 @@ async function overviewRoom() {
 const routes = new Map([
   ['/', { view: home }],
   ['/overview', { view: overviewRoom }],
-  ['/pulse', { view: later('Pulse') }],
+  ['/pulse', { view: pulseRoom }],
   ['/board', { view: later('Board') }],
   ['/custody', { view: later('Custody') }],
   ['/constellation', { view: later('Constellation') }],

@@ -179,7 +179,7 @@ export async function loadLiveGraph(root, options = {}) {
     && !problems.has(path) && staged.get(path)?.blob === base.get(path)?.blob);
   let symbolGraph = snapshot.binding;
   if (canRebind) {
-    const { ownerRows, bindingCoverage, unresolved } = bindSymbols(evidence, result.symbols);
+    const { ownerRows, bindingCoverage, unresolved, starExports } = bindSymbols(evidence, result.symbols);
     const fromCache = new Map((snapshot.binding?.edges ?? []).map((edge) => [edgeKey(edge), edge]));
     const edges = [...ownerRows].flatMap(([path, owner]) => owner.edges.map((edge) => {
       const old = fromCache.get(edgeKey(edge));
@@ -187,12 +187,13 @@ export async function loadLiveGraph(root, options = {}) {
         || old.lines.join('\0') !== edge.lines.join('\0');
       return { path, ...edge, provenance: live ? 'worktree' : 'committed' };
     }));
-    symbolGraph = { edges, bindingCoverage, unresolved, version: BINDING_VERSION };
+    symbolGraph = { edges, bindingCoverage, unresolved, starExports, version: BINDING_VERSION };
   } else if (symbolGraph) {
     const nodes = base.size === snapshot.files.length && !changedPathSet ? null : symbolNodePaths(paths, symbolGraph.edges);
     symbolGraph.edges = symbolGraph.edges.filter(({ src, dst }) => !nodes || (nodes.has(src) && nodes.has(dst)))
       .map((row) => ({ ...row, provenance: 'committed' }));
     symbolGraph.unresolved = symbolGraph.unresolved.filter(({ path }) => paths.has(path));
+    symbolGraph.starExports = symbolGraph.starExports.filter((path) => paths.has(path));
   }
   const stale = problems.size > 0 || (!build && mismatched);
   return {

@@ -3,7 +3,7 @@ import { createImportResolver } from './extract.mjs';
 
 const SCRIPT = new Set(['javascript', 'typescript']);
 const SHADOWED = Symbol('shadowed');
-export const BINDING_VERSION = 2;
+export const BINDING_VERSION = 3;
 
 function collect(map, key, value) {
   const entries = map.get(key);
@@ -89,6 +89,7 @@ export function bindSymbols(files, symbols) {
   const cache = new Map();
   const coverage = new Map();
   const unresolved = [];
+  const starExports = [];
   const ownerRows = new Map();
 
   function importDest(from, row, name, trace, depth) {
@@ -198,6 +199,7 @@ export function bindSymbols(files, symbols) {
       edges.set(key, row);
     }
     for (const node of file.nodes.values()) edge(origin, 'contains', node.key);
+    if (file.stars.length) starExports.push(owner);
     if (file.stars.length || file.named.size) {
       for (const name of exportNames(file)) {
         if (!file.named.has(name) && file.direct.has(name)) continue;
@@ -252,5 +254,5 @@ export function bindSymbols(files, symbols) {
   const bindingCoverage = Object.fromEntries([...coverage].sort(([a], [b]) => cmp(a, b)).map(([lang, stats]) => [
     lang, { ...stats, ratio: stats.total ? stats.bound / stats.total : null },
   ]));
-  return { ownerRows, bindingCoverage, unresolved };
+  return { ownerRows, bindingCoverage, unresolved, starExports };
 }

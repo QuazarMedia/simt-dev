@@ -69,7 +69,7 @@ export const SPEC = [
   { path: 'evidence', summary: 'the runs recorded against the tree on disk', aliases: ['evidence show'], flags: [], },
   { path: 'evidence check', usage: '<msg-file>', summary: 'a commit message claiming a run this tree does not have', flags: [], },
   { path: 'explain', usage: '<CODE>', summary: 'what one check finding code means, and how to fix it', flags: [], },
-  { path: 'gate', usage: '--changed', summary: 'the tests a change reaches over the import closure, and only those', flags: ["changed","strict"], },
+  { path: 'gate', usage: '--changed [--precise | --conservative]', summary: 'the tests a change reaches over the import closure, and only those', flags: ['changed', 'conservative', 'precise', 'strict'], },
   { path: 'graph lint', usage: '[--spec agentskills]', summary: 'check the skill registry against the skills on disk', defaultFor: 'graph', aliases: ['skills lint'], flags: ["spec","workspace"], },
   { path: 'harness detect', usage: '[--user]', summary: 'which harness is installed, and what it carries', defaultFor: 'harness', flags: ["at","reader","table","user"], },
   { path: 'harness loaders', usage: '[--table]', summary: 'the instruction files each harness loads, and what they cost', flags: ["at","reader","table","user"], },
@@ -167,7 +167,7 @@ export const SPEC = [
   // writes, so the flag asked a question the default answer answers. It keeps working and
   // says what replaced it, rather than disappearing from under a script.
   { path: 'sync', usage: '--yes', summary: 're-render the generated regions from the rule content', writes: 'repo', deprecated: { check: 'sync' }, flags: ["yes","baselines","check","diff","dry-run","surfaces","explain"], },
-  { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the stored test edges that exercise a file; --run asks the gate instead', flags: ["cochange","run","changed"], },
+  { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed] [--precise]', summary: 'the stored test edges that exercise a file; --run asks the gate instead', flags: ['changed', 'cochange', 'conservative', 'precise', 'run', 'strict'], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'verify plan', usage: '--input <file>', mcp: { name: 'verify_plan', flags: [] }, summary: 'the next observation worth making, and the point at which there is not one', flags: ["input"], },
   { path: 'verify select', usage: '(--input <file> | (--changed | --staged) --scope <id>)', mcp: { name: 'verify_select', flags: [] }, summary: 'the narrowest checks that prove a change, and whether a Git hook may run them', flags: ["input","changed","staged","scope"], },

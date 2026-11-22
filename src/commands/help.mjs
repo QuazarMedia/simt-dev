@@ -334,6 +334,8 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --paths <globs>         comma-separated path globs used for path resolution
 --proof                 brief --json: report whether the packet proves what it kept
 --strict                gate: refuse a change whose tests could not be proven
+--precise              gate and tests --run: use bound symbols from a Git diff when supported
+--conservative         gate and tests --run: use the full file import closure
                         to run (the default answer stays compatible)
 --root <path>           repository root (default: cwd)
 --base <ref>           pr-body: the ref the body diffs against

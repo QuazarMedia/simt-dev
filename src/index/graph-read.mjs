@@ -83,6 +83,7 @@ function decodeSymbolGraph(edges, metadata, error) {
     bindingCoverage: values.get('binding_coverage') ?? null,
     version: values.get('binding_version') ?? null,
     unresolved: values.get('binding_unresolved') ?? [],
+    starExports: values.get('binding_star_exports') ?? [],
     error,
   };
 }

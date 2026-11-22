@@ -136,7 +136,7 @@ simt evidence validate --input <file>                                           
 simt explain <CODE>                                                                        # what one check finding code means, and how to fix it
 
 # gate
-simt gate --changed                                                                        # the tests a change reaches over the import closure, and only those
+simt gate --changed [--precise | --conservative]                                           # the tests a change reaches over the import closure, and only those
 
 # graph
 simt graph lint [--spec agentskills]                                                       # check the skill registry against the skills on disk
@@ -257,7 +257,7 @@ simt studio [--port <n>] [--no-open]                                            
 simt sync --yes                                                                            # re-render the generated regions from the rule content
 
 # tests
-simt tests <path> [--cochange]  |  --run [--changed]                                       # the stored test edges that exercise a file; --run asks the gate instead
+simt tests <path> [--cochange]  |  --run [--changed] [--precise]                           # the stored test edges that exercise a file; --run asks the gate instead
 
 # tokens
 simt tokens [--repos] [--session]                                                          # count tokens per instruction file and per skill

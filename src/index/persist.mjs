@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
 import { writeCochange } from './cochange.mjs';
+import { BINDING_VERSION } from './bind.mjs';
 import { BM25F_FIELDS } from './bm25f.mjs';
 import { lexicalWriter } from './lexical-store.mjs';
 import { persistSymbolGraph } from './symbol-persist.mjs';
@@ -466,7 +467,8 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     const upsertMeta = db.prepare(
       'insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value',
     );
-    if (next.length || removed.length || meta.edgeOwners?.length) persistSymbolGraph(db);
+    const priorBinding = db.prepare("select value from meta where key = 'binding_version'").get()?.value;
+    if (next.length || removed.length || meta.edgeOwners?.length || priorBinding !== String(BINDING_VERSION)) persistSymbolGraph(db);
     if (meta.cochange) writeCochange(db, meta.cochange);
     upsertMeta.run('schema', SCHEMA_V);
     if (meta.fielded || invalidatedFielded) {

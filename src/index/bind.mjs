@@ -3,6 +3,7 @@ import { createImportResolver } from './extract.mjs';
 
 const SCRIPT = new Set(['javascript', 'typescript']);
 const SHADOWED = Symbol('shadowed');
+export const BINDING_VERSION = 2;
 
 function collect(map, key, value) {
   const entries = map.get(key);
@@ -67,7 +68,7 @@ function fileInfo(file, symbols) {
     if (row.isStar) stars.push(row);
     else collect(named, row.exported, row);
   }
-  return { ...file, direct, locals, scopes, nodes, imports, named, stars, scopeById };
+  return { ...file, importSpecs: file.imports ?? [], direct, locals, scopes, nodes, imports, named, stars, scopeById };
 }
 
 function distinctDestinations(destinations) {
@@ -204,8 +205,31 @@ export function bindSymbols(files, symbols) {
         if (target) edge(origin, 'reexports_symbol', target.dst, target.viaBarrels);
       }
     }
+    const structured = new Set([
+      ...(file.namedImports ?? []), ...(file.reexports ?? []), ...(file.chunk?.unresolved ?? []),
+    ].map(({ spec }) => spec));
+    for (const spec of file.importSpecs) {
+      if (!structured.has(spec) && resolve(file.path, spec, file.lang)) {
+        unresolved.push({ path: owner, kind: 'file-import', spec });
+      }
+    }
+    for (const row of file.namedImports ?? []) {
+      const path = resolve(file.path, row.spec, file.lang);
+      if (!path || (row.local && row.isNamespace)) continue;
+      const target = row.local ? query(info.get(path), row.imported) : null;
+      if (target) edge(origin, 'imports_symbol', target.dst, target.viaBarrels, row.line);
+      else if (!row.local) unresolved.push({ path: owner, kind: 'file-import', spec: row.spec, line: row.line });
+    }
     for (const ref of file.chunk?.references ?? []) {
-      if (!file.imports.has(ref.localName)) continue;
+      const src = file.scopes.get(ref.callerScope) ?? origin;
+      const kind = ref.kind === 'call' ? 'calls_symbol' : ref.kind === 'inherits' ? 'inherits' : 'refs_symbol';
+      if (!file.imports.has(ref.localName)) {
+        const local = file.locals.get(ref.localName);
+        if (!ref.shadowed && !ref.memberName && local?.length === 1 && src !== local[0]) {
+          edge(src, kind, local[0], [], ref.line);
+        }
+        continue;
+      }
       const target = referenceTarget(file, ref);
       if (target === SHADOWED) continue;
       stats.total += 1;
@@ -215,8 +239,6 @@ export function bindSymbols(files, symbols) {
         continue;
       }
       stats.bound += 1;
-      const src = file.scopes.get(ref.callerScope) ?? origin;
-      const kind = ref.kind === 'call' ? 'calls_symbol' : ref.kind === 'inherits' ? 'inherits' : 'refs_symbol';
       edge(src, kind, target.dst, target.viaBarrels, ref.line);
       edge(origin, 'imports_symbol', target.dst, target.viaBarrels, ref.line);
     }

@@ -80,6 +80,7 @@ function decodeSymbolGraph(edges, metadata, error) {
   return {
     edges: edges.map(({ src, kind, dst, path, props }) => ({ src, kind, dst, path, ...(props === null ? { viaBarrels: [], lines: [] } : JSON.parse(props)) })),
     bindingCoverage: values.get('binding_coverage') ?? null,
+    version: values.get('binding_version') ?? null,
     unresolved: values.get('binding_unresolved') ?? [],
     error,
   };

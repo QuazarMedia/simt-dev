@@ -154,7 +154,7 @@ simt hooks status                                                               
 simt ignore [--yes] [--diff]                                                               # render the one ignore list into every harness ignore file
 
 # impact
-simt impact <file|symbol>                                                                  # who a change reaches over the import closure: importers, their tests and the contract
+simt impact <file|symbol|file#symbol> [--retrieval v2]                                     # who a change reaches over the import closure: importers, their tests and the contract
 
 # index
 simt index [--open] [--search <task>] [--embed] [--retrieval v2]                           # rebuild the index, or ask the open cache for rows and ranks

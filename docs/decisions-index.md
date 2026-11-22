@@ -251,3 +251,4 @@ in [architecture/history.md](architecture/history.md).
 | [240](decisions/ADR-240-a-composite-packet-rewards-diminishing-evidence-returns.md) | A composite packet rewards diminishing evidence returns | accepted · 2026-11-22 |
 | [241](decisions/ADR-241-deterministic-retrieval-benchmarks-keep-gold-separate-from-prompts.md) | Deterministic retrieval benchmarks keep gold separate from prompts | accepted · 2026-11-22 |
 | [242](decisions/ADR-242-co-change-confidence-comes-from-bounded-untangled-history.md) | Co-change confidence comes from bounded untangled history | accepted · 2026-11-22 |
+| [243](decisions/ADR-243-impact-follows-bound-symbols-and-ranks-direct-dependents-first.md) | Impact follows bound symbols and ranks direct dependents first | accepted · 2026-11-22 · supersedes ADR-096 ruling 1 · supersedes ADR-096 ruling 2 |

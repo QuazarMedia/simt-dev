@@ -190,8 +190,9 @@ ${CLI} tests <path>          the tests that exercise a file: an import, the conv
                            --changed reads from the diff
 ${CLI} gate [path...]        the tests a change reaches, and only those
                            (--changed reads the diff instead of the paths)
-${CLI} impact <file|symbol>  who a change reaches: importers, their tests,
-                           what governs it, and a contract another repository references
+${CLI} impact <file|symbol|file#symbol> [--retrieval v2]
+                           who a change reaches: importers, tests, governance and consumers
+                           (v2 ranks bound symbols by directness and graph degree)
 ${CLI} map [--task "<text>"] [--level outline|names|signatures]
                            the files this task is most likely to touch, within
                            --budget bytes (default 2048; 0 is unlimited). outline
@@ -382,7 +383,8 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --search <task>         index: BM25 rows for a task, from the open cache
 --rank <task>           index: files ranked for a task, from the open cache
 --query <text>          knowledge rank: the question the units are ranked against
---retrieval <v1|v2>     knowledge rank, brief --scope: select the retrieval policy
+--retrieval <v1|v2>     select the retrieval policy for brief, map, index, impact or knowledge rank
+--subtask <n>           brief: open one subtask from a composite packet
 --where <k=v,...>       knowledge rank|why --scope: the scope dimensions the question
                         requires, e.g. jurisdiction=DE,product=acme
 --refs <ids>            knowledge impact: the changed claim or artifact ids, comma separated

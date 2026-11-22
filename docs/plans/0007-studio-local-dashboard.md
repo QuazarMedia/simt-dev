@@ -133,10 +133,11 @@ with a table view that carries the same data.
   output changes (ADR-187's contract ruling stands — only its no-socket clause is
   amended, by ADR-212, for this explicitly invoked surface).
 - **Budgets.** The whole shell (HTML + CSS + JS, uncompressed) stays under 120 KB; the
-  server answers every read route in under 50 ms on the fixture repository, except the
-  CLI-backed gate and status reads with measured ceilings in ADR-228; the test suite
-  asserts both and covers every GET path in `STUDIO_READ_ROUTES`. No asset over the
-  file-line ceiling; views split into small modules.
+  server answers every read route in under 50 ms on the fixture repository except
+  `/api/check`, which runs the full gate. The status-backed reads use 75 ms test ceilings
+  as concurrency headroom and `/api/check` uses 200 ms, all measured in ADR-228; the test
+  suite covers every GET path in `STUDIO_READ_ROUTES`. No asset over the file-line
+  ceiling; views split into small modules.
 
 ## Data ownership
 
@@ -174,10 +175,11 @@ ST15 qualification limits: `test/studio-server.test.mjs` measures every GET path
 seven-sample fixture run measured `/api/status` at 42.8 ms (41.4–44.5; 75 ms ceiling after
 collapsing three git spawns to one), `/api/check` at 105.1 ms (101.6–124.6; 200 ms
 ceiling, the full gate), and `/api/helm?path=status` at 44.1 ms (43.4–50.9; 75 ms ceiling,
-the same status door). Every other route measured 0.2–31.6 ms. A new GET path fails the
-latency coverage assertion until the test names it. The keyboard-only walkthrough of every
-room in both themes is an excluded manual check; it must be performed and recorded before
-claiming a complete accessibility pass. ADR-228 carries the same limits.
+the same status door). Only `/api/check` exceeded 50 ms; the other two use the 75 ms
+ceilings as concurrency headroom. Every other route measured 0.2–31.6 ms. A new GET path
+fails the latency coverage assertion until the test names it. The keyboard-only walkthrough
+of every room in both themes is an excluded manual check; it must be performed and recorded
+before claiming a complete accessibility pass. ADR-228 carries the same limits.
 
 ST04 is the first useful screen. ST05 makes it live. ST12 makes it a cockpit. ST15 is the
 release exit. Lanes own disjoint file sets: `server` owns `src/studio/server.mjs` and the

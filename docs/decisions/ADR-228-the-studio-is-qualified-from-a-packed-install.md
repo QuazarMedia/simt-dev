@@ -52,7 +52,9 @@ completes, and the shell entry, stylesheet and app module are measured with the 
 new GET path reaches the inventory through the route table and fails the coverage
 assertion until the latency test names it.
 
-The 50 ms budget is met by every measured route except the CLI-backed reads. A warm
+In the warm run, only `/api/check` exceeds the 50 ms budget. The two status-backed reads
+measured below it, but their test ceilings are 75 ms so a loaded suite does not turn
+scheduling noise into a failure; `/api/check` is the substantive exception. A warm
 seven-sample fixture run on 2026-11-22 measured:
 
 - `/api/status` at **42.8 ms median** (41.4–44.5 ms) after collapsing three
@@ -62,9 +64,10 @@ seven-sample fixture run on 2026-11-22 measured:
 - `/api/helm?path=status` at **44.1 ms median** (43.4–50.9 ms), because the Helm executes
   the same status door; its recorded ceiling is 75 ms.
 
-The other routes measured 0.2–31.6 ms, with the evidence-chain reads at the high end. The
-ceilings are recorded exceptions, not passes, and leave headroom for the suite's
-`--test-concurrency=4`; the test asserts a warm three-sample median.
+The other routes measured 0.2–31.6 ms, with the evidence-chain reads at the high end.
+These are recorded ceilings, not silent passes: the 75 ms pair is concurrency headroom
+around sub-50 ms reads, and the 200 ms gate ceiling is the substantive exception. The test
+asserts a warm three-sample median under `--test-concurrency=4`.
 
 The full keyboard-only walkthrough of every room in both themes is excluded from
 automation: the suite has no browser dependency, and the shell tests assert focus styles,

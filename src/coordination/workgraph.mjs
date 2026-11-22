@@ -11,6 +11,8 @@
 //   * a budget exhausted while the run was reported as approved;
 //   * independent research serialized for no reason, which costs capacity and gains nothing.
 
+import { cyclicComponents } from '../util/components.mjs';
+
 export const GRAPH_SCHEMA = 'simt.workgraph/1';
 
 /** Why a task is not dispatchable. */
@@ -66,47 +68,7 @@ export function readyTasks({ tasks = [], evidence = {} } = {}) {
  */
 export function stronglyConnected(tasks = []) {
   const list = (Array.isArray(tasks) ? tasks : []).filter((entry) => isObject(entry) && isText(entry.id));
-  const ids = new Set(list.map((task) => task.id));
-  // Two passes: filtering edges against a map that is still being filled silently dropped every
-  // forward dependency, which made every cycle look acyclic.
-  const edges = new Map();
-  for (const task of list) edges.set(task.id, listOf(task.dependsOn).filter((dependency) => ids.has(dependency)));
-  const index = new Map();
-  const low = new Map();
-  const stack = [];
-  const onStack = new Set();
-  const components = [];
-  let counter = 0;
-
-  const visit = (node) => {
-    index.set(node, counter);
-    low.set(node, counter);
-    counter += 1;
-    stack.push(node);
-    onStack.add(node);
-    for (const next of edges.get(node) ?? []) {
-      if (!edges.has(next)) continue;
-      if (!index.has(next)) {
-        visit(next);
-        low.set(node, Math.min(low.get(node), low.get(next)));
-      } else if (onStack.has(next)) {
-        low.set(node, Math.min(low.get(node), index.get(next)));
-      }
-    }
-    if (low.get(node) === index.get(node)) {
-      const component = [];
-      let member;
-      do {
-        member = stack.pop();
-        onStack.delete(member);
-        component.push(member);
-      } while (member !== node);
-      if (component.length > 1 || (edges.get(node) ?? []).includes(node)) components.push(component.sort());
-    }
-  };
-
-  for (const node of edges.keys()) if (!index.has(node)) visit(node);
-  return components;
+  return cyclicComponents(new Map(list.map((task) => [task.id, listOf(task.dependsOn)])));
 }
 
 /**

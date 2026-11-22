@@ -1,9 +1,7 @@
-import { realpath } from 'node:fs/promises';
-
 import { createImportResolver, extract } from '../index/extract.mjs';
 import { withImportDatabase } from '../index/import-database.mjs';
-import { loadLiveGraph } from '../index/live.mjs';
 import { readWorktreeFile } from '../index/overlay.mjs';
+import { BLOB_CAP } from '../index/store.mjs';
 import { scanSource } from '../index/syntax.mjs';
 import { matchesGlob } from '../resolve/resolve.mjs';
 import { cmp } from '../util/sort.mjs';
@@ -19,7 +17,7 @@ const transitive = `with recursive reachable(src, dst) as (
 )
 select src, dst from reachable where dst in (select value from json_each(?)) order by src, dst`;
 
-function adjacency(edges) {
+export function adjacency(edges) {
   const bySource = new Map();
   for (const { src, dst } of edges) {
     if (!bySource.has(src)) bySource.set(src, []);
@@ -29,7 +27,7 @@ function adjacency(edges) {
   return bySource;
 }
 
-function shortestPath(adjacency, src, dst) {
+export function shortestPath(adjacency, src, dst) {
   const parents = new Map();
   const queue = [src];
   for (let i = 0; i < queue.length && !parents.has(dst); i += 1) {
@@ -66,8 +64,8 @@ function architectureQueries(files, architecture) {
   return queries.filter(({ from, to }) => from.length && to.length);
 }
 
-async function sourceImports(root, path, lang) {
-  const bytes = await readWorktreeFile(root, path).catch(() => null);
+export async function sourceImports(root, path, lang) {
+  const bytes = await readWorktreeFile(root, path, BLOB_CAP).catch(() => null);
   if (bytes === null) return [];
   const body = bytes.toString('utf8');
   const { imports, namedImports, reexports } = extract(path, body, lang);
@@ -90,14 +88,8 @@ async function sourceImports(root, path, lang) {
   return evidence.sort((a, b) => (a.line ?? Infinity) - (b.line ?? Infinity) || cmp(a.spec, b.spec));
 }
 
-export async function architectureFindings(root, architecture) {
-  const graph = await loadLiveGraph(root);
-  if (graph.broken) {
-    return [{ file: 'simt.json', status: 'invalid', detail: 'cannot read the import graph',
-      remedy: 'run `simt reindex` to rebuild the local index' }];
-  }
-  const files = new Map(graph.files.map(({ path, lang }) => [path, lang]));
-  const edges = graph.edges.filter(({ src, dst, kind }) => kind === 'import' && files.has(src) && files.has(dst));
+export async function architectureFindings(graph, architecture) {
+  const { root, files, edges } = graph;
   const queries = architectureQueries(files, architecture);
   if (!edges.length || !queries.length) return [];
   const neighbors = adjacency(edges);
@@ -106,12 +98,11 @@ export async function architectureFindings(root, architecture) {
     return rows.map(({ src, dst }) => ({ src, reason, witness: recursive ? shortestPath(neighbors, src, dst) : [src, dst] }));
   }));
   if (!violations.length) return [];
-  const base = await realpath(root);
   const resolve = createImportResolver(new Set(files.keys()));
   const notes = new Map();
   const findings = [];
   for (const { src, reason, witness } of violations) {
-    if (!notes.has(src)) notes.set(src, await sourceImports(base, src, files.get(src)));
+    if (!notes.has(src)) notes.set(src, await sourceImports(root, src, files.get(src)));
     const origin = notes.get(src).find(({ spec }) => resolve(src, spec, files.get(src)) === witness[1]);
     findings.push({
       file: src,

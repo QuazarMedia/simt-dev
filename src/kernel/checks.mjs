@@ -11,9 +11,9 @@
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 
-import { architectureProblem } from '../manifest/architecture.mjs';
+import { architectureProblem, graphLimitsProblem } from '../manifest/architecture.mjs';
 import { CLI } from '../name.mjs';
-import { livePaths } from '../index/live.mjs';
+import { livePaths, loadLiveGraph } from '../index/live.mjs';
 import { readWorktreeFile } from '../index/overlay.mjs';
 import { git, gitPaths } from '../sys/git.mjs';
 
@@ -130,26 +130,52 @@ export async function runDeclaredChecks(root, rules, manifest) {
     }
   }
   const findings = [];
+  const architecture = manifest?.architecture;
+  const graphLimits = manifest?.limits?.graph;
+  const hasArchitecture = architecture !== undefined && architectureProblem(architecture) === null
+    && declared.some(({ name }) => name === 'import-direction');
+  const hasLimits = graphLimits !== undefined && graphLimitsProblem(graphLimits) === null
+    && (graphLimits.cycles || graphLimits.brokenImports || graphLimits.deadExports
+      || graphLimits.maxFanIn !== undefined || graphLimits.maxFanOut !== undefined);
+  if (hasArchitecture || hasLimits) {
+    const live = await loadLiveGraph(root, { binding: hasLimits && graphLimits.deadExports === true })
+      .catch((error) => {
+        if (/not a git repository/u.test(error.stderr ?? '')) return null;
+        throw error;
+      });
+    if (live?.broken) {
+      findings.push({ file: 'simt.json', status: 'invalid', detail: 'cannot read the import graph',
+        remedy: 'run `simt reindex` to rebuild the local index' });
+    } else if (live) {
+      const files = new Map(live.files.map(({ path, lang }) => [path, lang]));
+      const allEdges = live.edges.filter(({ kind }) => kind === 'import');
+      const edges = allEdges.filter(({ dst }) => files.has(dst));
+      const graph = { ...live, root: await realpath(root), files, allEdges, edges };
+      if (hasArchitecture) {
+        const { architectureFindings } = await import('./graph-checks.mjs');
+        findings.push(...await architectureFindings(graph, architecture));
+      }
+      if (hasLimits) {
+        const { graphInvariantFindings } = await import('./graph-invariants.mjs');
+        findings.push(...await graphInvariantFindings(graph, graphLimits));
+      }
+    }
+  }
   for (const check of declared) {
-    findings.push(...(await runOne(root, check, manifest)));
+    if (check.name !== 'import-direction') findings.push(...await runOne(root, check, manifest));
+    else if (architecture === undefined) {
+      findings.push({
+        file: check.source,
+        status: 'check-unbuilt',
+        detail: 'import-direction has no direction to enforce; the index records imports and no rule names which way they may point',
+        remedy: 'leave the instruction in the rule until a direction is named',
+      });
+    }
   }
   return findings;
 }
 
 async function runOne(root, check, manifest) {
-  if (check.name === 'import-direction') {
-    if (manifest?.architecture !== undefined) {
-      if (architectureProblem(manifest.architecture) !== null) return [];
-      const { architectureFindings } = await import('./graph-checks.mjs');
-      return architectureFindings(root, manifest.architecture);
-    }
-    return [{
-      file: check.source,
-      status: 'check-unbuilt',
-      detail: 'import-direction has no direction to enforce; the index records imports and no rule names which way they may point',
-      remedy: 'leave the instruction in the rule until a direction is named',
-    }];
-  }
   if (check.name === 'max-file-lines') return fileLines(root, check, manifest);
   if (check.name === 'required-file') return requiredFile(root, check);
   const diff = await workDiff(root);

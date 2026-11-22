@@ -150,7 +150,7 @@ export async function runDeclaredChecks(root, rules, manifest, { changed = false
     });
     if (live.broken && (hasArchitecture || hasLimits)) {
       findings.push({ file: 'simt.json', status: 'invalid', detail: 'cannot read the import graph',
-        remedy: 'run `simt reindex` to rebuild the local index' });
+        remedy: 'run `simt index` to rebuild the local index' });
     }
     if (changed) scope = changedNeighborhood(gitState[1], live);
     if (!live.broken && (hasArchitecture || hasLimits)) {
@@ -218,7 +218,7 @@ async function fileLines(root, manifest, gitState, scope) {
   const prefixes = Array.isArray(exclude) ? exclude.filter((g) => typeof g === 'string' && g !== '') : [];
   const skipText = limits.excludeTextFiles === true;
   const sources = await readCheckSources(root, gitState, (path) =>
-    (!scope || scope.has(path)) && !exempt(path, prefixes) && !(skipText && isTextFile(path)));
+    (!scope || scope.has(path)) && !path.split('/').includes('node_modules') && !exempt(path, prefixes) && !(skipText && isTextFile(path)));
   for (const { file: rel, lines, generated } of sources) {
     if (lines === null || generated) continue;
     if (lines > errorAt) {

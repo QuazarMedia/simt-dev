@@ -12,7 +12,7 @@
 // the tests use, and it names the failing path.
 //
 // Supported: type (including union arrays), properties, required, items, enum,
-// additionalProperties (boolean or a schema), anyOf.
+// additionalProperties (boolean or a schema), anyOf, minLength.
 
 /**
  * Check a value against a schema.
@@ -37,6 +37,9 @@ export function check(value, schema, path = '$') {
 
   if (schema.type !== undefined && !typeMatches(value, schema.type)) {
     return `${path}: expected ${describe(schema.type)}, got ${describeValue(value)}`;
+  }
+  if (typeof value === 'string' && schema.minLength !== undefined && [...value].length < schema.minLength) {
+    return `${path}: expected at least ${schema.minLength} characters`;
   }
   if (Array.isArray(schema.enum) && !schema.enum.some((allowed) => same(allowed, value))) {
     return `${path}: ${JSON.stringify(value)} is not one of ${JSON.stringify(schema.enum)}`;
@@ -97,6 +100,7 @@ const SUPPORTED = new Set([
   'enum',
   'additionalProperties',
   'anyOf',
+  'minLength',
   'description',
   '$schema',
 ]);

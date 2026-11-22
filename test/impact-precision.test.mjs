@@ -48,6 +48,27 @@ test('impact follows the named export through a barrel, its callers and their te
   assert.equal(impact.conservativeFallback, true);
 });
 
+test('module-level consumers keep downstream tests when the declaration has no caller binding', async () => {
+  const root = await tempDir('impact-module-value-');
+  await mkdir(join(root, 'test'));
+  const sources = {
+    'library.mjs': 'export function selected() { return 1; }\nexport function sibling() { return 2; }',
+    'value.mjs': "import { selected } from './library.mjs';\nexport const value = selected();",
+    'other.mjs': "import { sibling } from './library.mjs';\nexport const other = sibling();",
+    'test/value.test.mjs': "import { value } from '../value.mjs';",
+    'test/other.test.mjs': "import { other } from '../other.mjs';",
+  };
+  for (const [path, body] of Object.entries(sources)) await writeFile(join(root, path), body);
+  await ensureGit(root);
+  await reindex(root);
+  const result = await capture(() => impactCommand(['library.mjs#selected'], { root, workspace: 'off', json: true }));
+  assert.equal(result.code, 0, result.stderr);
+  const impact = JSON.parse(result.stdout);
+  assert.deepEqual(impact.importers, ['value.mjs']);
+  assert.deepEqual(impact.tests, ['test/value.test.mjs']);
+  assert.equal(impact.conservativeFallback, true);
+});
+
 test('direct and ordinary transitive paths survive a hub and report suppressed paths', () => {
   const spokes = Array.from({ length: 40 }, (_, index) => 'spoke-' + index + '.mjs');
   const files = ['target.mjs', 'z-direct.mjs', 'z-mid.mjs', 'hub.mjs', ...spokes];

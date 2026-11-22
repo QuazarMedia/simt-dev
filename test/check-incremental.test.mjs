@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 
 import { diagnose, serialisedFindings } from '../src/commands/doctor.mjs';
@@ -18,7 +18,11 @@ const long = 'export const x = 1;\n// two\n// three\n';
 async function repo(files) {
   const root = await mkdtemp(join(tmpdir(), 'simt-check-incremental-'));
   await git(['init', '-q', root]);
-  for (const [path, content] of Object.entries(files)) await writeFile(join(root, path), content);
+  for (const [path, content] of Object.entries(files)) {
+    const file = join(root, path);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, content);
+  }
   await git(['-C', root, 'add', '.']);
   await git(['-C', root, 'commit', '-qm', 'fixture']);
   return root;
@@ -31,6 +35,7 @@ test('a warm length check uses staged facts and overlays dirty files', async () 
   const root = await repo({
     'old.mjs': long,
     'new.mjs': '',
+    'packages/example/node_modules/vendor/index.mjs': long,
     'binary.bin': Buffer.from([0, 10, 10, 10]),
     'rendered.md': '<!-- simt:generated -->\nA\nB\n',
   });

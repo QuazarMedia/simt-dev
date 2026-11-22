@@ -121,12 +121,12 @@ test('a database at a newer version is served from a sidecar, never overwritten 
     await reindex(root);
     const file = join(root, SQLITE_FILE);
     const newer = new DatabaseSync(file);
-    newer.exec('pragma user_version = 6');
+    newer.exec('pragma user_version = 7');
     newer.exec(`update meta set value = '6' where key = 'schema'`);
     newer.close();
     await reindex(root);
     const intact = new DatabaseSync(file);
-    assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 6, 'the newer database is untouched');
+    assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 7, 'the newer database is untouched');
     assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '6');
     intact.close();
     const sidecar = indexFileFor(root, '6');
@@ -139,7 +139,7 @@ test('a database at a newer version is served from a sidecar, never overwritten 
   }
 });
 
-test('a v3 database is migrated in place through v4 to v5 (Q44, Q76)', async () => {
+test('a v3 database is migrated in place through v4 and v5 to v6 (Q44, Q76)', async () => {
   // The 3 -> 4 step recreates the FTS table; the 4 -> 5 step copies its rows by
   // the `ref` column. If 3 -> 4 created the table in the v5 shape, the copy
   // reads a column that is not there and the whole build fails.
@@ -165,10 +165,10 @@ test('a v3 database is migrated in place through v4 to v5 (Q44, Q76)', async () 
     db.close();
     await reindex(root);
     const after = new DatabaseSync(file);
-    assert.equal(Number(after.prepare('pragma user_version').get().user_version), 5, 'the chain ended at the current schema');
+    assert.equal(Number(after.prepare('pragma user_version').get().user_version), 6, 'the chain ended at the current schema');
     const sql = after.prepare(`select sql from sqlite_master where name = 'fts'`).get().sql;
-    assert.ok(sql.includes('node_id'), 'the FTS table is the v5 shape');
-    assert.ok(after.prepare('select count(*) as n from fts').get().n > 0, 'the FTS rows survived the 3 -> 4 -> 5 chain');
+    assert.ok(sql.includes('node_id'), 'the FTS table is keyed by node');
+    assert.ok(after.prepare('select count(*) as n from fts_legacy').get().n > 0, 'the FTS rows survived the ordered migration chain');
     after.close();
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -315,7 +315,7 @@ test('sections of one file collapse to one hit and results stop at 200 (Q43)', a
   assert.equal(ranked.filter((row) => row.path === 'multi.js').length, 1);
 });
 
-test('a fresh build is the v5 entity layout, and the read shapes are SQL (Q76)', async () => {
+test('a fresh build is the v6 entity layout, and the read shapes are SQL (Q76)', async () => {
   const root = await repo();
   try {
     await reindex(root);
@@ -328,7 +328,7 @@ test('a fresh build is the v5 entity layout, and the read shapes are SQL (Q76)',
     for (const name of ['sources', 'nodes', 'edges', 'vectors', 'meta', 'fts']) {
       assert.ok(names.includes(name), `the ${name} table is present`);
     }
-    assert.equal(Number(db.prepare('pragma user_version').get().user_version), 5, 'the schema is stamped v5');
+    assert.equal(Number(db.prepare('pragma user_version').get().user_version), 6, 'the schema is stamped v6');
     const ftsSql = db.prepare(`select sql from sqlite_master where name = 'fts'`).get().sql;
     assert.ok(ftsSql.includes('node_id'), 'fts rows point at the file node, not a path string');
     const kinds = db.prepare(`select distinct kind from nodes`).all().map((row) => row.kind);

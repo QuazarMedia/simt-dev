@@ -10,10 +10,11 @@ import { dirname, join } from 'node:path';
 
 import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
+import { BM25F_FIELDS } from './bm25f.mjs';
 
 export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
-export const SCHEMA_V = '5';
+export const SCHEMA_V = '6';
 
 // The writer has waited 5 s for a busy database since ADR-115; a reader that
 // returned immediately turned a transient build into INDEX_BUSY for a caller that
@@ -26,13 +27,15 @@ function openRead(DatabaseSync, file, busyTimeout = BUSY_TIMEOUT_MS) {
   return db;
 }
 
-// The FTS tables carry their tokenizer in their definition, so `if not exists`
-// cannot migrate them: a v3 database would keep tokenizing new rows the v3 way
-// (ASCII fold, kind and ref searchable), and a v4 `fts` table cannot grow the
-// node_id column the v5 layout needs. The preamble creates them only when they
-// are missing (a cold build); the 3 -> 4 and 4 -> 5 migrations below drop and
-// recreate them, which is the versioned replacement for the per-write wipe .
-export const FTS_SCHEMA = 'create virtual table if not exists fts using fts5(body, node_id UNINDEXED, kind UNINDEXED, tokenize = "unicode61 remove_diacritics 2")';
+const FTS_TOKENIZER = 'tokenize = "unicode61 remove_diacritics 2"';
+const FTS_V5_SCHEMA = `create virtual table if not exists fts using fts5(body, node_id UNINDEXED, kind UNINDEXED, ${FTS_TOKENIZER})`;
+// The v5 ranking used its JavaScript body scorer. Keep its input and section
+// order without maintaining a second inverted index while v2 is evaluated.
+const FTS_LEGACY_SCHEMA = `create table if not exists fts_legacy(body text, node_id integer, kind text);
+  create index if not exists idx_fts_legacy_node on fts_legacy(node_id)`;
+export const FTS_SCHEMA = `create virtual table if not exists fts using fts5(
+  ${BM25F_FIELDS.join(', ')}, node_id UNINDEXED, kind UNINDEXED, ${FTS_TOKENIZER}
+)`;
 export const FTS_TRI_SCHEMA = 'create virtual table if not exists fts_tri using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "trigram")';
 
 // The v4 `fts` shape. The 3 -> 4 step recreates the table with THIS shape so a
@@ -87,7 +90,7 @@ const MIGRATIONS = [
     apply: (db) => {
       db.exec(TABLES);
       db.exec(EDGES_DDL.replaceAll('edges(', 'edges_v5('));
-      db.exec(FTS_SCHEMA.replaceAll('exists fts ', 'exists fts_v5 '));
+      db.exec(FTS_V5_SCHEMA.replace('exists fts ', 'exists fts_v5 '));
       db.exec(`insert into sources(kind, path, revision, lang, bytes, status, props)
         select 'blob', path, blob, lang, bytes, 'indexed', json_object('pkg', coalesce(pkg, '')) from files`);
       db.exec(`insert into nodes(key, kind, source_id)
@@ -120,6 +123,16 @@ const MIGRATIONS = [
       db.exec('drop table fts');
       db.exec('alter table edges_v5 rename to edges');
       db.exec('alter table fts_v5 rename to fts');
+    },
+  },
+  {
+    from: 5,
+    to: 6,
+    apply: (db) => {
+      db.exec(FTS_LEGACY_SCHEMA);
+      db.exec('insert into fts_legacy(body, node_id, kind) select body, node_id, kind from fts order by rowid');
+      db.exec('drop table fts');
+      db.exec(FTS_SCHEMA);
     },
   },
 ];
@@ -210,6 +223,7 @@ create index if not exists idx_edges_dst on edges(dst_id, kind);
 create index if not exists idx_edges_owner on edges(owner_source_id);
 create index if not exists idx_nodes_source on nodes(source_id);
 create index if not exists idx_nodes_kind_name on nodes(kind, name);
+create index if not exists idx_symbols_folded_name on nodes(lower(name)) where kind = 'symbol';
 `;
 
 const SCHEMA = `${TABLES}\n${EDGES_DDL}\n`;
@@ -318,10 +332,11 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     db.exec(`pragma busy_timeout = ${BUSY_TIMEOUT_MS}`);
     db.exec('pragma synchronous = normal');
     db.exec(SCHEMA);
-    db.exec(FTS_SCHEMA);
     db.exec(FTS_TRI_SCHEMA);
     db.exec('begin immediate');
     migrateDb(db);
+    db.exec(FTS_SCHEMA);
+    db.exec(FTS_LEGACY_SCHEMA);
     // The `edges` table is v5-shaped now on every path: the preamble created
     // it on a cold build, the migration swapped it in on a legacy one.
     db.exec(INDEXES);
@@ -329,6 +344,10 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     // sha, so an unchanged blob keeps its row, and the file's node, vectors,
     // edges and fts rows all hang off it. `props` carries what the v5 columns
     // do not name - the package directory, which the files read shape serves.
+    // A plain rebuild retains the legacy ranking. After an experimental build
+    // activates the fielded table, changed or removed rows must update both.
+    const fieldedWasBuilt = db.prepare("select value from meta where key = 'fts_fields'").get()?.value === '1';
+    const ownsFielded = meta.fielded || fieldedWasBuilt;
     const upsertSource = db.prepare(`insert into sources(kind, path, revision, lang, bytes, status, props)
       values('blob', ?, ?, ?, ?, 'indexed', ?)
       on conflict(kind, path) do update set revision = excluded.revision, lang = excluded.lang,
@@ -339,7 +358,8 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     // surviving `file:` node collided with the next insert on `nodes.key`.
     const dropDependents = [
       db.prepare('delete from vectors where node_id in (select id from nodes where source_id = ?)'),
-      db.prepare('delete from fts where node_id in (select id from nodes where source_id = ?)'),
+      db.prepare('delete from fts_legacy where node_id in (select id from nodes where source_id = ?)'),
+      ...(ownsFielded ? [db.prepare('delete from fts where node_id in (select id from nodes where source_id = ?)')] : []),
       db.prepare('delete from edges where owner_source_id = ?'),
       db.prepare('delete from nodes where source_id = ?'),
     ];
@@ -348,7 +368,9 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       values('sym:' || ? || '#' || ? || '@' || ?, 'symbol', ?, ?, ?, ?)`);
     const addEdge = db.prepare(`insert into edges(src_id, kind, dst_key, dst_id, weight, owner_source_id, trust)
       values (?, ?, ?, ?, ?, ?, 'observed')`);
-    const addFts = db.prepare('insert into fts(body, node_id, kind) values (?, ?, ?)');
+    const addFts = db.prepare('insert into fts_legacy(body, node_id, kind) values (?, ?, ?)');
+    const addFielded = meta.fielded ? db.prepare(`insert into fts(${BM25F_FIELDS.join(', ')}, node_id, kind)
+      values (${BM25F_FIELDS.map(() => '?').join(', ')}, ?, ?)`) : null;
     const addTri = db.prepare('insert into fts_tri(kind, ref, body) values (?, ?, ?)');
     // A changed file rebuilds its rows, but the trigram table is keyed by path rather
     // than node id, so nothing else deletes the old bodies. Left in place, a file that
@@ -360,14 +382,6 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     const dropEdgesByOwner = db.prepare('delete from edges where owner_source_id = ?');
     const upsertVector = db.prepare(`insert into vectors(node_id, model, dims, vec) values (?, ?, ?, ?)
       on conflict(node_id) do update set model = excluded.model, dims = excluded.dims, vec = excluded.vec`);
-    const dropSource = [
-      db.prepare(`delete from vectors where node_id in (select id from nodes where source_id in (select id from sources where kind = 'blob' and path = ?))`),
-      db.prepare(`delete from fts where node_id in (select id from nodes where source_id in (select id from sources where kind = 'blob' and path = ?))`),
-      db.prepare(`delete from edges where owner_source_id in (select id from sources where kind = 'blob' and path = ?)`),
-      db.prepare('delete from edges where dst_key = ?'),
-      db.prepare(`delete from nodes where source_id in (select id from sources where kind = 'blob' and path = ?)`),
-      db.prepare(`delete from sources where kind = 'blob' and path = ?`),
-    ];
     for (const row of next) {
       const sourceId = sourceIdOf.get(row.path)?.id;
       if (sourceId !== undefined) for (const st of dropDependents) st.run(sourceId);
@@ -378,10 +392,16 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
         resolution: row.resolution ?? 'none',
       }));
     }
+    const deleteSource = db.prepare('delete from sources where id = ?');
+    const dropIncoming = db.prepare('delete from edges where dst_key = ?');
     for (const path of removed) {
-      for (const st of dropSource) st.run(path);
+      const sourceId = sourceIdOf.get(path)?.id;
+      if (sourceId === undefined) continue;
+      for (const st of dropDependents) st.run(sourceId);
+      dropIncoming.run(path);
+      deleteSource.run(sourceId);
       // fts_tri is still path-keyed: the trigram table keeps its v4 shape .
-      db.prepare('delete from fts_tri where ref = ?').run(path);
+      dropTri.run(path);
     }
     for (const path of Array.isArray(meta.edgeOwners) ? meta.edgeOwners : []) {
       const sourceId = sourceIdOf.get(path)?.id;
@@ -418,6 +438,10 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       // only; an ASCII-only section is already reachable through `fts`.
       if (row.raw) addTri.run(row.kind, row.ref, row.raw);
     }
+    for (const row of meta.fieldedRows ?? []) {
+      const entry = ids.get(row.ref);
+      if (entry) addFielded.run(...BM25F_FIELDS.map((field) => row[field]), entry.nodeId, row.kind);
+    }
     for (const row of embeddings) {
       const entry = ids.get(row.path);
       if (!entry) continue;
@@ -429,6 +453,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       'insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value',
     );
     upsertMeta.run('schema', SCHEMA_V);
+    if (ownsFielded) upsertMeta.run('fts_fields', meta.fielded ? '1' : '0');
     upsertMeta.run('tree', tree);
     // What the build read, beside the tree it saw. A reader compares digests
     // instead of guessing from a blob: an unchanged blob under a new parser,
@@ -536,7 +561,7 @@ async function resolveSqliteFile(root, { busyTimeout = BUSY_TIMEOUT_MS } = {}) {
  * The optional `busyTimeout` lets the timeout test reach the mapping without
  * holding the suite for the production bound; callers otherwise take the default.
  */
-export async function readSqliteRows(root, sql, params = [], { busyTimeout = BUSY_TIMEOUT_MS } = {}) {
+export async function readSqliteRows(root, sql, params = [], { busyTimeout = BUSY_TIMEOUT_MS, legacySql } = {}) {
   let DatabaseSync;
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
@@ -552,6 +577,16 @@ export async function readSqliteRows(root, sql, params = [], { busyTimeout = BUS
   if (!file) return { rows: [], error: null };
   const db = openRead(DatabaseSync, file, busyTimeout);
   try {
+    if (legacySql !== undefined) {
+      // Read the stamp and the selected table in one snapshot so a concurrent
+      // migration cannot rename that table between the two statements.
+      db.exec('begin');
+      const schema = Number(db.prepare('pragma user_version').get().user_version);
+      if (schema < 6) {
+        if (legacySql === null) return { rows: [], error: null };
+        sql = legacySql;
+      }
+    }
     return { rows: db.prepare(sql).all(...params), error: null };
   } catch (error) {
     return { rows: [], error: asIndexError(error) };
@@ -565,7 +600,7 @@ export async function readSchema(root) {
   return rows[0]?.value ?? '';
 }
 
-const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis'];
+const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis', 'fts_fields'];
 
 /**
  * The stamps a build leaves, with the read error attached.

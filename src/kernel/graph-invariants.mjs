@@ -9,10 +9,10 @@ import { cmp } from '../util/sort.mjs';
 import { cyclicComponents } from '../util/components.mjs';
 import { adjacency, shortestPath, sourceImports } from './graph-checks.mjs';
 
-function cycles({ edges }, policy) {
+function cycles({ edges, scope }, policy) {
   const excluded = (path) => (policy.exclude ?? []).some((glob) => matchesGlob(path, glob));
   const neighbors = adjacency(edges.filter(({ src, dst }) => !excluded(src) && !excluded(dst)));
-  return cyclicComponents(neighbors).sort(([a], [b]) => cmp(a, b)).map((component) => {
+  return cyclicComponents(neighbors).filter((members) => !scope || members.some((path) => scope.has(path))).sort(([a], [b]) => cmp(a, b)).map((component) => {
     const members = new Set(component);
     const internal = new Map(component.map((path) => [path, neighbors.get(path).filter((dst) => members.has(dst))]));
     const file = component[0];
@@ -22,11 +22,11 @@ function cycles({ edges }, policy) {
   });
 }
 
-async function brokenImports({ root, files, allEdges }) {
+async function brokenImports({ root, files, allEdges, scope }) {
   const results = [];
   const sources = new Map();
   for (const { src, dst } of allEdges) {
-    if (files.has(dst) || !/^\.\.?\//u.test(dst)) continue;
+    if ((scope && !scope.has(src)) || files.has(dst) || !/^\.\.?\//u.test(dst)) continue;
     const specifier = dst;
     const clean = specifier.split(/[?#]/u)[0];
     const relative = normalize(join(dirname(src), clean));
@@ -74,14 +74,14 @@ async function deadExports(graph, declared) {
   if (!globs.length) {
     return [{ file: 'simt.json', status: 'graph-coverage-warn', detail: 'dead-export analysis requires explicit entrypoints', remedy }];
   }
-  const { files, symbols, symbolGraph } = graph;
+  const { files, symbols, symbolGraph, scope } = graph;
   const edges = symbolGraph?.edges ?? [];
   const coverage = symbolGraph?.bindingCoverage ?? {};
   const owners = symbolNodePaths(files.keys(), edges);
   const languages = new Set();
   const candidates = [];
   for (const { path, name, line, exported } of symbols) {
-    if (!exported || globs.some((glob) => matchesGlob(path, glob))) continue;
+    if (!exported || (scope && !scope.has(path)) || globs.some((glob) => matchesGlob(path, glob))) continue;
     const lang = files.get(path);
     languages.add(lang);
     const key = symbolKey(path, name, line);
@@ -108,7 +108,7 @@ async function deadExports(graph, declared) {
   return findings;
 }
 
-function hubWarnings({ edges }, policy) {
+function hubWarnings({ edges, scope }, policy) {
   const counts = new Map();
   function count(path, side) {
     if (!counts.has(path)) counts.set(path, { in: 0, out: 0 });
@@ -118,7 +118,7 @@ function hubWarnings({ edges }, policy) {
     count(src, 'out');
     count(dst, 'in');
   }
-  return [...counts.keys()].sort().flatMap((file) => ['in', 'out'].flatMap((side) => {
+  return [...counts.keys()].filter((path) => !scope || scope.has(path)).sort().flatMap((file) => ['in', 'out'].flatMap((side) => {
     const maximum = side === 'in' ? policy.maxFanIn : policy.maxFanOut;
     const actual = counts.get(file)[side];
     if (maximum === undefined || actual <= maximum) return [];

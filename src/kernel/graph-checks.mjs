@@ -89,7 +89,7 @@ export async function sourceImports(root, path, lang) {
 }
 
 export async function architectureFindings(graph, architecture) {
-  const { root, files, edges } = graph;
+  const { root, files, edges, scope } = graph;
   const queries = architectureQueries(files, architecture);
   if (!edges.length || !queries.length) return [];
   const neighbors = adjacency(edges);
@@ -102,6 +102,7 @@ export async function architectureFindings(graph, architecture) {
   const notes = new Map();
   const findings = [];
   for (const { src, reason, witness } of violations) {
+    if (scope && !witness.some((path) => scope.has(path))) continue;
     if (!notes.has(src)) notes.set(src, await sourceImports(root, src, files.get(src)));
     const origin = notes.get(src).find(({ spec }) => resolve(src, spec, files.get(src)) === witness[1]);
     findings.push({

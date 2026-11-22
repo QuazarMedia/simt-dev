@@ -98,10 +98,12 @@ export const TOOLS_FACTS = [
     name: 'check',
     description:
       'The gate for one repository: region current, unmanaged, drifted or malformed, and rule files lacking an id. Read-only - it never repairs.',
-    inputSchema: rootArg,
+    inputSchema: { ...rootArg, properties: { ...rootArg.properties,
+      changed: { type: 'boolean', description: 'limit source and graph findings to changed files and their direct neighbors' },
+    } },
     async run(args) {
       const root = rootOf(args);
-      const { ok, findings } = await checkRepo(root, {});
+      const { ok, findings } = await checkRepo(root, { changed: args?.changed === true });
       return { root, ok, findings };
     },
   },

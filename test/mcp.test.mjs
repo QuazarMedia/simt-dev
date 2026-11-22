@@ -7,17 +7,16 @@
 
 import './isolate.mjs';
 import assert from 'node:assert/strict';
-import { before, test } from 'node:test';
+import { after, before, test } from 'node:test';
 // The pre-push gate runs this suite in a detached worktree under the temp
 // directory. With no workspace declared, the sibling heuristic treats that
 // parent as a workspace and `compare` scans every scratch directory beside it.
 // These tests are about the protocol, not workspace discovery, so decline it.
 process.env.SIMT_DEV_WORKSPACE = 'off';
 
-import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { Readable } from 'node:stream';
 import { handle, serve, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS, META } from '../src/mcp/server.mjs';
@@ -28,14 +27,26 @@ import { desiredRegion } from '../src/projection/rules.mjs';
 import { planNext } from '../src/plan/index.mjs';
 
 import { BIN, exec, req, at, converse } from './mcp-fixture.mjs';
+import { git } from './fixture.mjs';
 
-const CHECKOUT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
-// The pre-push gate runs from a clean copy with no ignored `.simt/index`. The
-// skills_brief parity cases read the same packet as the CLI, so build the cache the
-// consumer would build; the protocol tests themselves still read nothing.
+// The index-backed cases get a repository of their own. A checkout-level index is written
+// by other test files while this one runs, and an INDEX_BUSY here was the suite's
+// scheduling, not the answer under test.
+let INDEXED;
 before(async () => {
-  await exec(process.execPath, [BIN, 'index'], { cwd: CHECKOUT });
+  INDEXED = await mkdtemp(join(tmpdir(), 'simt-mcp-brief-'));
+  await mkdir(join(INDEXED, 'skills', 'simt-commands'), { recursive: true });
+  await mkdir(join(INDEXED, 'src'), { recursive: true });
+  await writeFile(join(INDEXED, 'skills', 'simt-commands', 'SKILL.md'), '# commands\n');
+  await writeFile(join(INDEXED, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+  await writeFile(join(INDEXED, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
+  await git(['init', '-q', INDEXED]);
+  await git(['-C', INDEXED, 'add', '-A']);
+  await git(['-C', INDEXED, 'commit', '-qm', 'fixture']);
+  await exec(process.execPath, [BIN, 'index', '--root', INDEXED]);
+});
+after(async () => {
+  if (INDEXED) await rm(INDEXED, { recursive: true, force: true });
 });
 
 // --- protocol ------------------------------------------------------------------
@@ -323,7 +334,7 @@ test('mcp: arguments are checked against the schema the client was shown (Q56)',
   assert.match(r.error.message, /missing required property "name"/);
   // A tool with no required arguments still accepts the empty object, which is what a
   // client that knows nothing sends.
-  const ok = await handle(req('tools/call', { name: 'skills_brief', arguments: {} }), TOOLS, { state });
+  const ok = await handle(req('tools/call', { name: 'skills_brief', arguments: { root: INDEXED } }), TOOLS, { state });
   assert.equal(ok.result.isError, false, JSON.stringify(ok.result));
 });
 
@@ -376,12 +387,11 @@ test('mcp: skills_brief is the brief SKILLS view on both surfaces', async () => 
   // One packer, one budget (ADR-226). Both surfaces render the packet's SKILLS section,
   // so the documents are equal at a tight budget and at the whole-packet budget.
   const view = TOOLS.find((t) => t.name === 'skills_brief');
-  const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   for (const budget of [1024, 0]) {
-    const mcp = await view.run({ budget, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md', root: ROOT });
+    const mcp = await view.run({ budget, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md', root: INDEXED });
     const { stdout } = await exec(process.execPath, [
-      resolve(ROOT, 'bin', 'simt.mjs'),
-      'brief', '--root', ROOT, '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md', '--only', 'skills',
+      BIN,
+      'brief', '--root', INDEXED, '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md', '--only', 'skills',
       '--budget', String(budget), '--json',
     ]);
     const cli = JSON.parse(stdout);
@@ -398,12 +408,11 @@ test('mcp: brief accepts any section the packet knows, and matches the CLI view'
   // The CLI's --only <section> and the tool's `only` are one door with two handles:
   // same packer, same bytes, and the same answer to a section the packet does not know.
   const view = TOOLS.find((t) => t.name === 'brief');
-  const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   for (const only of ['files', 'decisions', 'cautions']) {
-    const mcp = await view.run({ only, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md', root: ROOT });
+    const mcp = await view.run({ only, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md', root: INDEXED });
     const { stdout } = await exec(process.execPath, [
-      resolve(ROOT, 'bin', 'simt.mjs'),
-      'brief', '--root', ROOT, '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md',
+      BIN,
+      'brief', '--root', INDEXED, '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md',
       '--only', only, '--json',
     ]);
     const cli = JSON.parse(stdout);
@@ -411,7 +420,7 @@ test('mcp: brief accepts any section the packet knows, and matches the CLI view'
     assert.equal(mcp.text, cli.text);
     assert.ok(Object.keys(mcp.sections).every((section) => section === only.toUpperCase()));
   }
-  await assert.rejects(() => view.run({ only: 'bogus', root: ROOT }), /unknown brief section bogus/);
+  await assert.rejects(() => view.run({ only: 'bogus', root: INDEXED }), /unknown brief section bogus/);
 });
 
 test('mcp: no mutating command is exposed as a tool', () => {

@@ -5,11 +5,8 @@
 // imports the change is included, and a cycle cannot. Naming and co-change are
 // not imports, so they are not a selection.
 
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
 import { isTestPath } from '../testing/paths.mjs';
-import { langOf } from './store.mjs';
+import { loadLiveGraph } from './live.mjs';
 import { importsOf } from './tests.mjs';
 
 /**
@@ -62,28 +59,9 @@ export function importEdges(entries) {
   return imports;
 }
 
-/** Texts for tracked paths, read from the worktree. A missing file contributes none. */
-export async function readEntries(root, files) {
-  const entries = [];
-  const paths = [...files].sort();
-  const batch = 32;
-  for (let i = 0; i < paths.length; i += batch) {
-    const slice = paths.slice(i, i + batch);
-    const read = await Promise.all(slice.map(async (path) => {
-      const lang = langOf(path);
-      if (!lang) return { path, text: '', lang: '' };
-      try {
-        return { path, text: await readFile(join(root, path), 'utf8'), lang };
-      } catch {
-        return { path, text: '', lang };
-      }
-    }));
-    entries.push(...read);
-  }
-  return entries;
-}
-
-/** Import edges for tracked paths. A missing file contributes none. */
+/** Resolve live imports while retaining a removed target for the gate's diff. */
 export async function readImportEdges(root, files) {
-  return importEdges(await readEntries(root, files));
+  const graph = await loadLiveGraph(root, { retainTargets: [...files] });
+  if (graph.broken) throw new Error(graph.indexError?.message ?? 'the index cannot be read');
+  return graph.edges;
 }

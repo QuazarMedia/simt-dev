@@ -1,20 +1,16 @@
 // `simt tests [path]` lists the tests that exercise a file (ADR-092).
 //
-// The index already stores imports, but a test import that spans lines is not
-// one of them. Test files are read back from their blobs, once, in a single
-// batch. Coverage is read only from a fixed list of paths. History is the last
-// 200 non-merge commits, which is a map and not the whole changelog.
+// Imports combine the staged graph with current edits. Coverage is read from
+// named reports, and co-change uses the last 200 non-merge commits.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { isTestPath } from '../testing/paths.mjs';
-import { isIndexStale } from '../index/freshness.mjs';
-import { blobTexts, langOf, readEdges, readFiles, reindex } from '../index/store.mjs';
+import { loadLiveGraph } from '../index/live.mjs';
 import { coverage } from '../index/coverage.mjs';
-import { HISTORY, importsOf, parseCoverage, testEdges } from '../index/tests.mjs';
+import { HISTORY, parseCoverage, testEdges } from '../index/tests.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { git } from '../sys/git.mjs';
 
@@ -37,23 +33,16 @@ export async function testsCommand(args, flags) {
   if (flags.run === true) return (await import('./gate.mjs')).gateCommand(args, flags);
   if (args.length > 1) return fail(`unknown tests argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} tests [path]`);
   const root = commandRoot(flags);
-  const loaded = await loadFiles(root);
-  if (loaded.error) return loaded.error;
-  const { files } = loaded;
-  const [stored, texts, reports, commits] = await Promise.all([
-    readEdges(root),
-    testBlobs(root, files),
-    coverageTexts(root),
-    history(root),
-  ]);
-  const paths = new Set(files.map((file) => file.path));
-  const imports = stored.filter((edge) => edge.kind === 'import');
-  for (const file of files) {
-    if (!isTestPath(file.path, root)) continue;
-    const text = texts.get(file.blob);
-    if (!text) continue;
-    imports.push(...importsOf(file.path, text, langOf(file.path, root), paths));
+  let graph;
+  try {
+    graph = await loadLiveGraph(root);
+    if (graph.broken) throw new Error(graph.indexError?.message ?? 'the index cannot be read');
+  } catch (error) {
+    return fail(`could not map tests in this repository (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
   }
+  const { files, edges: imports } = graph;
+  const [reports, commits] = await Promise.all([coverageTexts(root), history(root)]);
+  const paths = new Set(files.map((file) => file.path));
   const edges = testEdges({ files, imports, coverage: reports, commits }, { root });
   const target = args[0];
   if (!target) return summarise(root, flags, edges);
@@ -85,36 +74,6 @@ function summarise(root, flags, edges) {
   const payload = { ok: true, command: 'tests', root, test, cochange };
   present(payload, () => `test      ${test}\ncochange  ${cochange}`, flags);
   return EXIT.OK;
-}
-
-async function loadFiles(root) {
-  let files = await readFiles(root);
-  // An empty index has nothing to answer from; a stale one has yesterday's
-  // tree. Either way the refresh is incremental, so a
-  // current repository pays for one `git ls-files -s`, not a rebuild.
-  if (files.length === 0 || (await isIndexStale(root))) {
-    try {
-      await reindex(root);
-    } catch (error) {
-      return {
-        error: fail(
-          `could not map tests in this repository (${error.message})`,
-          EXIT.UNSUPPORTED,
-          'run this inside a git repository',
-        ),
-      };
-    }
-    files = await readFiles(root);
-  }
-  return { files };
-}
-
-async function testBlobs(root, files) {
-  const blobs = [];
-  for (const file of files) {
-    if (isTestPath(file.path, root) && file.blob) blobs.push(file.blob);
-  }
-  return blobTexts(root, blobs).catch(() => new Map());
 }
 
 async function coverageTexts(root) {

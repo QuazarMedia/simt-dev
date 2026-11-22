@@ -5,7 +5,7 @@ simt-supersedes: []
 
 # ADR-108 — an adoption builds the index, and a command that reads it refreshes it on read
 
-Status: **accepted** · 2026-10-30
+Status: **accepted** · 2026-10-30 · ruling 2 superseded by [ADR-237](ADR-237-live-graph-reads-leave-the-staged-cache-intact.md)
 
 ## Context
 

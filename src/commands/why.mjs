@@ -30,7 +30,7 @@ import {
 import { parseFrontmatter } from '../text/frontmatter.mjs';
 import { listPromotedLessons } from '../memory/lessons.mjs';
 import { commandRoot } from '../repo-root.mjs';
-import { gitPaths } from '../sys/git.mjs';
+import { livePaths } from '../index/live.mjs';
 
 const RULE_DIRS = ['rules', 'rules/stacks', 'rules/mdc', '.simt/profiles'];
 
@@ -261,7 +261,7 @@ export async function tracked(root) {
   try {
     // `-z`: without it git C-quotes a non-ASCII path and the reader's real
     // filename never matches it.
-    return { files: await gitPaths(root, ['ls-files']) };
+    return { files: await livePaths(root) };
   } catch (error) {
     return {
       error: fail(

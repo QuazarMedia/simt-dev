@@ -21,9 +21,9 @@
 // Two backends store the merged rows - JSON lines and SQLite - and they are one semantics:
 // the same rows written through either read back identical, in a deterministic order.
 
-import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { constants, existsSync } from 'node:fs';
+import { mkdir, open, readFile, realpath, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 
 import { digestOf } from '../knowledge/observations.mjs';
 import { resolveScope } from '../work/artifacts.mjs';
@@ -183,6 +183,22 @@ export function filterAllowed(changes = [], { deny = [], ignore = [] } = {}) {
     else allowed.push(change);
   }
   return { allowed, denied: denied.sort() };
+}
+
+/** Read a regular file below a canonical repository root without following symlinks. */
+export async function readWorktreeFile(root, path, maxBytes = Infinity) {
+  const parts = path.split('/');
+  if (parts.some((part) => !part || part === '.' || part === '..')) return null;
+  const file = resolve(root, path);
+  if (await realpath(file) !== file) return null;
+  const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  try {
+    const stat = await handle.stat();
+    if (!stat.isFile() || stat.size > maxBytes) return null;
+    return await handle.readFile();
+  } finally {
+    await handle.close();
+  }
 }
 
 /**

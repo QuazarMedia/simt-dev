@@ -111,7 +111,12 @@ export async function gateCommand(args, flags) {
       );
     }
   }
-  const edges = await readImportEdges(root, files);
+  let edges;
+  try {
+    edges = await readImportEdges(root, gone);
+  } catch (error) {
+    return fail(`could not read the import graph (${error.message})`, EXIT.FAIL, `run: ${CLI} index`);
+  }
   const selected = coverage({ imports: edges }, changed, { root });
   // the selection explains itself. `unmatched` names explicit paths the
   // tracked tree does not carry (untracked but present, so the run proceeds);

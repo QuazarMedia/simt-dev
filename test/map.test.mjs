@@ -30,7 +30,8 @@ import {
   rrfFuse,
 } from '../src/index/map.mjs';
 import { cosineSimilarity, rankByCosine } from '../src/index/vectors.mjs';
-import { loadGraph, mapCommand } from '../src/commands/map.mjs';
+import { mapCommand } from '../src/commands/map.mjs';
+import { loadLiveGraph } from '../src/index/live.mjs';
 import { resolveVaultDir } from '../src/testing/vault.mjs';
 import { SQLITE_FILE } from '../src/index/persist.mjs';
 import {
@@ -51,7 +52,7 @@ const FILES = [
   { path: 'src/alone.mjs' },
 ];
 
-test('loadGraph without build names a broken index instead of serving it as cold (Q44)', async () => {
+test('the live graph without build names a broken index instead of serving it as cold (Q44)', async () => {
   // A present index that cannot be read is `broken`, not `cold`: the caller
   // reports a damaged index instead of answering "nothing here".
   const root = await mkdtemp(join(tmpdir(), 'idx-map-'));
@@ -64,7 +65,7 @@ test('loadGraph without build names a broken index instead of serving it as cold
     await reindex(root);
     const indexFile = join(root, SQLITE_FILE);
     await writeFile(indexFile, 'not an index');
-    const broken = await loadGraph(root, { build: false });
+    const broken = await loadLiveGraph(root, { build: false });
     assert.equal(broken.broken, true, 'the damaged index is named');
     assert.equal(broken.files.length, 0);
   } finally {
@@ -72,9 +73,9 @@ test('loadGraph without build names a broken index instead of serving it as cold
   }
 });
 
-test('loadGraph without build reports a stale index instead of hiding it (Q42)', async () => {
+test('the live graph without build reports a stale index instead of hiding it (Q42)', async () => {
   // The prompt hook and the MCP surface may not build; what they may do is
-  // distrust. The stale rows are still served (a cache is a cache), labelled.
+  // distrust. Removed paths disappear even when the source cache is stale.
   const root = await mkdtemp(join(tmpdir(), 'idx-map-'));
   try {
     await git(['init', '-q', root]);
@@ -84,15 +85,15 @@ test('loadGraph without build reports a stale index instead of hiding it (Q42)',
     await git(['-C', root, 'add', '-A']);
     await git(['-C', root, 'commit', '-qm', 'initial']);
     await reindex(root);
-    const fresh = await loadGraph(root, { build: false });
+    const fresh = await loadLiveGraph(root, { build: false });
     assert.equal(fresh.cold, undefined);
     assert.equal(fresh.stale, false);
     await git(['-C', root, 'rm', '-q', 'src/gone.mjs']);
     await git(['-C', root, 'commit', '-qm', 'drop gone']);
-    const old = await loadGraph(root, { build: false });
+    const old = await loadLiveGraph(root, { build: false });
     assert.equal(old.stale, true);
-    assert.ok(old.files.some((f) => f.path === 'src/gone.mjs'), 'stale rows are served, labelled');
-    const rebuilt = await loadGraph(root);
+    assert.equal(old.files.some((f) => f.path === 'src/gone.mjs'), false);
+    const rebuilt = await loadLiveGraph(root);
     assert.equal(rebuilt.stale, false, 'a build vouches for the tree it just read');
     assert.equal(rebuilt.files.some((f) => f.path === 'src/gone.mjs'), false);
   } finally {

@@ -1,6 +1,8 @@
 import { stronglyConnected } from '../coordination/workgraph.mjs';
 import { symbolNodePaths } from '../index/bind.mjs';
 import { createEntityResolver } from '../index/entities.mjs';
+import { tokenizeIdentifiers } from '../text/identifiers.mjs';
+import { STOPWORDS } from '../text/tokens.mjs';
 import { cmp } from '../util/sort.mjs';
 import { maskPrompt } from './decompose.mjs';
 
@@ -118,4 +120,150 @@ export function orderSubtasks(tasks, graph) {
       before, after, witnesses: [...witnesses].sort(([a], [b]) => cmp(a, b)).map(([, witness]) => witness),
     }));
   return { dependencies, ...orderedGroups(ids, dependencies) };
+}
+
+const DUPLICATE_THRESHOLD = 0.8;
+const SYMBOL_ANCHORS = new Set(['symbol', 'qualified-symbol']);
+
+function setSorted(values, comparator = cmp) {
+  return [...new Set(values)].sort(comparator);
+}
+
+function comparisonKey(task) {
+  const anchors = setSorted(task.anchors.map(({ path, kind, matched }) =>
+    JSON.stringify(SYMBOL_ANCHORS.has(kind) ? [path, matched] : [path])));
+  const constraints = setSorted(task.constraints.map(({ kind, action, guard, condition, targets }) =>
+    JSON.stringify(kind === 'condition' ? [kind, guard, condition] : [kind, action, setSorted(targets)])));
+  return JSON.stringify([anchors, constraints, task.decisions, task.scopes, task.context]);
+}
+
+function tokenSet(query) {
+  return new Set(tokenizeIdentifiers(query).map(({ token }) => token).filter((word) =>
+    !STOPWORDS.has(word) && word !== 'please'));
+}
+
+function isNearDuplicate(first, second) {
+  if (!first.size || !second.size) return false;
+  let common = 0;
+  for (const word of first) if (second.has(word)) common += 1;
+  return common / (first.size + second.size - common) >= DUPLICATE_THRESHOLD;
+}
+
+function mergedTask(entries) {
+  const [representative] = entries.map(({ task }) => task);
+  if (entries.length === 1) return representative;
+  const subjects = entries.map(({ task }) => task);
+  const clauses = subjects.flatMap((task) => task.clauses).sort((a, b) => byId(a.id, b.id));
+  const anchors = new Map();
+  for (const anchor of subjects.flatMap((task) => task.anchors)) {
+    const key = JSON.stringify([anchor.path, anchor.kind, anchor.matched]);
+    const first = anchors.get(key);
+    anchors.set(key, { ...anchor, clauseIds: setSorted([...(anchor.clauseIds ?? []), ...(first?.clauseIds ?? [])], byId) });
+  }
+  const files = new Map();
+  for (const file of subjects.flatMap((task) => task.files ?? [])) {
+    const path = typeof file === 'string' ? file : file.path;
+    const previous = files.get(path);
+    if (previous === undefined || (file.score ?? 0) > (previous.score ?? 0)) files.set(path, file);
+  }
+  const ids = setSorted(subjects.map(({ id }) => id), byId);
+  return {
+    ...representative, id: ids[0],
+    mergedTaskIds: ids, clauseIds: clauses.map(({ id }) => id), clauses,
+    anchors: [...anchors.values()].sort((a, b) => cmp(a.path, b.path) || cmp(a.kind, b.kind) || cmp(a.matched, b.matched)),
+    files: [...files].sort(([a], [b]) => cmp(a, b)).map(([, file]) => file),
+    constraints: subjects.flatMap((task) => task.constraints).sort((a, b) => byId(a.clauseId, b.clauseId)),
+    cautions: setSorted(subjects.flatMap((task) => task.cautions)),
+  };
+}
+
+/** Merge only when every member agrees on scope and passes the similarity bar. */
+export function clusterSubtasks(tasks) {
+  const candidates = tasks.map((task) => ({ task, key: comparisonKey(task), tokens: tokenSet(task.query) }));
+  candidates.sort((a, b) => cmp(a.key, b.key) || cmp(a.task.query, b.task.query) || byId(a.task.id, b.task.id));
+  const clusters = [];
+  for (const candidate of candidates) {
+    const group = clusters.find((entries) => entries[0].key === candidate.key
+      && entries.every((entry) => isNearDuplicate(entry.tokens, candidate.tokens)));
+    if (group) group.push(candidate);
+    else clusters.push([candidate]);
+  }
+  return clusters.map(mergedTask).sort((a, b) => byId(a.id, b.id));
+}
+
+function addOwner(index, key, id) {
+  if (!index.has(key)) index.set(key, new Set());
+  index.get(key).add(id);
+}
+
+/** Plan lanes from both explicit anchors and the files retrieved for each task. */
+export function subtaskLanes(tasks) {
+  const fileOwners = new Map();
+  const symbolOwners = new Map();
+  const pathsByTask = new Map();
+  const neighbors = new Map(tasks.map(({ id }) => [id, new Set()]));
+  for (const task of tasks) {
+    const paths = subtaskPaths(task);
+    pathsByTask.set(task.id, paths);
+    for (const path of paths) addOwner(fileOwners, path, task.id);
+    for (const { path, kind, matched } of task.anchors ?? []) {
+      if (SYMBOL_ANCHORS.has(kind)) addOwner(symbolOwners, JSON.stringify([path, matched]), task.id);
+    }
+  }
+  const pairs = new Map();
+  function overlap(owners, label, convert) {
+    for (const [key, ids] of owners) {
+      const group = [...ids].sort(byId);
+      for (const [index, from] of group.entries()) {
+        for (const to of group.slice(index + 1)) {
+          neighbors.get(from).add(to);
+          neighbors.get(to).add(from);
+          const labelKey = from + ':' + to;
+          const pair = pairs.get(labelKey) ?? { tasks: [from, to], files: [], symbols: [] };
+          pair[label].push(convert(key));
+          pairs.set(labelKey, pair);
+        }
+      }
+    }
+  }
+  overlap(fileOwners, 'files', (path) => path);
+  overlap(symbolOwners, 'symbols', (key) => {
+    const [path, name] = JSON.parse(key);
+    return { path, name };
+  });
+  const overlaps = [...pairs.values()].sort((a, b) => byId(a.tasks[0], b.tasks[0]) || byId(a.tasks[1], b.tasks[1]))
+    .map((row) => ({
+      ...row, files: row.files.sort(cmp), symbols: row.symbols.sort((a, b) => cmp(a.path, b.path) || cmp(a.name, b.name)),
+    }));
+  const visited = new Set();
+  const components = [];
+  for (const { id } of tasks) {
+    if (visited.has(id)) continue;
+    const group = [id];
+    visited.add(id);
+    for (const member of group) {
+      for (const neighbor of neighbors.get(member)) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        group.push(neighbor);
+      }
+    }
+    group.sort(byId);
+    const files = setSorted(group.flatMap((member) => [...pathsByTask.get(member)]));
+    const members = new Set(group);
+    const sharedFiles = setSorted(overlaps.filter(({ tasks: pair }) => members.has(pair[0])).flatMap((row) => row.files));
+    const state = group.length > 1 ? 'coupled' : files.length ? 'independent' : 'unresolved';
+    const key = JSON.stringify([files, tasks.filter((task) => members.has(task.id)).map(({ query }) => query).sort(cmp)]);
+    components.push({ taskIds: group, state, files, sharedFiles, key });
+  }
+  const lanes = components.sort((a, b) => cmp(a.key, b.key)).map(({ key, ...lane }, index) => ({ id: index + 1, ...lane }));
+  return {
+    lanes,
+    overlaps,
+    lines: tasks.length > 1 ? [
+      'Lanes  ' + lanes.map(({ id, taskIds, state }) =>
+        'L' + id + ' ' + taskIds.map((task) => 'T' + task).join(',') + ' ' + state).join(' | '),
+      ...(overlaps.length ? ['Shared files  ' + setSorted(overlaps.flatMap(({ files }) => files)).join(', ')] : []),
+    ] : [],
+  };
 }

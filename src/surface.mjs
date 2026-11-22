@@ -96,7 +96,7 @@ export const DISPOSITIONS = [
     owner: 'studio',
     consumer: 'a maintainer watching and steering the doors of the tool in a browser',
     note: 'one loopback socket, opened only by explicit invocation and read-only except the guarded writer path (ADR-212, ADR-227); nothing leaves the machine (ADR-075)',
-    qualification: '0d769ae',
+    qualification: 'a764c8a',
     groups: ['studio'],
   },
   {

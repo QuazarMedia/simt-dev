@@ -14,7 +14,7 @@ install with no siblings, and a clean repository. The release slice also has to 
 sanitized transcripts a maintainer can compare against, and ADR-207 requires the surface
 inventory to say what was qualified and at which code SHA.
 
-## Decision
+## Rulings
 
 1. **Qualification runs from the artefact.** `test/studio-release.test.mjs` packs the
    working tree, installs the tarball into a standalone consumer, and drives the installed

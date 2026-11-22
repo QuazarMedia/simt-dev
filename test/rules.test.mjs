@@ -186,6 +186,10 @@ test('every partial supersession in the corpus is found, with its kind and its r
     // no-socket guarantee is narrowed for the explicitly invoked studio, which is the
     // claim the parser reads on the changed record.
     'ADR-187',
+    // ADR-212 joined when ADR-227 landed: its frontmatter narrows ruling 4's read-only
+    // guarantee for the guarded writer path, and the index applies that claim to the
+    // target record rather than rewriting its status line.
+    'ADR-212',
   ]);
   for (const d of decisions) {
     for (const p of d.partial) {
@@ -343,6 +347,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // the ruling is ABOUT the acceptance matrix as one inventory, so it names the data
   // module, its publication and the test that pins them together; a record that named
   // none of the three could not be followed when the page and the module drift.
+  // ADR-228 joined because its ruling is ABOUT the packed-install evidence, so it names
+  // the release test, the two transcripts, the surface module and the generated page; a
+  // record that named none of them could not be followed to the tree it qualifies.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -379,6 +386,7 @@ assert.deepEqual(leaking, [
     'ADR-208',
     'ADR-211',
     'ADR-214',
+    'ADR-228',
   ]);
 });
 

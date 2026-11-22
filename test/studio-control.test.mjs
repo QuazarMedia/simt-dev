@@ -8,7 +8,7 @@ import { join } from 'node:path';
 
 import { CONTROL_ALLOWLIST, controlApply, controlPreview } from '../src/studio/control.mjs';
 import { simt } from './fixture.mjs';
-import { fixtureRepo, httpReq, session, startStudio, treeDigest } from './studio-fixture.mjs';
+import { fixtureRepo, session, startStudio, treeDigest } from './studio-fixture.mjs';
 
 async function root(files = {}) {
   return realpath(await fixtureRepo(files));

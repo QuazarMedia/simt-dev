@@ -25,7 +25,7 @@ import { activeLeases, readLeases } from './lease.mjs';
 import { hasTestEvidence, readLedger } from './ledger/index.mjs';
 import { CLI } from './name.mjs';
 import { planStatus } from './plan/index.mjs';
-import { currentHead, readCheckCache, renderStatusLine } from './status.mjs';
+import { readCheckCache, renderStatusLine } from './status.mjs';
 import { gitText } from './sys/git.mjs';
 
 /** One slot's failure is that slot's answer, never the snapshot's. */
@@ -37,10 +37,20 @@ async function slot(compute) {
   }
 }
 
-async function checkSlot(root) {
+/** HEAD and its tree from one git process; either is null when git cannot answer. */
+async function headAndTree(root) {
+  try {
+    const [head, tree] = (await gitText(root, ['rev-parse', 'HEAD', 'HEAD^{tree}'])).split('\n');
+    return { head, tree };
+  } catch {
+    return { head: null, tree: null };
+  }
+}
+
+async function checkSlot(root, headInfo) {
   const record = await readCheckCache(root);
   if (record === null) return null;
-  const head = await currentHead(root);
+  const { head } = await headInfo;
   const stale = head !== null && record.head !== null && head !== record.head;
   return {
     at: record.at,
@@ -121,16 +131,11 @@ async function agentHooksSlot(root) {
   };
 }
 
-async function evidenceSlot(root) {
+async function evidenceSlot(root, headInfo) {
   const { entries, errors } = await readLedger(root);
-  let tree = null;
-  try {
-    tree = await gitText(root, ['rev-parse', 'HEAD^{tree}']);
-  } catch {
-    // No repository, no commits: there is no tree to have evidence for, and `null`
-    // says that rather than \"no evidence\", which would read as a missing run.
-    tree = null;
-  }
+  // No repository, no commits: there is no tree to have evidence for, and `null`
+  // says that rather than \"no evidence\", which would read as a missing run.
+  const { tree } = await headInfo;
   return {
     entries: entries.length,
     errors: errors.length,
@@ -165,21 +170,27 @@ async function journalSlot(root) {
  * `ok` would turn a stale manifest into a failing gate no `sync` can fix.
  */
 export async function statusSnapshot(root) {
+  // One git call answers both facts every slot asks for. The snapshot used to spawn
+  // `rev-parse HEAD` twice and `rev-parse HEAD^{tree}` once; that was three processes
+  // and the difference between the studio's status route meeting its read budget and
+  // missing it by a few milliseconds.
+  const headInfo = headAndTree(root);
   const [check, gitHooks, agentHooks, evidence, leases, slices, journal] = await Promise.all([
-    slot(() => checkSlot(root)),
+    slot(() => checkSlot(root, headInfo)),
     slot(() => gitHooksSlot(root)),
     slot(() => agentHooksSlot(root)),
-    slot(() => evidenceSlot(root)),
+    slot(() => evidenceSlot(root, headInfo)),
     slot(() => leasesSlot(root)),
     slot(() => slicesSlot(root)),
     slot(() => journalSlot(root)),
   ]);
+  const { head } = await headInfo;
   return {
     ok: (check?.blocking ?? 0) === 0 && (gitHooks?.gatesError ?? null) === null,
     command: 'status',
     root,
     at: Date.now(),
-    head: await currentHead(root),
+    head,
     check,
     gitHooks,
     agentHooks,

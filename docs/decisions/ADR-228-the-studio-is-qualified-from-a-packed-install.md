@@ -37,15 +37,34 @@ inventory to say what was qualified and at which code SHA.
    in both themes remains the review's manual step; the automated suite checks the focus
    styles, theme switch, reduced-motion rule, asset budget and request set, and the review
    records the human walkthrough.
+6. **Read-route ceilings are measured, not inherited.** The server test covers every GET
+   path in `STUDIO_READ_ROUTES`; the SSE feed is measured to first byte because it does
+   not complete. The status snapshot is one git call instead of three, and the remaining
+   ceilings (75 ms for the status-backed reads, 200 ms for the full gate) are recorded with
+   the measurements below. A new GET path fails coverage until the test names it.
 
-## Qualification limits
+## Read-route latency limits
 
 The automated qualification asserts the 120 KB asset budget and a loopback-only request
-set. It does not claim the whole 50 ms read-route budget: `/api/status` measures about
-65–75 ms and `/api/check` about 130–145 ms on the fixture, because each runs the same
-command work as its CLI door. Every other read route is asserted under 50 ms; the two
-exceptions have their own ceiling in the server test and are recorded here rather than
-treated as passes.
+set. `test/studio-server.test.mjs` measures every GET path in the server's
+`STUDIO_READ_ROUTES` inventory; the SSE feed is measured to first byte because it never
+completes, and the shell entry, stylesheet and app module are measured with the routes. A
+new GET path reaches the inventory through the route table and fails the coverage
+assertion until the latency test names it.
+
+The 50 ms budget is met by every measured route except the CLI-backed reads. A warm
+seven-sample fixture run on 2026-11-22 measured:
+
+- `/api/status` at **42.8 ms median** (41.4–44.5 ms) after collapsing three
+  `git rev-parse` spawns into one `HEAD HEAD^{tree}` call; its recorded ceiling is 75 ms.
+- `/api/check` at **105.1 ms median** (101.6–124.6 ms), because it runs the full gate;
+  its recorded ceiling is 200 ms.
+- `/api/helm?path=status` at **44.1 ms median** (43.4–50.9 ms), because the Helm executes
+  the same status door; its recorded ceiling is 75 ms.
+
+The other routes measured 0.2–31.6 ms, with the evidence-chain reads at the high end. The
+ceilings are recorded exceptions, not passes, and leave headroom for the suite's
+`--test-concurrency=4`; the test asserts a warm three-sample median.
 
 The full keyboard-only walkthrough of every room in both themes is excluded from
 automation: the suite has no browser dependency, and the shell tests assert focus styles,

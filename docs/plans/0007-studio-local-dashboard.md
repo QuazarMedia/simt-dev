@@ -133,8 +133,10 @@ with a table view that carries the same data.
   output changes (ADR-187's contract ruling stands — only its no-socket clause is
   amended, by ADR-212, for this explicitly invoked surface).
 - **Budgets.** The whole shell (HTML + CSS + JS, uncompressed) stays under 120 KB; the
-  server answers any read route in under 50 ms on the fixture repository; the test suite
-  asserts both. No asset over the file-line ceiling; views split into small modules.
+  server answers every read route in under 50 ms on the fixture repository, except the
+  CLI-backed gate and status reads with measured ceilings in ADR-228; the test suite
+  asserts both and covers every GET path in `STUDIO_READ_ROUTES`. No asset over the
+  file-line ceiling; views split into small modules.
 
 ## Data ownership
 
@@ -167,12 +169,15 @@ with a table view that carries the same data.
 | ST14 | The Bench room: reports and comparisons as charts | Steer | views | S | ST02, ST03 | Complete | 45b5298 · test: node --test test/studio-bench.test.mjs |
 | ST15 | Qualify the studio: installed fixtures, budgets, accessibility, surface | Release | release | M | ST04, ST09, ST12, ST13, ST14 | Complete | b1711fb · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — 5823334 · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — 4f120ab · test: node --test test/studio-shell.test.mjs — 0d769ae · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — a764c8a · test: node --test test/studio-shell.test.mjs test/studio-control.test.mjs test/studio-library.test.mjs test/studio-bench.test.mjs |
 
-ST15 qualification limits: the 50 ms read-route budget is met by every read route except
-`/api/status` (~65–75 ms) and `/api/check` (~130–145 ms), which run the same command work
-as their CLI doors and have recorded exception ceilings in the server test. The
-keyboard-only walkthrough of every room in both themes is an excluded manual check; it
-must be performed and recorded before claiming a complete accessibility pass. ADR-228
-carries the same limits.
+ST15 qualification limits: `test/studio-server.test.mjs` measures every GET path in
+`STUDIO_READ_ROUTES`, plus the SSE first byte and the shell/app assets. A warm
+seven-sample fixture run measured `/api/status` at 42.8 ms (41.4–44.5; 75 ms ceiling after
+collapsing three git spawns to one), `/api/check` at 105.1 ms (101.6–124.6; 200 ms
+ceiling, the full gate), and `/api/helm?path=status` at 44.1 ms (43.4–50.9; 75 ms ceiling,
+the same status door). Every other route measured 0.2–31.6 ms. A new GET path fails the
+latency coverage assertion until the test names it. The keyboard-only walkthrough of every
+room in both themes is an excluded manual check; it must be performed and recorded before
+claiming a complete accessibility pass. ADR-228 carries the same limits.
 
 ST04 is the first useful screen. ST05 makes it live. ST12 makes it a cockpit. ST15 is the
 release exit. Lanes own disjoint file sets: `server` owns `src/studio/server.mjs` and the

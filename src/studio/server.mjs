@@ -12,12 +12,15 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { apiAnswer } from './api.mjs';
+import { API_READ_ROUTES, apiAnswer } from './api.mjs';
 import { streamEvents } from './events.mjs';
 import { within } from '../trust/paths.mjs';
 
 const STUDIO_HOST = '127.0.0.1';
 export const STUDIO_DEFAULT_PORT = 4310;
+
+/** Every GET path the socket serves, including the SSE feed. */
+export const STUDIO_READ_ROUTES = Object.freeze(['/api/events', ...API_READ_ROUTES]);
 
 const COOKIE = 'simt_studio';
 const PUBLIC_DIR = join(dirname(fileURLToPath(import.meta.url)), 'public');

@@ -5,12 +5,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { request } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { startStudioServer } from '../src/studio/server.mjs';
+import { STUDIO_READ_ROUTES, startStudioServer } from '../src/studio/server.mjs';
 import { BIN, simt, tempDir } from './fixture.mjs';
 import { fixtureRepo, httpReq, session, startStudio, treeDigest } from './studio-fixture.mjs';
+
+const PLAN = `# fixture plan
+
+## 3. Tracker
+
+| ID | Slice | Depends on | State | SHA / evidence |
+| --- | --- | --- | --- | --- |
+| F01 | first | — | Queued | |
+| F02 | second | F01 | Queued | |
+
+### F01 — first
+
+**Finding.** the first slice
+
+### F02 — second
+
+**Finding.** the second slice
+`;
 
 test('studio serves the shell on loopback after a one-shot token exchange', async (t) => {
   const root = await fixtureRepo();
@@ -62,17 +81,35 @@ test('the accepted request set is loopback-only and names only the shell and API
   }
 });
 
-test('read routes answer inside the 50 ms budget, with the two CLI-backed exceptions measured', async (t) => {
-  const root = await fixtureRepo();
+test('read routes answer inside the 50 ms budget, with the measured CLI-backed exceptions', async (t) => {
+  const root = await fixtureRepo({
+    'docs/plans/0001-fixture.md': PLAN,
+    'session.jsonl': '{"type":"user","message":{"role":"user","content":"hi"}}\n',
+  });
   const studio = await startStudio(root);
   t.after(() => studio.stop());
   const cookie = await session(studio);
   const routes = [
     '/', '/shell.css', '/app.js',
-    '/api/tokens', '/api/plan', '/api/plan/next', '/api/board',
-    '/api/evidence', '/api/evidence/chains', '/api/harness', '/api/helm',
-    '/api/knowledge/graph', '/api/knowledge/why', '/api/knowledge/rank?query=fixture',
-    '/api/work', '/api/library', '/api/library/skill?name=nope', '/api/bench', '/api/control',
+    '/api/tokens', '/api/tokens/session?session=session.jsonl',
+    '/api/plan', '/api/plan/next', '/api/plan/next?id=F01', '/api/board',
+    '/api/evidence', '/api/evidence/chains', '/api/evidence/chains?claim=F01',
+    '/api/harness', '/api/helm',
+    '/api/knowledge/graph', '/api/knowledge/why?scope=x&id=y', '/api/knowledge/rank?query=fixture&scope=x',
+    '/api/work', '/api/library', '/api/library/skill?name=nope',
+    '/api/bench', '/api/bench/replay?input=nope.json', '/api/bench/calibrate?input=nope.json',
+    '/api/control',
+  ];
+  const exceptions = [
+    // The status snapshot used to spawn three git processes; one `rev-parse HEAD HEAD^{tree}`
+    // now answers both facts. The 75 ms ceiling leaves room for a loaded suite while keeping
+    // the route close to the measured 43 ms median.
+    ['/api/status', 75],
+    // The gate itself is the work: it reads the projection, manifest, hooks, decisions and
+    // knowledge inputs. Measured ~105 ms; 200 ms is the recorded ceiling, not a silent pass.
+    ['/api/check', 200],
+    // The Helm executes the same status door for `?path=status`; it inherits that cost.
+    ['/api/helm?path=status', 75],
   ];
   const median = (times) => [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
   const measure = async (path) => {
@@ -92,13 +129,43 @@ test('read routes answer inside the 50 ms budget, with the two CLI-backed except
     assert.ok(ms < 50, `${path} median ${ms.toFixed(1)} ms exceeds the 50 ms read-route budget`);
   }
 
-  // The fixture's status and check doors run the same CLI work as their commands; they are
-  // the two measured exceptions, recorded in ADR-228 rather than silently exempted here.
-  for (const [path, ceiling] of [['/api/status', 150], ['/api/check', 300]]) {
+  // Every read path in the server's inventory is in this set, so a new GET route cannot
+  // arrive without a latency assertion. The SSE route has its own first-byte check below.
+  const measured = new Set(
+    [...routes, ...exceptions.map(([path]) => path)].map((path) => new URL(path, 'http://studio').pathname),
+  );
+  for (const route of STUDIO_READ_ROUTES) {
+    if (route === '/api/events') continue;
+    assert.ok(measured.has(route), `${route} is not covered by the read-route latency test`);
+  }
+
+  for (const [path, ceiling] of exceptions) {
     await httpReq(studio.port, { path, headers: { cookie } });
     const ms = await measure(path);
     assert.ok(ms < ceiling, `${path} median ${ms.toFixed(1)} ms exceeds its recorded ${ceiling} ms exception ceiling`);
   }
+
+  // SSE is a read that never finishes, so its latency is the time to first byte, not a
+  // completed response. The stream is aborted after the directive arrives.
+  const started = performance.now();
+  const firstByte = await new Promise((resolve, reject) => {
+    const stream = request({
+      host: '127.0.0.1',
+      port: studio.port,
+      path: '/api/events',
+      headers: { cookie, accept: 'text/event-stream' },
+    }, (res) => {
+      res.once('data', () => {
+        const ms = performance.now() - started;
+        stream.destroy();
+        resolve({ status: res.statusCode, ms });
+      });
+    });
+    stream.on('error', reject);
+    stream.end();
+  });
+  assert.equal(firstByte.status, 200);
+  assert.ok(firstByte.ms < 50, `/api/events first byte ${firstByte.ms.toFixed(1)} ms exceeds the 50 ms read-route budget`);
 });
 
 test('a replayed, wrong or off-route token query is refused', async (t) => {

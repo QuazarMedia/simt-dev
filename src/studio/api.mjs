@@ -41,6 +41,17 @@ const ROUTES = new Map([
   ['/api/work', { command: 'work inspect' }],
 ]);
 
+/** Every GET path this bridge serves. The control preview/apply writes are not reads. */
+export const API_READ_ROUTES = Object.freeze([
+  ...ROUTES.keys(),
+  '/api/library',
+  '/api/library/skill',
+  '/api/bench',
+  '/api/bench/replay',
+  '/api/bench/calibrate',
+  '/api/control',
+]);
+
 /**
  * Seal one payload the way the dispatcher seals a command's answer: the command name,
  * the schema version and the exit code come from the same machinery, not from a second

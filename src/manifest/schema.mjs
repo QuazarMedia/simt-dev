@@ -25,6 +25,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { SUPPORTED_WORK_VERSIONS, WORK_VERSION, validateWork } from '../work/config.mjs';
+import { architectureProblem } from './architecture.mjs';
 import { runnerSpecProblem } from '../testing/contract.mjs';
 
 /** Absent means 1: the field arrived after the file did, and every file predates it. */
@@ -91,6 +92,7 @@ export const KEYS = [
   { key: 'id', owner: 'tool', since: '0.7.0', check: (v) => (typeof v === 'string' && v.length > 0 ? null : 'id must be a non-empty string') },
   { key: 'version', owner: 'tool', since: '0.9.0', check: (v) => (Number.isInteger(v) && v >= 1 ? null : 'version must be an integer of at least 1') },
   { key: 'stack', owner: 'tool', since: '0.7.0', check: (v) => (isStringList(v) ? null : 'stack must be a list of profile ids') },
+  { key: 'architecture', owner: 'repo', since: '0.13.0', check: architectureProblem },
   { key: 'limits', owner: 'repo', since: '0.7.0', check: (v) => (isObject(v) ? null : 'limits must be an object') },
   // {warn, error, excludeTextFiles, exclude} - ADR-005's two tiers plus the paths a
   // repository opts out of, all of which the repository owns and `init` keeps.

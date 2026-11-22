@@ -257,3 +257,4 @@ in [architecture/history.md](architecture/history.md).
 | [246](decisions/ADR-246-code-and-knowledge-impact-join-by-exact-artifact-identity.md) | Code and knowledge impact join by exact artifact identity | accepted · 2026-11-22 |
 | [247](decisions/ADR-247-governance-applies-only-with-current-path-and-stack-evidence.md) | Governance applies only with current path and stack evidence | accepted · 2026-11-22 · supersedes ADR-093 ruling 2 · supersedes ADR-093 ruling 3 |
 | [248](decisions/ADR-248-governance-witnesses-carry-typed-paths-and-commit-citations.md) | Governance witnesses carry typed paths and commit citations | accepted · 2026-11-22 |
+| [249](decisions/ADR-249-import-direction-is-repository-policy.md) | Import direction is repository policy | accepted · 2026-11-22 · D34 |

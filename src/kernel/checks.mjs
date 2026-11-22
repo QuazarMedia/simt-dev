@@ -5,13 +5,13 @@
 // block would be the whole section: the core rules are consecutive bullets, and
 // marking one of them must not take its neighbours with it.
 //
-// `import-direction` records nothing about which way an import may point. The
-// index has the edges . A direction still has to be named before the prose
-// can leave, or the line would say Enforced and nothing would be enforcing it.
+// An import-direction marker only activates a policy declared in the manifest.
+// Projection without that context keeps the instruction.
 
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 
+import { architectureProblem } from '../manifest/architecture.mjs';
 import { CLI } from '../name.mjs';
 import { livePaths } from '../index/live.mjs';
 import { readWorktreeFile } from '../index/overlay.mjs';
@@ -138,6 +138,11 @@ export async function runDeclaredChecks(root, rules, manifest) {
 
 async function runOne(root, check, manifest) {
   if (check.name === 'import-direction') {
+    if (manifest?.architecture !== undefined) {
+      if (architectureProblem(manifest.architecture) !== null) return [];
+      const { architectureFindings } = await import('./graph-checks.mjs');
+      return architectureFindings(root, manifest.architecture);
+    }
     return [{
       file: check.source,
       status: 'check-unbuilt',

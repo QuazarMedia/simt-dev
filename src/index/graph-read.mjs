@@ -1,6 +1,6 @@
 import { BM25F_FIELDS } from './bm25f.mjs';
 import { readSqliteBatch, readSqliteRows } from './persist.mjs';
-import { SYMBOL_GRAPH_QUERIES } from './symbol-persist.mjs';
+import { symbolGraphQueries } from './symbol-persist.mjs';
 
 /**
  * Read wrappers return arrays with the read error attached:
@@ -70,7 +70,7 @@ export async function readGraph(root) {
 }
 
 export async function readSymbolGraph(root) {
-  const { results, error } = await readSqliteBatch(root, SYMBOL_GRAPH_QUERIES);
+  const { results, error } = await readSqliteBatch(root, symbolGraphQueries());
   const [edges, metadata] = results ?? [[], []];
   return decodeSymbolGraph(edges, metadata, error);
 }
@@ -78,7 +78,7 @@ export async function readSymbolGraph(root) {
 function decodeSymbolGraph(edges, metadata, error) {
   const values = new Map(metadata.map(({ key, value }) => [key, JSON.parse(value)]));
   return {
-    edges: edges.map(({ src, kind, dst, path, props }) => ({ src, kind, dst, path, ...JSON.parse(props) })),
+    edges: edges.map(({ src, kind, dst, path, props }) => ({ src, kind, dst, path, ...(props === null ? { viaBarrels: [], lines: [] } : JSON.parse(props)) })),
     bindingCoverage: values.get('binding_coverage') ?? null,
     unresolved: values.get('binding_unresolved') ?? [],
     error,
@@ -94,7 +94,9 @@ export async function readFts(root) {
   return withReadError(rows, error);
 }
 
-export async function readLiveSnapshot(root, { text, fielded, binding }) {
+export async function readLiveSnapshot(root, { text, fielded, binding, tree, bindingEdits }) {
+  const chunks = !binding ? '' : tree === undefined ? ", json_extract(s.props, '$.bindings') as bindings"
+    : ", case when ? or (select value from meta where key = 'tree') != ? then json_extract(s.props, '$.bindings') end as bindings";
   const queries = [
     [`select ${FILE_COLUMNS}, json_extract(s.props, '$.imports') as imports,
       json_extract(s.props, '$.resolution') as resolution
@@ -107,15 +109,13 @@ export async function readLiveSnapshot(root, { text, fielded, binding }) {
   if (fielded) queries.push([`select f.kind, substr(n.key, 6) as ref, ${BM25F_FIELDS.map((field) => `f.${field}`).join(', ')}
     from fts f join nodes n on n.id = f.node_id where (select value from meta where key = 'fts_fields') = '1'
     order by ref, f.rowid`]);
-  if (binding) queries.push(...SYMBOL_GRAPH_QUERIES);
+  if (binding) queries.push(...symbolGraphQueries({ lightweight: tree !== undefined && !bindingEdits }));
   const { results, error } = await readSqliteBatch(root, queries);
   const [files, symbols, edges, meta, ...extra] = results ?? [[], [], [], []];
   const fts = text ? extra.shift() ?? [] : [];
   const fieldedRows = fielded ? extra.shift() ?? [] : [];
   return {
-    files: files.map(({ imports, bindings, ...file }) => ({
-      ...file, imports: JSON.parse(imports ?? '[]'), ...(bindings ? JSON.parse(bindings) : {}),
-    })),
+    files: files.map(({ imports, ...file }) => ({ ...file, imports: JSON.parse(imports ?? '[]') })),
     symbols, edges, fts, fieldedRows, meta: Object.fromEntries(meta.map(({ key, value }) => [key, value])),
     binding: binding ? decodeSymbolGraph(extra[0] ?? [], extra[1] ?? [], error) : null,
     error,

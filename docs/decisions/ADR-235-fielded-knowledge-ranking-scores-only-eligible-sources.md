@@ -24,7 +24,7 @@ scattered through a section.
 
 3. **Enable fielded knowledge scoring explicitly.** A reader can select it
    with `--retrieval v2` on `simt knowledge rank` and scoped `simt brief`.
-   Default changes follow the paired qualification in ADR-231.
+   Default changes follow the paired qualification in ADR-241.
 
 ## Consequences
 

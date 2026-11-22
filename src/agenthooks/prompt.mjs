@@ -48,7 +48,9 @@ export async function promptOptIn(root) {
   }
   const declared = manifest.brief?.bytes;
   const asked = Number.isFinite(declared) && declared > 0 ? declared : PROMPT_CAP_BYTES;
-  return { optedIn: true, bytes: Math.min(asked, PROMPT_CAP_BYTES) };
+  return { optedIn: true, bytes: Math.min(Math.max(1, Math.floor(asked)), PROMPT_CAP_BYTES),
+    ...(manifest.brief.retrieval === 'v2' ? { retrieval: 'v2' } : {}),
+  };
 }
 
 /**
@@ -78,10 +80,11 @@ export async function deliverPrompt(row, payload, { root: flagRoot } = {}) {
   // Federation is off on this path and on no other: a delivery has 300 ms to answer, and
   // starting a declared server is a wait a prompt submit must not take. The task is the
   // question a federation would ask, and a person is not made to wait for it here.
-  const result = await assembleBrief({ root, task, budget: optIn.bytes, build: false, federate: false });
+  const result = await assembleBrief({ root, task, budget: optIn.bytes, retrieval: optIn.retrieval, build: false, federate: false });
   if (result.error) return { skipped: 'the packet could not be assembled' };
   if (result.cold) return { skipped: 'the index is empty, and a delivered packet never builds one' };
 
+  if (result.packed.after > optIn.bytes) return { skipped: 'the mandatory packet exceeds the prompt byte ceiling' };
   const json = deliveryJson(row, result.packed.text);
   if (json === null) return { skipped: `${row.id} has no prompt event that can inject` };
   return { json, root, bytes: result.packed.after };

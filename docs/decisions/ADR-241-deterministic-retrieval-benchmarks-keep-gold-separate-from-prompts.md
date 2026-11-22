@@ -2,7 +2,7 @@
 simt-affects: ["packages/bench/src/multitask-corpus.mjs", "test/bench-multitask-corpus.test.mjs"]
 ---
 
-# ADR-231 — Deterministic retrieval benchmarks keep gold separate from prompts
+# ADR-241 — Deterministic retrieval benchmarks keep gold separate from prompts
 
 Status: accepted · 2026-11-22
 

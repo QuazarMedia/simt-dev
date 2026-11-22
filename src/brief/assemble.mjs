@@ -40,7 +40,7 @@ import { join } from 'node:path';
 import { CLI, STATE_DIR } from '../name.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { assembleScopedBrief } from './local-work.mjs';
-import { DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES, buildPacket, collect } from './packet.mjs';
+import { DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES, buildPacket, collect, keptSections } from './packet.mjs';
 import { buildProofPacket } from './proof.mjs';
 import { classifyTask, cardVerbs } from './kind.mjs';
 import { briefAdvice } from '../advice/advice.mjs';
@@ -225,6 +225,14 @@ export async function assembleBrief({
   // A view is the same packet with the other sections never collected, so it shares the
   // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
   const section = only === null ? null : String(only).toUpperCase();
+  if (retrieval === 'v2' && !proof) {
+    const { decomposePrompt } = await import('./decompose.mjs');
+    const parts = decomposePrompt(task);
+    if (parts.length > 1 || /\b(?:without|except|never|unless|only when|do not|leave|keep|if)\b/iu.test(task)) {
+      const { assembleCompositeBrief } = await import('./multi.mjs');
+      return assembleCompositeBrief({ root, task, parts, paths, budget, flags, build, commands, section });
+    }
+  }
   // A view collects one section, so a block of work runs only when the collected section
   // consumes its result: collect() would drop the rest, and paying for it changes nothing
   // a reader sees. `section` null is the whole packet, where every block runs. Each call
@@ -588,12 +596,7 @@ export async function assembleBrief({
     };
   }
 
-  const sections = {};
-  for (const item of items) {
-    if (cut.has(item.id)) continue;
-    sections[item.section] ??= [];
-    sections[item.section].push(item.text);
-  }
+  const sections = keptSections(items, cut);
 
   return { root, kind, basis, task, scope, budget, items, packed, sections, proof: proofSummary };
 }

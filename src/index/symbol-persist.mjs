@@ -1,8 +1,8 @@
 import { bindSymbols } from './bind.mjs';
 import { canonicalJson } from '../util/canonical.mjs';
 
-const EDGE_SQL = `select e.src_id as srcId, src.key as src, e.kind, e.dst_key as dst,
-  e.dst_id as dstId, e.props, s.path
+const edgeSql = (props = 'e.props') => `select e.src_id as srcId, src.key as src, e.kind, e.dst_key as dst,
+  e.dst_id as dstId, ${props}, s.path
   from edges e join nodes src on src.id = e.src_id join sources s on s.id = e.owner_source_id
   where e.props is not null and e.props != ''`;
 
@@ -41,7 +41,7 @@ export function persistSymbolGraph(db) {
 
   // A changed target can keep the same key but receive a different node ID.
   // Reconcile that edge along with changed bindings, keeping unaffected rows.
-  const oldEdges = new Map(db.prepare(EDGE_SQL).all().map((row) => [edgeIdentity(row), row]));
+  const oldEdges = new Map(db.prepare(edgeSql()).all().map((row) => [edgeIdentity(row), row]));
   const upsert = db.prepare(`insert into edges(src_id, kind, dst_key, dst_id, weight, owner_source_id, trust, props)
     values (?, ?, ?, ?, 1, ?, 'observed', ?)
     on conflict(src_id, kind, dst_key) do update set dst_id = excluded.dst_id, props = excluded.props`);
@@ -65,7 +65,10 @@ export function persistSymbolGraph(db) {
   upsertMeta.run('binding_unresolved', canonicalJson(unresolved));
 }
 
-export const SYMBOL_GRAPH_QUERIES = [
-  [`${EDGE_SQL} order by src, e.kind, dst`],
-  ["select key, value from meta where key in ('binding_coverage', 'binding_unresolved')"],
-];
+export function symbolGraphQueries({ lightweight = false } = {}) {
+  return [
+    [`${edgeSql(lightweight ? 'null as props' : undefined)} order by src, e.kind, dst`],
+    [lightweight ? "select key, value from meta where key = 'binding_coverage'"
+      : "select key, value from meta where key in ('binding_coverage', 'binding_unresolved')"],
+  ];
+}

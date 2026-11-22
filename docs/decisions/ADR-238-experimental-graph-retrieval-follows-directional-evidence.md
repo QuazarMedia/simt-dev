@@ -24,7 +24,7 @@ kind of each relationship.
    the contributing path with the greatest weight.
 
 3. **Qualify directional scores as experimental.** Promotion depends on the
-   paired retrieval evidence required by ADR-231.
+   paired retrieval evidence required by ADR-241.
 
 ## Consequences
 

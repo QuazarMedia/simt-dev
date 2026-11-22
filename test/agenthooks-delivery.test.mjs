@@ -58,7 +58,7 @@ async function served(optIn = { brief: {} }, { warm = true } = {}) {
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
   // Warm the index the way a person would, at a terminal, where building one is allowed.
-  cli(['brief', 'fix the keep helper in src/keep.mjs', '--root', root]);
+  cli(['index', '--root', root]);
   return root;
 }
 

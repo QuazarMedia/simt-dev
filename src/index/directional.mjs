@@ -24,12 +24,17 @@ function byRank(a, b) {
 
 /** Prepare both directions once, retaining the edge kind used by each traversal. */
 export function directionalGraph(edges) {
-  const arcs = new Map();
+  const buckets = new Map();
+  const inbound = new Map();
   function add(src, dst, kind, weight) {
     if (src === dst || weight <= 0) return;
-    const id = JSON.stringify([src, dst, kind]);
-    const old = arcs.get(id);
-    if (!old || old.weight < weight) arcs.set(id, { src, dst, kind, weight });
+    if (!buckets.has(src)) buckets.set(src, new Map());
+    const bucket = buckets.get(src);
+    const id = dst + '\\0' + kind;
+    const old = bucket.get(id);
+    if (!old || old.weight < weight) bucket.set(id, { src, dst, kind, weight });
+    if (!inbound.has(dst)) inbound.set(dst, new Set());
+    inbound.get(dst).add(src);
   }
   for (const edge of edges) {
     if (!edge.src || !edge.dst || !Object.hasOwn(RELATIONS, edge.kind)) continue;
@@ -39,16 +44,7 @@ export function directionalGraph(edges) {
     add(edge.src, edge.dst, forward, downstream * strength);
     add(edge.dst, edge.src, reverse, upstream * strength);
   }
-  const outgoing = new Map();
-  const inbound = new Map();
-  for (const arc of [...arcs.values()].sort(byArc)) {
-    const from = outgoing.get(arc.src);
-    if (from) from.push(arc);
-    else outgoing.set(arc.src, [arc]);
-    const sources = inbound.get(arc.dst);
-    if (sources) sources.add(arc.src);
-    else inbound.set(arc.dst, new Set([arc.src]));
-  }
+  const outgoing = new Map([...buckets].map(([node, bucket]) => [node, [...bucket.values()].sort(byArc)]));
   const degree = new Map([...inbound].map(([node, sources]) => [node, sources.size]));
   return { outgoing, degree };
 }

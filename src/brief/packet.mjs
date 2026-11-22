@@ -191,6 +191,16 @@ export function buildPacket(items, { budget = DEFAULT_BRIEF_BYTES } = {}) {
   return { ...result, text: renderPacket(items, { cut, budget }) };
 }
 
+export function keptSections(items, cut) {
+  const removed = new Set(cut);
+  const sections = {};
+  for (const item of items) {
+    if (removed.has(item.id)) continue;
+    (sections[item.section] ??= []).push(item.text);
+  }
+  return sections;
+}
+
 /**
  * One line per item, for `--explain`: what was kept, what was cut, and the two facts that
  * decided it.

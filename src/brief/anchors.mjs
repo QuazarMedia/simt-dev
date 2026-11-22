@@ -54,9 +54,11 @@ export function bindSubtaskAnchors(subtasks, graph, { paths = null, scopes = [] 
       const shared = prior.map(({ query }) => query).filter(Boolean).join('\n');
       if (!current.query) continue;
       queries.push(current.query);
+      const mentioned = new Set([...current.query.matchAll(/\x60([^\x60]+)\x60/gu)].map(([, value]) => value.trim()));
       for (const [path, hits] of resolve(current.query, { context: shared })) {
         if (excluded.has(path) || (allowed !== null && !allowed.has(path))) continue;
         for (const hit of hits) {
+          if (hit.kind === 'symbol' && !mentioned.has(hit.query) && !/[_$]|[a-z0-9][A-Z]|^[A-Z]/u.test(hit.query)) continue;
           const key = JSON.stringify([path, hit.kind, hit.query, hit.matched]);
           const found = anchors.get(key) ?? { path, ...hit, clauseIds: [] };
           found.clauseIds.push(id);

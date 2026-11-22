@@ -30,7 +30,7 @@ lookup but prevents ordinary queries for its parts from matching it.
 
 4. **Qualify default behavior with paired evidence.** The fielded scorer and
    its shared knowledge-retrieval vocabulary can be measured independently.
-   Default promotion requires the retrieval evidence in ADR-231.
+   Default promotion requires the retrieval evidence in ADR-241.
 
 ## Consequences
 

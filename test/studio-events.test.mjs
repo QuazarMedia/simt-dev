@@ -198,6 +198,16 @@ test('gate brackets pair by subject and keep open and orphan runs visible', () =
   assert.equal(glyph('gate.finished'), '■');
 });
 
+test('the Gate brackets table is a labelled narrow scroll region', () => {
+  const html = pulse([
+    { id: '1', kind: 'gate.started', subject: 'npm test', ts: '2026-11-22T10:00:00Z' },
+    { id: '2', kind: 'gate.finished', subject: 'npm test', ts: '2026-11-22T10:00:02Z' },
+  ]);
+  assert.match(html, /<div class="pulse-brackets" role="region" aria-label="Gate brackets" tabindex="0">/);
+  assert.match(html, /<table class="table">/);
+  assert.match(html, /npm test/);
+});
+
 test('the rendered pulse is an ARIA live feed with click-through and escaped values', () => {
   const html = pulse([
     { id: '1', kind: 'policy.decided', subject: '<img src=x onerror=alert(1)>', harness: 'claude', ts: '2026-11-22T10:00:00Z' },

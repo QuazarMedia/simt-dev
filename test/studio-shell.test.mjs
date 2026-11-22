@@ -105,6 +105,19 @@ test('the control, library and Bench views keep their shared layout hooks', asyn
   assert.match(css, /\.empty\b/);
 });
 
+test('narrow layouts keep the brackets table and custody runs readable', async () => {
+  const all = await assets();
+  const sheet = (name) => all.find((asset) => asset.name === name).body;
+  assert.match(
+    sheet('shell.css'),
+    /@media \(max-width:48rem\)\{\.pulse-brackets\{overflow-x:auto\}\.pulse-brackets \.table\{min-width:30rem\}\}/,
+  );
+  assert.match(
+    sheet('custody.css'),
+    /@media \(max-width: 48rem\) \{\.custody-link \{grid-template-columns: minmax\(0, 1fr\);\}\}/,
+  );
+});
+
 test('the refusal panel renders the door payload, escaped', () => {
   const panel = refusalPanel({ ok: false, error: 'STUDIO_TOKEN_REFUSED', remedy: 'open the fresh URL', exitCode: 2 });
   assert.match(panel, /role="alert"/);

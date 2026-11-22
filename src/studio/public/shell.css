@@ -86,3 +86,4 @@ code,kbd{padding:0 .35em;border:1px solid var(--line);border-radius:4px;font-fam
 .library-catalog{grid-template-columns:repeat(auto-fill,minmax(13rem,1fr))}
 .skill-card{display:grid;gap:.2rem;padding:.6rem .7rem;text-align:left;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);cursor:pointer}
 .skill-body{max-height:30rem;padding:.8rem;font-size:.8rem}
+@media (max-width:48rem){.pulse-brackets{overflow-x:auto}.pulse-brackets .table{min-width:30rem}}

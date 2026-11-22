@@ -158,10 +158,10 @@ export function pulse(events = [], { kind = 'all', connected = true } = {}) {
     : emptyState({ title: 'No events yet', hint: 'Start a gate, claim a lease or write through simt to see it here.' });
   const feed = `<div id="pulse-feed" class="pulse-feed" role="log" aria-live="polite" aria-relevant="additions">${ribbon}</div>`;
   const bracketTable = brackets.length
-    ? table({
+    ? `<div class="pulse-brackets" role="region" aria-label="Gate brackets" tabindex="0">${table({
         columns: ['gate', 'state', 'start', 'finish', 'duration'],
         rows: bracketRows(brackets),
-      })
+      })}</div>`
     : '<p class="empty-hint">No gate brackets in this window.</p>';
   const status = connected ? badge('live', 'ok') : badge('reconnecting', 'warn');
   return `${card({

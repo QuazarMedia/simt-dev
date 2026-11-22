@@ -29,3 +29,4 @@
 .custody-catalog ul {margin: .75rem 0 0; padding-left: 1rem;}
 .custody-catalog li {margin-bottom: .6rem;}
 .custody-catalog p {margin: .2rem 0 0; color: var(--dim);}
+@media (max-width: 48rem) {.custody-link {grid-template-columns: minmax(0, 1fr);}}

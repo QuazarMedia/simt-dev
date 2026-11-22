@@ -35,9 +35,10 @@ const at = (version, method, params = {}, id = 1) =>
  * `options.execArgv`: `spawn` ignores that option - only `fork` reads it - and
  * the first fix attempt shipped with a flag that never reached the child.
  */
-function converse(raw) {
+function converse(raw, { bin = BIN, cwd, timeout } = {}) {
   return new Promise((res, rej) => {
-    const child = spawn(process.execPath, ['--no-warnings', BIN, 'mcp'], {
+    const child = spawn(process.execPath, ['--no-warnings', bin, 'mcp'], {
+      cwd, timeout,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
@@ -45,7 +46,7 @@ function converse(raw) {
     child.stdout.on('data', (d) => { stdout += d; });
     child.stderr.on('data', (d) => { stderr += d; });
     child.on('error', rej);
-    child.on('close', () => res({ stdout, stderr }));
+    child.on('close', (code) => res({ stdout, stderr, code }));
     child.stdin.end(raw);
   });
 }

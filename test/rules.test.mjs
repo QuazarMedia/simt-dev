@@ -172,6 +172,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
     // ADR-089 joined when ADR-135 withdrew its ruling 1: the note on the superseded
     // record is where the parser reads the claim, so the corpus lists it there.
     'ADR-089',
+    'ADR-090',
     'ADR-093',
     'ADR-096',
     'ADR-097',

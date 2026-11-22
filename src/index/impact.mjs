@@ -88,6 +88,7 @@ export function impactTopology(graph, retained = []) {
   const edges = binding?.edges ?? [];
   const nodes = symbolNodePaths(files, edges);
   const callers = new Map();
+  const moduleUses = new Map();
   const imports = new Map();
   const outgoing = new Map();
   const uncertain = new Map();
@@ -112,10 +113,14 @@ export function impactTopology(graph, retained = []) {
     if (fallback.has(src) || !binding?.bindingCoverage?.[languages.get(src)]) connect(uncertain, dst, src);
   }
   for (const { src, dst, kind } of edges) {
-    if (RELATIONS.has(kind) && nodes.has(src) && nodes.has(dst)) connect(callers, dst, src);
+    if (!RELATIONS.has(kind) || !nodes.has(src) || !nodes.has(dst)) continue;
+    connect(callers, dst, src);
+    if (src.startsWith('file:') && (kind === 'calls_symbol' || kind === 'refs_symbol')) {
+      connect(moduleUses, dst, src);
+    }
   }
   return {
-    nodes, imports, callers, uncertain, unknownDynamic,
+    nodes, imports, callers, moduleUses, uncertain, unknownDynamic,
     bindingCoverage: binding?.bindingCoverage ?? {},
     isHub: (path) => Math.max(imports.get(path)?.size ?? 0, outgoing.get(path)?.size ?? 0) > HUB_DEGREE_THRESHOLD,
   };
@@ -130,7 +135,7 @@ function byImpact(a, b) {
 }
 
 export function traceImpact(topology, targets, { root = null, limit = IMPACT_LIMIT } = {}) {
-  const { nodes, imports, callers, uncertain, bindingCoverage, unknownDynamic, isHub } = topology;
+  const { nodes, imports, callers, moduleUses, uncertain, bindingCoverage, unknownDynamic, isHub } = topology;
   const seeds = new Set(targets.map(({ file }) => file));
   const best = new Map();
   const states = [new Map(), new Map()];
@@ -166,7 +171,14 @@ export function traceImpact(topology, targets, { root = null, limit = IMPACT_LIM
     }
     for (const src of callers.get(node) ?? []) {
       const owner = nodes.get(src);
-      enqueue(src, owner, hop + Number(owner !== path), mediated, score);
+      const nextHop = hop + Number(owner !== path);
+      enqueue(src, owner, nextHop, mediated, score);
+      // A module-level expression can initialize an export without a bound
+      // caller symbol. Preserve downstream tests through that specific module.
+      if (owner !== path && moduleUses.get(node)?.has(src) && imports.get(owner)?.size) {
+        conservativeFallback = true;
+        enqueue(owner, owner, nextHop, mediated, score);
+      }
     }
     for (const src of uncertain.get(path) ?? []) {
       conservativeFallback = true;

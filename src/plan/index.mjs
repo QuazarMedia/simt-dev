@@ -728,6 +728,17 @@ function publicSlice(slice) {
   };
 }
 
+/** Every tracker row in board shape, without the section body. */
+export async function planBoardSlices(root) {
+  const loaded = await loadPlanState(root);
+  if (loaded.error) return loaded;
+  return loaded.slices.map((slice) => {
+    const row = publicSlice(slice);
+    delete row.section;
+    return row;
+  });
+}
+
 function inTier(slice, tier) {
   if (tier === null || tier === undefined || String(tier).trim() === '') return true;
   const want = keyOf(String(tier));

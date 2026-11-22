@@ -5,6 +5,7 @@
 
 import { readDoor } from './client.js';
 import { badge, card, emptyState, escapeHtml } from './components.js';
+import { board } from './board.js';
 import { overview } from './overview.js';
 import { pulse } from './pulse.js';
 import { createRouter } from './router.js';
@@ -128,11 +129,15 @@ async function overviewRoom() {
   return overview(snapshot, check, work);
 }
 
+async function boardRoom() {
+  return board(await readDoor('/api/board'));
+}
+
 const routes = new Map([
   ['/', { view: home }],
   ['/overview', { view: overviewRoom }],
   ['/pulse', { view: pulseRoom }],
-  ['/board', { view: later('Board') }],
+  ['/board', { view: boardRoom }],
   ['/custody', { view: later('Custody') }],
   ['/constellation', { view: later('Constellation') }],
   ['/harness', { view: later('Harness wall') }],

@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 
 import { run, renderJson } from '../run.mjs';
 import { checkRepo } from '../commands/sync.mjs';
+import { boardPayload } from './board.mjs';
 import { EXIT, emitJson, jsonCommand, withOutputState, withSink } from '../output/index.mjs';
 import { finaliseJson } from '../output/envelope.mjs';
 import { within } from '../trust/paths.mjs';
@@ -20,6 +21,7 @@ const ROUTES = new Map([
   ['/api/check', { check: true }],
   ['/api/plan', { command: 'plan status' }],
   ['/api/plan/next', { command: 'plan next', id: true }],
+  ['/api/board', { board: true }],
   ['/api/work', { command: 'work inspect' }],
 ]);
 
@@ -79,6 +81,14 @@ export async function apiAnswer(root, url) {
       const { ok, findings } = await checkRepo(root, {});
       emitJson({ ok, command: 'check', root, findings });
       return ok ? EXIT.OK : EXIT.FAIL;
+    });
+    return { status: 200, document };
+  }
+
+  if (route.board) {
+    const document = await sealedDocument('board', async () => {
+      emitJson(await boardPayload(root));
+      return EXIT.OK;
     });
     return { status: 200, document };
   }

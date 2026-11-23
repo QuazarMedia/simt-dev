@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "description": "The SIMT MCP server registry. Hand-authored, like the skill registry: structure is declared, never inferred. A server entry is data about an external process - how to reach it (transport) and when a task needs it (capabilities) - not the process itself. Selection reuses the skill scoring, so a server is offered for exactly the same reasons a skill would be (docs/research/0002-simt-dev-cli.md section 3.1).",
+  "servers": [
+    {
+      "id": "simt",
+      "name": "simt-dev",
+      "summary": "The simt-dev tool surface over MCP: brief packets, plan next and done, gate checks, the skill registry, and review verdicts as read-only tools. Connect when a task plans slices, checks gates, or resolves skills through simt-dev.",
+      "transport": {
+        "type": "stdio",
+        "command": "simt",
+        "args": ["mcp"]
+      },
+      "capabilities": ["feature-slice", "release"]
+    }
+  ]
+}

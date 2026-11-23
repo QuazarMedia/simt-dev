@@ -32,6 +32,9 @@
         "package.json",
         "simt.json"
       ]
+    },
+    "timeout": {
+      "test": 1800
     }
   },
   "localSkills": [

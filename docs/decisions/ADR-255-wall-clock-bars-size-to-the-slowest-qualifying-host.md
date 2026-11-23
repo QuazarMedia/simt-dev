@@ -1,5 +1,5 @@
 ---
-simt-affects: ["test/identifiers.test.mjs", "test/index-prf.test.mjs", "test/studio-server.test.mjs", "docs/decisions/ADR-254-the-gate-ceiling-sizes-to-the-slowest-runner.md"]
+simt-affects: ["test/identifiers.test.mjs", "test/index-prf.test.mjs", "test/studio-server.test.mjs", "simt.json", "docs/decisions/ADR-254-the-gate-ceiling-sizes-to-the-slowest-runner.md"]
 ---
 
 # ADR-255 — wall-clock bars size to the slowest qualifying host, not the authoring machine
@@ -42,7 +42,11 @@ host, not the interpreter:
   and **789.5 ms** settled under sustained full-suite load — at parity with
   `/api/status` on this host — against the 300 ms ceiling ADR-254 sized from a
   216.4 ms 2-vCPU CI measurement;
-- `/api/status` **779.8 ms** (v26) / **286.2 ms** (v24) against the 75 ms read ceiling.
+- `/api/status` **779.8 ms** (v26) / **286.2 ms** (v24) against the 75 ms read ceiling;
+- the pre-push gate's own time bound: the dispatcher bounds each gate at 600 s by
+  default, and the full suite takes **17.6 min** (duration_ms 1056774) on this host —
+  so the `test` gate timed out mid-suite and blocked the push, with in-flight workers
+  reporting "Promise resolution is still pending" instead of a route failure.
 
 The tokenizer is already regex-optimal — a forward-only boundary rewrite measured
 slower than the lookbehind split it would replace — so none of these gaps closes with a
@@ -76,3 +80,10 @@ code change. Only the bars can move.
 4. **The statistic does not change.** Warm medians, the same sample counts, and the
    settled re-measure stand; only the numbers move. No route gets a softer statistic
    to hide behind.
+5. **The gate's time bound is a wall-clock bar too, and sizes the same way.** The
+   dispatcher's default 600 s bound predates this host and cuts the suite off
+   mid-run here; the in-test bars measure the routes, and the bound exists only to
+   catch a hang. This repository therefore declares `gates.timeout: { "test": 1800 }`
+   — about 1.7× the measured full-suite duration — while every other gate keeps the
+   600 s default, so a genuinely hung gate still fails loudly instead of blocking
+   the push indefinitely.

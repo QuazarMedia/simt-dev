@@ -14,7 +14,7 @@ add `--yes` and hope.
 ### Mutating commands (need `--yes` to write)
 
 `init`, `sync`, `plan done`, `slice start`, `slice finish`, `slice abandon`,
-`agents install`, `agent-hooks install`, `hooks install`, `doctor --fix`,
+`agents install`, `agent-hooks install`, `hooks install`, `mcp install`, `doctor --fix`,
 `ignore`, `ci`, `shared install`, `lessons review`, `decide`, `undo`,
 `skills install`, `bench mine|run|ablate|probes|variants`, `pack new|publish`,
 `lease`, `plugin <harness>`, `workspace upgrade`
@@ -28,7 +28,7 @@ add `--yes` and hope.
 `skills index|brief|show|why|find|compile|eval`, `index`, `index overlay`,
 `review`, `tokens`, `harness *`, `compare`, `workspace compare|share`,
 `distill`, `docs readme`, `local doctor`, `shared plan`,
-`bench report|critic`, `pack lint`, `mcp`, `completions`,
+`bench report|critic`, `pack lint`, `mcp`, `mcp status`, `completions`,
 `lessons list|capture|discover`, `knowledge *`, `work *`, `verify *`,
 `action status|review`, `adapter check`
 
@@ -64,6 +64,8 @@ Pick the command by what you need, not by what you remember:
 | Install hooks | `simt hooks install --yes` | Shared dispatcher; `--agent` writes each harness hooks file |
 | Run a hook event | `simt hooks run <event>` | As git would |
 | Install agent hooks | `simt agent-hooks install --yes` | Per-harness policies |
+| See which MCP servers are configured | `simt mcp status` | Entry-level file facts; an acceptance is never claimed |
+| Write registry servers into harness configs | `simt mcp install --yes` | Preview without `--yes`; an unreadable config refuses the run, and no other harness is written |
 | Diagnose config | `simt doctor [--fix]` | `--fix` applies safe remedies |
 | Pin a skill | `simt skills install <name> --yes` | `--variant` for multi-variant |
 | Search skills | `simt skills find <query>` | Capability and keyword |

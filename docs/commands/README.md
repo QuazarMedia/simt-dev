@@ -36,7 +36,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [lease](lease.md) | 1 |
 | [local](local.md) | 1 |
 | [map](map.md) | 1 |
-| [mcp](mcp.md) | 1 |
+| [mcp](mcp.md) | 3 |
 | [pack](pack.md) | 4 |
 | [plan](plan.md) | 5 |
 | [plugin](plugin.md) | 1 |
@@ -203,6 +203,8 @@ simt map [--task "<task>"] [--retrieval v2] [--explain]                         
 
 # mcp
 simt mcp [--list]                                                                          # serve the read-only MCP surface over stdio
+simt mcp install --harness <id> --yes                                                      # write the registry servers into the selected harnesses project configs
+simt mcp status --harness <id>                                                             # which servers the selected harnesses have configured, entry-level
 
 # pack
 simt pack lint [dir] [--require-measured]                                                  # lint a rule pack in the working directory

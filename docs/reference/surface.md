@@ -43,7 +43,7 @@ promise, a shipping decision, a prototype without one, and a frozen experimental
 
 ## Command inventory
 
-115 dispatchable paths, one row each in `src/commands/spec.mjs`. The generated
+117 dispatchable paths, one row each in `src/commands/spec.mjs`. The generated
 command pages carry the flags; this table carries the promise.
 
 | Command | Stability | Owner | Writes | MCP tool | Aliases |
@@ -122,6 +122,8 @@ command pages carry the flags; this table carries the promise.
 | `simt local doctor` | optional | local | none | — | — |
 | `simt map` | stable | adoption | none | — | — |
 | `simt mcp` | stable | adoption | none | — | — |
+| `simt mcp status` | stable | adoption | none | — | — |
+| `simt mcp install` | stable | adoption | repo | — | — |
 | `simt pack lint` | experimental | packs | none | — | — |
 | `simt pack new` | experimental | packs | repo | — | — |
 | `simt pack migrate` | experimental | packs | repo | — | — |

@@ -1,3 +1,5 @@
+import { inferRetrievalIntent, kindPriorFor } from '../brief/kind.mjs';
+import { isTestPath } from '../testing/paths.mjs';
 import { cmp } from '../util/sort.mjs';
 import { symbolKey, symbolNodePaths } from './bind.mjs';
 import { BM25F_FIELDS, fieldQueryTerms, scoreFtsBm25F } from './bm25f.mjs';
@@ -128,10 +130,51 @@ function explainRanks(ranked, lists, fields) {
   return [...evidence.values()];
 }
 
-export async function rankMapV2(root, graph, task, { explain = false, queryVector = null, coupling = true, structure = null, exactOnly = false, feedbackEnabled = true, directional = true } = {}) {
-  const paths = new Set(graph.files.map(({ path }) => path));
+function singularize(word) {
+  if (word.length > 4 && word.endsWith('ies')) return `${word.slice(0, -3)}y`;
+  if (word.length > 4 && word.endsWith('es')) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
+  return word;
+}
+
+function stemBoosts(task, paths) {
+  const scopeMatch = String(task ?? '').trim().match(/^[a-z]+\(([^)]+)\):/i);
+  const scopeTokens = scopeMatch
+    ? scopeMatch[1].toLowerCase().split(/[,/.\s_-]+/).filter((t) => t.length >= 2).map(singularize)
+    : [];
+  const queryStems = new Set([...scopeTokens, ...fieldQueryTerms(task).map(singularize)]);
+  if (!queryStems.size) return [];
+  const scopeSet = new Set(scopeTokens);
+  const stemsByPath = new Map();
+  const df = new Map();
+  for (const path of paths) {
+    const base = (path.split('/').pop() ?? '').replace(/\.[^.]+$/, '');
+    const tokens = new Set(fieldQueryTerms(base).map(singularize));
+    stemsByPath.set(path, tokens);
+    for (const token of tokens) df.set(token, (df.get(token) ?? 0) + 1);
+  }
+  const n = Math.max(1, paths.size);
+  const hits = [];
+  for (const [path, tokens] of stemsByPath) {
+    let score = 0;
+    for (const token of tokens) {
+      if (!queryStems.has(token)) continue;
+      const idf = Math.log(1 + n / ((df.get(token) ?? 0) + 0.5));
+      score += idf * (scopeSet.has(token) ? 2.0 : 1.0);
+    }
+    if (score > 0) hits.push({ path, score });
+  }
+  return hits.sort(byScore).slice(0, LIMIT);
+}
+
+export async function rankMapV2(root, graph, task, {
+  explain = false, queryVector = null, coupling = true, structure = null,
+  exactOnly = false, feedbackEnabled = true, directional = true, includeTests = undefined,
+} = {}) {
+  const allPaths = new Set(graph.files.map(({ path }) => path));
   if (!task.trim()) {
-    const structural = centrality(paths, graph.edges);
+    const nonTestPaths = new Set([...allPaths].filter((path) => includeTests === true || !isTestPath(path, root)));
+    const structural = centrality(nonTestPaths, graph.edges);
     const ranked = structural.map((row) => ({ ...row, rank: row.score, resolver: 0 }));
     const evidence = explain ? explainRanks(ranked, [{ id: 'centrality', weight: 1, items: structural }], new Map()) : [];
     return { ranked, evidence, matched: 0, feedback: null };
@@ -142,30 +185,42 @@ export async function rankMapV2(root, graph, task, { explain = false, queryVecto
     exactOnly ? exactEntityCandidates(task, graph) : searchEntityCandidates(root, task, { ...graph, fts }),
     searchFtsBm25F(root, task, { fts }),
   ]);
+  const explicitTestAnchor = [...entities.anchors.keys()].some((path) => isTestPath(path, root));
+  const intent = inferRetrievalIntent(task, { includeTests: includeTests === true || explicitTestAnchor });
+  const allowTests = includeTests !== undefined ? Boolean(includeTests) : (intent === 'tests' || explicitTestAnchor);
+  const paths = allowTests ? allPaths : new Set([...allPaths].filter((path) => !isTestPath(path, root)));
+
   const changed = new Set(overlayRows.map(({ ref }) => ref));
   const valid = ({ path }) => paths.has(path) && !changed.has(path);
-  const ranking = graph.nativeLexical ? original.filter(valid) : original;
+  const ranking = graph.nativeLexical ? original.filter(valid) : original.filter(({ path }) => paths.has(path));
   const feedback = feedbackEnabled
     ? await searchWithFeedback(root, task, { ranking, graph, anchors: entities.anchors, fts })
     : { ranking, reason: 'disabled', expansion: [] };
   const exact = entities.candidates.filter(({ tier, path }) => tier <= 2 && paths.has(path));
-  const matched = new Set(entities.candidates.filter(({ tier }) => tier <= 3).map(({ path }) => path));
+  const matched = new Set(entities.candidates.filter(({ tier, path }) => tier <= 3 && paths.has(path)).map(({ path }) => path));
   const phrases = new Map(entities.candidates.map(({ path, phrase, components }) => [path, { phrase, score: components.proximity }]));
   const primary = feedback.ranking.filter(valid);
-  const local = scoreFtsBm25F(overlayRows, task);
-  const lexical = [primary, local].flatMap((rows) => {
-    const high = rows[0]?.score || 1;
-    return rows.filter(({ path }) => paths.has(path)).map((row) => ({
-      ...row, score: row.score / high + (phrases.get(row.path)?.score ?? 0), phrase: phrases.get(row.path)?.phrase ?? [],
-    }));
-  }).sort(byScore).slice(0, LIMIT);
+  const local = scoreFtsBm25F(overlayRows, task).filter(({ path }) => paths.has(path));
+  const globalHigh = Math.max(primary[0]?.score ?? 0, local[0]?.score ?? 0, 1e-9);
+  const lexical = [primary, local].flatMap((rows) =>
+    rows.map((row) => {
+      const prior = kindPriorFor(row.path, intent, isTestPath(row.path, root));
+      const phraseBonus = Math.min(0.20, (phrases.get(row.path)?.score ?? 0) * (0.20 / 0.75));
+      return {
+        ...row,
+        score: (row.score / globalHigh) * prior + phraseBonus,
+        phrase: phrases.get(row.path)?.phrase ?? [],
+      };
+    })).sort(byScore).slice(0, LIMIT);
+  const stems = stemBoosts(task, paths);
   const changes = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')].sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
   const tier1 = exact.filter(({ tier: value }) => value === 1);
   const tier2 = exact.filter(({ tier: value }) => value === 2);
   const lists = [
     { id: 'entity', weight: 3, items: tier1 },
-    ...(tier2.length ? [{ id: 'entity', weight: 0.35, items: tier2 }] : []),
+    ...(tier2.length ? [{ id: 'entity', weight: 1.65, items: tier2 }] : []),
     { id: 'bm25f', weight: 2, items: lexical },
+    ...(stems.length ? [{ id: 'stem', weight: 1.2, items: stems }] : []),
     { id: 'directional', weight: 1, items: directional ? structuralHits(structure ?? prepareMapStructure(graph), paths, exact, lexical) : [] },
     { id: 'coupling', weight: 0.6, items: coupling ? couplingHits(fts ?? overlayRows, changes, exact.length ? exact : lexical, paths) : [] },
   ];

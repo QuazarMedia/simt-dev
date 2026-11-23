@@ -51,27 +51,27 @@ test('quoted symbol literal is Tier-1 while unquoted compound symbol is Tier-2 s
 test('Tier-2 does not hard-override strong BM25F + directional consensus', async () => {
   const files = [
     { path: 'src/weak.mjs' },
-    { path: 'src/strong.mjs' },
+    { path: 'src/session.mjs' },
     { path: 'src/caller.mjs' },
   ];
   const symbols = [{ path: 'src/weak.mjs', name: 'refreshCache', exported: 1 }];
-  const edges = [{ src: 'src/caller.mjs', dst: 'src/strong.mjs', kind: 'import' }];
+  const edges = [{ src: 'src/caller.mjs', dst: 'src/session.mjs', kind: 'import' }];
   const graph = {
     files,
     symbols,
     edges,
     symbolGraph: {
-      edges: [{ src: 'file:src/caller.mjs', dst: 'file:src/strong.mjs', kind: 'imports_symbol' }],
+      edges: [{ src: 'file:src/caller.mjs', dst: 'file:src/session.mjs', kind: 'imports_symbol' }],
     },
     fieldedRows: [
       ...buildFieldedFtsBodies('src/weak.mjs', symbols, 'unrelated'),
-      ...buildFieldedFtsBodies('src/strong.mjs', [], 'session token rotation expiry renewal'),
+      ...buildFieldedFtsBodies('src/session.mjs', [], 'session token rotation expiry renewal'),
       ...buildFieldedFtsBodies('src/caller.mjs', [], 'session token rotation expiry renewal'),
     ],
   };
   const { ranked } = await rankMapV2('.', graph, 'session token rotation expiry renewal refreshCache');
   assert.ok(
-    ranked.findIndex(({ path }) => path === 'src/strong.mjs')
+    ranked.findIndex(({ path }) => path === 'src/session.mjs')
       < ranked.findIndex(({ path }) => path === 'src/weak.mjs'),
   );
 });

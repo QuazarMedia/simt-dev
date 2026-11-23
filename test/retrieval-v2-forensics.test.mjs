@@ -59,9 +59,8 @@ test('enclosed_by does not award weight back to the owning file of a symbol seed
   assert.equal(self, undefined, 'the owning file is not scored from its own symbol seed');
 });
 
-// 3. The default `rankMapV2` does not exclude test paths (v1 filters `!isTestPath`).
-//    Current: a test path is present in the default ranking.
-test('the default rankMapV2 does not exclude test paths', async () => {
+// 3. The default `rankMapV2` excludes test paths (matching v1 `!isTestPath`). Fixed in V04.
+test('the default rankMapV2 excludes test paths', async () => {
   const files = [
     { path: 'src/rank.mjs' },
     { path: 'test/rank.test.mjs' },
@@ -75,15 +74,14 @@ test('the default rankMapV2 does not exclude test paths', async () => {
   };
   const ranked = (await rankMapV2('.', graph, 'fix the rank records scoring')).ranked;
   assert.ok(
-    ranked.some(({ path }) => path === 'test/rank.test.mjs'),
-    'a test path is present in the default ranking',
+    !ranked.some(({ path }) => path === 'test/rank.test.mjs'),
+    'test paths are excluded from the default ranking',
   );
 });
 
-// 4. A shorter `docs/guides/<name>.md` that repeats a symptom outranks the longer
-//    `src/<name>.mjs` under unweighted cross-field BM25F length normalization.
-//    Current: docs ranks first on a default/bugfix query.
-test('a shorter docs guide outranks the source file on a default query', async () => {
+// 4. A shorter `docs/guides/<name>.md` that repeats a symptom must not outrank
+//    `src/<name>.mjs` on a default/bugfix query. Fixed in V04.
+test('the source file outranks a shorter docs guide on a default query', async () => {
   const files = [
     { path: 'docs/guides/rate-limit.md' },
     { path: 'src/rate-limit.mjs' },
@@ -97,9 +95,9 @@ test('a shorter docs guide outranks the source file on a default query', async (
   };
   const ranked = (await rankMapV2('.', graph, 'fix the rate limit on api requests')).ranked;
   assert.ok(
-    ranked.findIndex(({ path }) => path === 'docs/guides/rate-limit.md')
-      < ranked.findIndex(({ path }) => path === 'src/rate-limit.mjs'),
-    'the shorter docs guide outranks the longer source on a default query',
+    ranked.findIndex(({ path }) => path === 'src/rate-limit.mjs')
+      < ranked.findIndex(({ path }) => path === 'docs/guides/rate-limit.md'),
+    'the source file outranks the shorter docs guide on a default query',
   );
 });
 
@@ -136,9 +134,9 @@ test('the 2,048-byte composite does not surface both the test and config artifac
   );
 });
 
-// 6. A dirty-file overlay is normalized against its own maximum, so a single low-score
-//    overlay file reaches 1.0 and ties the top primary result. Current: per-list max.
-test('a one-file dirty overlay is normalized to its own maximum, not the global maximum', async () => {
+// 6. A dirty-file overlay is normalized against the global maximum across primary
+//    and overlay results, so a weak overlay hit does not tie the top primary result. Fixed in V04.
+test('a one-file dirty overlay is normalized against the global maximum', async () => {
   const root = await tempDir('retrieval-v2-forensics-overlay-');
   // A tracked, high-scoring file becomes the native (SQLite) primary result.
   await mkdir(join(root, 'src'), { recursive: true });
@@ -160,7 +158,7 @@ test('a one-file dirty overlay is normalized to its own maximum, not the global 
   assert.ok(entry?.channels?.bm25f, 'the overlay file is scored by the bm25f channel');
   assert.ok(dirtyRaw > 0, 'the overlay file has a positive raw BM25F score');
   assert.ok(
-    Math.abs(entry.channels.bm25f.score - 1) < 1e-9,
-    `the one-file overlay is normalized to its own maximum of 1.0 (got ${entry.channels.bm25f.score})`,
+    entry.channels.bm25f.score < 1,
+    `the one-file overlay is normalized against the global maximum (< 1.0, got ${entry.channels.bm25f.score})`,
   );
 });

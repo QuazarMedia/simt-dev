@@ -365,6 +365,10 @@ export const IMPLEMENTED = {
   'bench import': async () => (await import('./bench.mjs')).benchImportCommand,
   'workspace upgrade': async () => (await import('./upgrade.mjs')).upgradeCommand,
   mcp: async () => (await import('./mcp.mjs')).mcpCommand,
+  'mcp status': async () => {
+    const { mcpCommand } = await import('./mcp.mjs');
+    return (args, flags) => mcpCommand(['status'], flags);
+  },
   //. A bare command: the kind is a positional, so there is no group and
   // no default subcommand to resolve.
   plugin: async () => (await import('./plugin.mjs')).pluginCommand,

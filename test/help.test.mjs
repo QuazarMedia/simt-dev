@@ -4,7 +4,6 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
 import { COMMANDS } from '../src/commands/index.mjs';
-import { parse } from '../src/argv.mjs';
 import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
 import { simt as simtCli } from './fixture.mjs';
 

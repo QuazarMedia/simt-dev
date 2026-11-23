@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { loadMcpRegistry, selectServers, validateMcpRegistry } from '../src/mcpconfig/registry.mjs';
-import { canonical, dialects, renderEntry } from '../src/mcpconfig/dialects.mjs';
+import { canonical, dialects } from '../src/mcpconfig/dialects.mjs';
 import { parseToml, replaceOwnedTables } from '../src/mcpconfig/toml.mjs';
 import { mcpStatus } from '../src/mcpconfig/status.mjs';
 import { planMcpInstall } from '../src/mcpconfig/install.mjs';

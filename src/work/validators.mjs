@@ -1,5 +1,5 @@
 import { realpath, stat } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 
 import { commandAvailable } from '../testing/contract.mjs';
 import { normalizePath } from './artifacts.mjs';

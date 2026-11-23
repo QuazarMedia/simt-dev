@@ -194,9 +194,12 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
     for (const id of row.subtasks) add('COMMANDS', row.command, row.label + '  ' + row.command, id, 1, ['test', 'focused'].includes(row.verb));
   }
   if (tasks.length > 1) {
+    if (tasks.length > 2) {
+      add('SUBTASKS', 'summary', 'T1..T' + tasks.length + ' (' + tasks.length + ' tasks; --subtask N for details)', 0, 1, true);
+    }
     for (const line of lines) add('SUBTASKS', line, compact(line, 170), 0, 0.3);
     for (const subject of tasks) {
-      add('SUBTASKS', String(subject.id), (ids) => taggedLine(compact(subject.text, 78), ids), subject.id, 1, true);
+      add('SUBTASKS', String(subject.id), (ids) => taggedLine(compact(subject.text, 78), ids), subject.id, 1, tasks.length <= 2);
     }
   }
 
@@ -257,7 +260,7 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
   const items = candidates.items();
   const drillDown = detailCommands(task, tasks, { paths: named, selected: subtask });
   const footerBytes = Math.min(350, Math.floor(budget / 4));
-  const packed = buildCompactPacket(items, { budget, footer: drillFooter(tasks, drillDown, footerBytes), footerBytes });
+  const packed = buildCompactPacket(items, { budget, footer: drillFooter(tasks, drillDown, footerBytes) });
   const constraints = tasks.flatMap(({ id, constraints: rows }) => rows.map((row) => ({ subtaskId: id, ...row })));
   return {
     root, kind, basis, task, scope, budget, items, packed,

@@ -1,7 +1,7 @@
 // `simt mcp status`: what is CONFIGURED, per selected harness and per server in the
-// registry. Entry-level, the plan 0008 F03 pattern: a file that holds other keys of its
-// own is not drift, and the bytes an entry carries are what the harness runs until
-// install rewrites them.
+// registry. The comparison is entry-level: a file that holds other keys of its own is
+// not drift, and the bytes an entry carries are what the harness runs until install
+// rewrites them.
 //
 // Honesty boundary: a config file is a fact this tool can read, so status claims it.
 // Whether the harness has ACCEPTED the server is a runtime fact this tool cannot read,

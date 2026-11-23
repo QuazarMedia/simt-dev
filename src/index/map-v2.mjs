@@ -54,7 +54,7 @@ export function prepareMapStructure(graph) {
 }
 
 // Exported so the scale harness can time the graph and coupling phases in
-// isolation (plan 0006 V02); they are the engine's own walk, not a proxy.
+// isolation; they are the engine's own walk, not a proxy.
 export function structuralHits({ nodes, byName, links }, paths, anchors, lexical) {
   const seeds = [];
   for (const { path, matches: hits } of anchors.slice(0, SEED_CAP)) {

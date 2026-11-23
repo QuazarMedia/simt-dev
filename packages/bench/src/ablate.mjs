@@ -31,7 +31,7 @@ import {
 import { DEL_R_TOLERANCE, parseAblationArmName } from '../../../src/measure/ablation.mjs';
 
 export { DEL_R_TOLERANCE, parseAblationArmName };
-export { renderRetrievalAblation, replayRetrievalAblation, runRetrievalAblation } from './retrieval-ablation.mjs';
+export { PROMOTION_GATE_BARS, evaluateRetrievalGates, renderRetrievalAblation, replayRetrievalAblation, runRetrievalAblation } from './retrieval-ablation.mjs';
 
 export const DEFAULT_CANARY_SIZE = 10;
 export const CANARY_ALPHA = 0.05;

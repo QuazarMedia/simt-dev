@@ -14,8 +14,8 @@ import { reindex } from '../src/index/store.mjs';
 import { run } from '../src/run.mjs';
 import { git, gitText } from '../src/sys/git.mjs';
 import { buildRetrievalCorpus } from '../packages/bench/src/multitask-corpus.mjs';
-import { runRetrievalAblation } from '../packages/bench/src/ablate.mjs';
-import { summarizeLatency } from '../packages/bench/src/retrieval-metrics.mjs';
+import { evaluateRetrievalGates, runRetrievalAblation } from '../packages/bench/src/ablate.mjs';
+import { measureMapPhases, summarizeLatency } from '../packages/bench/src/retrieval-metrics.mjs';
 
 const fixtureCommit = ['-c', 'commit.gpgsign=false', '-c', 'user.name=Retrieval Qualification',
   '-c', 'user.email=qualification@example.invalid', 'commit', '-qm'];
@@ -212,6 +212,14 @@ async function scaleEvaluation(baseline, directory, count) {
     rows.push({ count, command, ...Object.fromEntries(Object.entries(timings)
       .map(([name, measurements]) => [name, summarizeLatency(measurements)])) });
   }
+  const graph = await loadLiveGraph(next, { fielded: true, binding: true, cochange: true });
+  const phaseSamples = { ftsMs: [], entityMs: [], graphMs: [], couplingMs: [], packMs: [] };
+  for (let index = 0; index < LATENCY_SAMPLES; index += 1) {
+    const phases = await measureMapPhases({ root: next, graph, task: prompt });
+    for (const [name, samples] of Object.entries(phaseSamples)) samples.push(phases[name]);
+  }
+  rows.find(({ command }) => command === 'map').candidate.phases = Object.fromEntries(
+    Object.entries(phaseSamples).map(([name, samples]) => [name, summarizeLatency(samples)]));
   return [...rows, await hookEvaluation(count, prior, next, baseline.deliverPrompt, prompt)];
 }
 
@@ -253,7 +261,8 @@ async function main([baselinePath, directory, mode = 'all']) {
     const corpus = await buildRetrievalCorpus(baselineRoot);
     if (mode === 'structure') corpus.tasks = corpus.tasks.filter(({ stratum }) => stratum === 'impact-governance');
     const report = await corpusEvaluation(baseline, baselineRoot, output, corpus);
-    await writeFile(join(output, 'quality.json'), JSON.stringify({ ...basis, ...report }, null, 2) + '\n');
+    await writeFile(join(output, 'quality.json'),
+      JSON.stringify({ ...basis, ...report, gates: evaluateRetrievalGates(report) }, null, 2) + '\n');
   }
   if (mode === 'all' || mode === 'scale') {
     const rows = [];

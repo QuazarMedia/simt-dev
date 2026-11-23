@@ -53,7 +53,9 @@ export function prepareMapStructure(graph) {
   return { nodes, byName, links: directionalGraph([...edges, ...cochange]) };
 }
 
-function structuralHits({ nodes, byName, links }, paths, anchors, lexical) {
+// Exported so the scale harness can time the graph and coupling phases in
+// isolation (plan 0006 V02); they are the engine's own walk, not a proxy.
+export function structuralHits({ nodes, byName, links }, paths, anchors, lexical) {
   const seeds = [];
   for (const { path, matches: hits } of anchors.slice(0, SEED_CAP)) {
     const keys = new Set(hits.flatMap((hit) => byName.get(JSON.stringify([path, hit.matched])) ?? []));
@@ -73,7 +75,7 @@ function structuralHits({ nodes, byName, links }, paths, anchors, lexical) {
   return [...best.values()].sort(byScore).slice(0, LIMIT);
 }
 
-function couplingHits(rows, changes, anchors, paths) {
+export function couplingHits(rows, changes, anchors, paths) {
   const sources = new Set(anchors.slice(0, 3).map(({ path }) => path));
   if (!sources.size) return [];
   const best = new Map();

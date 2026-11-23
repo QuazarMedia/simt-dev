@@ -161,3 +161,39 @@ export function platformLines() {
     `arch=$(printf %s "$arch" | sed "s/aarch64/arm64/")`,
   ];
 }
+
+/**
+ * The paths a content-only release may touch, and nothing else.
+ *
+ * Content is everything the binary serves without behaving differently: harness
+ * definitions, rule bodies, skills, templates, ecosystems, docs, the skill graph,
+ * and the release commit's own bookkeeping (the version bump, the manifest pin,
+ * the changelog). The set is deliberately closed rather than open-ended: a path
+ * outside it makes the release full. The safe side is full, because a release
+ * misread as content-only skips the binary build and a reader on the Homebrew
+ * channel keeps the old bytes until the next full release - recoverable, and
+ * stated; a release misread as full only pays the three builds it did not need.
+ */
+export const CONTENT_PATHS = {
+  dirs: ['harnesses/', 'rules/', 'skills/', 'templates/', 'ecosystems/', 'docs/', 'packages/bench/'],
+  files: ['package.json', 'simt.json', 'CHANGELOG.md', 'README.md', 'graph/skills.graph.json'],
+};
+
+/**
+ * Classify a release from the paths it changes since the previous tag.
+ *
+ * Every path must sit in {@link CONTENT_PATHS} for the release to be
+ * content-only; one path outside it - `src/`, `bin/`, `scripts/`, `.github/` -
+ * makes it full. An empty list is content-only: nothing changed, so nothing
+ * the binary does changed.
+ *
+ * @param {string[]} paths repository-relative paths, as `git diff --name-only` prints them
+ * @returns {'content-only'|'full'}
+ */
+export function classifyReleaseKind(paths) {
+  for (const p of paths) {
+    const inDir = CONTENT_PATHS.dirs.some((d) => p === d || p.startsWith(d));
+    if (!inDir && !CONTENT_PATHS.files.includes(p)) return 'full';
+  }
+  return 'content-only';
+}

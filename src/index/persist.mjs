@@ -483,6 +483,29 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       const ready = meta.fielded ? '1' : '0';
       upsertMeta.run('fts_fields', ready);
       upsertMeta.run('lexical_terms', ready);
+      if (meta.fielded) {
+        const stats = db.prepare(
+          `select count(*) as n,
+            avg(case when path_tokens != '' then length(path_tokens) - length(replace(path_tokens, ' ', '')) + 1 else 0 end) as path_tokens,
+            avg(case when symbol_names != '' then length(symbol_names) - length(replace(symbol_names, ' ', '')) + 1 else 0 end) as symbol_names,
+            avg(case when qual_names != '' then length(qual_names) - length(replace(qual_names, ' ', '')) + 1 else 0 end) as qual_names,
+            avg(case when signatures != '' then length(signatures) - length(replace(signatures, ' ', '')) + 1 else 0 end) as signatures,
+            avg(case when headings != '' then length(headings) - length(replace(headings, ' ', '')) + 1 else 0 end) as headings,
+            avg(case when body != '' then length(body) - length(replace(body, ' ', '')) + 1 else 0 end) as body
+          from fts`,
+        ).get();
+        upsertMeta.run('fts_field_stats', JSON.stringify({
+          N: stats?.n ?? 0,
+          avgdl: {
+            path_tokens: stats?.path_tokens || 1,
+            symbol_names: stats?.symbol_names || 1,
+            qual_names: stats?.qual_names || 1,
+            signatures: stats?.signatures || 1,
+            headings: stats?.headings || 1,
+            body: stats?.body || 1,
+          },
+        }));
+      }
     }
     upsertMeta.run('tree', tree);
     // What the build read, beside the tree it saw. A reader compares digests

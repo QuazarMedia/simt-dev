@@ -23,7 +23,10 @@ import { CITATIONS_BASIS_SQL, prepareCitations } from './commit-citations.mjs';
 import { readCochangeBasis, readFts, withReadError } from './graph-read.mjs';
 export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols } from './graph-read.mjs';
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
-import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
+import {
+  BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldCandidateStatement, fieldQueryTerms,
+  fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F,
+} from './bm25f.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
 // names the extensions that RESOLVE to a language (JavaScript claims `.ts` for extraction
 // but not for resolution), so a record's extraction and resolution cannot desynchronize.
@@ -559,9 +562,36 @@ export async function searchFtsBm25F(root, task, { fts, fields = BM25F_FIELDS } 
   if (fts !== undefined) return withReadError(scoreFtsBm25F(fts, task, { fields }), fts.error);
   const terms = fieldQueryTerms(task);
   if (!terms.length) return [];
-  const [sql, params] = fieldSearchStatement(terms, fields);
-  const { rows, error } = await readSqliteRows(root, sql, params, { legacySql: null });
-  return withReadError(bestFieldHits(rows), error);
+  const metaCheck = await readSqliteBatch(root, [
+    ["select key, value from meta where key in ('fts_fields', 'fts_field_stats')"],
+  ], { legacySql: null });
+  if (metaCheck.error) return withReadError([], metaCheck.error);
+  const metaMap = new Map((metaCheck.results?.[0] ?? []).map(({ key, value }) => [key, value]));
+  if (metaMap.get('fts_fields') !== '1') return [];
+  const prefix = fields === BM25F_FIELDS ? '' : `{${fields.join(' ')}} : `;
+  const dfQueries = terms.map((term) => [
+    "select count(*) as df from fts where fts match ?",
+    [`${prefix}${ftsQuote(term)}`],
+  ]);
+  const { results, error } = await readSqliteBatch(root, [
+    fieldCandidateStatement(terms, fields),
+    ...dfQueries,
+  ], { legacySql: null });
+  if (error) return withReadError([], error);
+  const candidateRows = results?.[0] ?? [];
+  if (!candidateRows.length) return [];
+  const rawStats = metaMap.get('fts_field_stats');
+  const parsedStats = rawStats ? JSON.parse(rawStats) : null;
+  if (!parsedStats) {
+    const [sql, params] = fieldSearchStatement(terms, fields);
+    const fallback = await readSqliteRows(root, sql, params, { legacySql: null });
+    return withReadError(bestFieldHits(fallback.rows), fallback.error);
+  }
+  const df = terms.map((_, index) => results?.[1 + index]?.[0]?.df ?? 0);
+  return scoreFtsBm25F(candidateRows, task, {
+    fields,
+    stats: { N: parsedStats.N, avgdl: parsedStats.avgdl, df },
+  });
 }
 
 export async function readLexicalStats(root) {

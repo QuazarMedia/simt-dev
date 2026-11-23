@@ -8,7 +8,7 @@ import { exactEntityCandidates, searchEntityCandidates } from './entities.mjs';
 import { conceptualPartners } from './lexical.mjs';
 import { rrfFuse } from './map.mjs';
 import { searchWithFeedback } from './prf.mjs';
-import { searchFtsBm25F } from './store.mjs';
+import { nativeConceptualPartners, searchFtsBm25F } from './store.mjs';
 import { rankByCosine } from './vectors.mjs';
 
 const LIMIT = 30;
@@ -55,6 +55,59 @@ export function prepareMapStructure(graph) {
   return { nodes, byName, links: directionalGraph([...edges, ...cochange]) };
 }
 
+function prepareSeededStructure(graph, seedPaths) {
+  const edges = graph.symbolGraph?.edges ?? [];
+  const cochange = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')]
+    .map(({ src, dst, weight }) => ({ src: 'file:' + src, dst: 'file:' + dst, kind: 'cochange', weight }));
+  const allEdges = [...edges, ...cochange];
+
+  const isSeedNode = (node) => {
+    if (node.startsWith('file:')) return seedPaths.has(node.slice(5));
+    if (node.startsWith('sym:')) {
+      const hash = node.indexOf('#');
+      return hash > 4 && seedPaths.has(node.slice(4, hash));
+    }
+    return false;
+  };
+
+  const hop1 = new Set();
+  for (const { src, dst } of allEdges) {
+    if (isSeedNode(src)) hop1.add(dst);
+    if (isSeedNode(dst)) hop1.add(src);
+  }
+  const localEdges = [];
+  const localPaths = new Set(seedPaths);
+  const pathOfNode = (node) => {
+    if (node.startsWith('file:')) return node.slice(5);
+    if (node.startsWith('sym:')) {
+      const hash = node.indexOf('#');
+      return hash > 4 ? node.slice(4, hash) : null;
+    }
+    return null;
+  };
+  for (const edge of allEdges) {
+    if (isSeedNode(edge.src) || isSeedNode(edge.dst) || hop1.has(edge.src) || hop1.has(edge.dst)) {
+      localEdges.push(edge);
+      const p1 = pathOfNode(edge.src);
+      const p2 = pathOfNode(edge.dst);
+      if (p1) localPaths.add(p1);
+      if (p2) localPaths.add(p2);
+    }
+  }
+  const nodes = symbolNodePaths([...localPaths], localEdges);
+  const byName = new Map();
+  for (const symbol of graph.symbols) {
+    if (!seedPaths.has(symbol.path)) continue;
+    const key = symbolKey(symbol.path, symbol.name, symbol.line);
+    if (!nodes.has(key)) continue;
+    const name = JSON.stringify([symbol.path, symbol.qualname ?? symbol.name]);
+    const values = byName.get(name) ?? [];
+    values.push(key);
+    byName.set(name, values);
+  }
+  return { nodes, byName, links: directionalGraph(localEdges) };
+}
+
 // Exported so the scale harness can time the graph and coupling phases in
 // isolation; they are the engine's own walk, not a proxy.
 export function structuralHits({ nodes, byName, links }, paths, anchors, lexical) {
@@ -79,7 +132,7 @@ export function structuralHits({ nodes, byName, links }, paths, anchors, lexical
   return [...best.values()].sort(byScore).slice(0, LIMIT);
 }
 
-export function couplingHits(rows, changes, anchors, paths) {
+export function couplingHits(rows, changes, anchors, paths, precomputedPartners = null) {
   const sources = new Set(anchors.slice(0, 3).map(({ path }) => path));
   if (!sources.size) return [];
   const best = new Map();
@@ -97,7 +150,8 @@ export function couplingHits(rows, changes, anchors, paths) {
     if (sources.has(src)) record(dst, 'evolutionary', Math.min(1, weight), src);
     if (sources.has(dst)) record(src, 'evolutionary', Math.min(1, weight), dst);
   }
-  for (const { path, source, score } of conceptualPartners(rows, sources)) record(path, 'conceptual', score, source);
+  const partners = precomputedPartners ?? conceptualPartners(rows, sources);
+  for (const { path, source, score } of partners) record(path, 'conceptual', score, source);
   return [...best.values()].map((row) => ({ ...row, score: row.conceptual + row.evolutionary })).sort(byScore).slice(0, LIMIT);
 }
 
@@ -216,13 +270,25 @@ export async function rankMapV2(root, graph, task, {
   const changes = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')].sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
   const tier1 = exact.filter(({ tier: value }) => value === 1);
   const tier2 = exact.filter(({ tier: value }) => value === 2);
+  const couplingAnchors = exact.length ? exact : lexical;
+  const couplingSources = new Set(couplingAnchors.slice(0, 3).map(({ path }) => path));
+  const nativePartners = coupling && graph.nativeLexical && couplingSources.size
+    ? await nativeConceptualPartners(root, couplingSources)
+    : null;
+  const seedPaths = new Set([
+    ...exact.slice(0, SEED_CAP).map(({ path }) => path),
+    ...lexical.slice(0, SEED_CAP).map(({ path }) => path),
+  ]);
+  const mapStructure = directional
+    ? (structure ?? prepareSeededStructure(graph, seedPaths))
+    : null;
   const lists = [
     { id: 'entity', weight: 3, items: tier1 },
     ...(tier2.length ? [{ id: 'entity', weight: 1.65, items: tier2 }] : []),
     { id: 'bm25f', weight: 2, items: lexical },
     ...(stems.length ? [{ id: 'stem', weight: 1.2, items: stems }] : []),
-    { id: 'directional', weight: 1, items: directional ? structuralHits(structure ?? prepareMapStructure(graph), paths, exact, lexical) : [] },
-    { id: 'coupling', weight: 0.6, items: coupling ? couplingHits(fts ?? overlayRows, changes, exact.length ? exact : lexical, paths) : [] },
+    { id: 'directional', weight: 1, items: directional ? structuralHits(mapStructure, paths, exact, lexical) : [] },
+    { id: 'coupling', weight: 0.6, items: coupling ? couplingHits(fts ?? overlayRows, changes, couplingAnchors, paths, nativePartners) : [] },
   ];
   if (queryVector && graph.embeddings?.length) {
     const embedded = rankByCosine(graph.embeddings, queryVector).filter(({ path }) => paths.has(path));

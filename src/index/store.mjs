@@ -23,6 +23,7 @@ import { CITATIONS_BASIS_SQL, prepareCitations } from './commit-citations.mjs';
 import { readCochangeBasis, readFts, withReadError } from './graph-read.mjs';
 export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols } from './graph-read.mjs';
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
+import { cmp } from '../util/sort.mjs';
 import {
   BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldCandidateStatement, fieldQueryTerms,
   fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F,
@@ -605,6 +606,41 @@ export async function readLexicalStats(root) {
     terms: new Map(terms.map(({ term, df, cf }) => [term, { df, cf }])),
     error,
   };
+}
+
+export async function nativeConceptualPartners(root, sources, { limit = 60 } = {}) {
+  const list = [...sources].sort(cmp);
+  if (!list.length) return [];
+  const json = JSON.stringify(list);
+  const { results, error } = await readSqliteBatch(root, [[
+    `with anchor as (
+       select path as source, term, weight from file_signatures where path in (select value from json_each(?))
+     ), anchor_norm as (
+       select source, sqrt(sum(weight * weight)) as norm from anchor group by source
+     ), candidate_dot as (
+       select fs.path, a.source, sum(fs.weight * a.weight) as dot
+       from anchor a
+       join file_signatures fs on fs.term = a.term
+       where fs.path not in (select value from json_each(?))
+       group by fs.path, a.source
+     ), candidate_norm as (
+       select fs.path, sqrt(sum(fs.weight * fs.weight)) as norm
+       from file_signatures fs
+       where fs.path in (select distinct path from candidate_dot)
+       group by fs.path
+     )
+     select cd.path, cd.source,
+       min(1.0, cd.dot / (an.norm * cn.norm)) as score
+     from candidate_dot cd
+     join anchor_norm an on an.source = cd.source
+     join candidate_norm cn on cn.path = cd.path
+     where an.norm > 0 and cn.norm > 0
+     order by score desc, cd.path asc
+     limit ?`,
+    [json, json, limit],
+  ]], { legacySql: null });
+  if (error) return [];
+  return results?.[0] ?? [];
 }
 
 export async function readFileSignatures(root, paths) {

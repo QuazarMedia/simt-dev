@@ -14,6 +14,7 @@ create table if not exists term_stats(
   cf integer not null check(cf >= df)
 ) without rowid;
 create index if not exists idx_term_stats_empty on term_stats(df) where df = 0;
+create index if not exists idx_file_terms_term on file_terms(term, source_id);
 create view if not exists file_signatures as
   with weights as (
     select s.path, ft.term,

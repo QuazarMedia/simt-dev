@@ -132,6 +132,47 @@ function splitArray(inner) {
   return items;
 }
 
+/**
+ * Render a subset value to TOML text. The inverse of `parseValue`: strings, booleans,
+ * integers and arrays of those - the same set the parser reads, so a written file is
+ * always one this tool can read back.
+ */
+export function renderTomlValue(value) {
+  if (typeof value === 'string') return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\t/g, '\\t')}"`;
+  if (typeof value === 'boolean' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return `[${value.map((item) => renderTomlValue(item)).join(', ')}]`;
+  throw new Error(`not in the TOML subset this tool writes: ${JSON.stringify(value)}`);
+}
+
+/**
+ * Replace every table under `container` with `entries`; every other line stays byte for
+ * byte, in its place. This is what makes the subset safe on a file with a full TOML life
+ * of its own: the rewrite touches only the blocks this tool owns, and the second run over
+ * a file it wrote produces identical bytes, which is what makes install idempotent.
+ */
+export function replaceOwnedTables(text, container, entries) {
+  const ownedHeader = (line) => line === `[${container}]` || line.startsWith(`[${container}.`);
+  const kept = [];
+  let dropping = false;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (line.startsWith('[')) {
+      dropping = ownedHeader(line);
+      if (!dropping) kept.push(raw);
+      continue;
+    }
+    if (dropping) continue;
+    kept.push(raw);
+  }
+  while (kept.length > 0 && kept.at(-1).trim() === '') kept.pop();
+  for (const [name, obj] of Object.entries(entries)) {
+    kept.push('');
+    kept.push(`[${container}.${name}]`);
+    for (const [key, value] of Object.entries(obj)) kept.push(`${key} = ${renderTomlValue(value)}`);
+  }
+  return `${kept.join('\n')}\n`;
+}
+
 /** A basic string with escapes, and the check that only a comment may follow it. */
 function basicString(t) {
   let out = '';

@@ -323,7 +323,11 @@ ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            upgrade and the installers stay CLI-only by design)
 ${CLI} mcp status             which servers the selected harnesses have configured,
                            entry-level; a config file is read, an acceptance is
-                           never claimed (--harness narrows the scope)`;
+                           never claimed (--harness narrows the scope)
+${CLI} mcp install            write the registry servers into the selected harnesses'
+                           project configs (preview without --yes; a config that
+                           cannot be parsed is refused, and no other harness is
+                           written; user-scope files are never touched)`;
 
 const FLAGS = `--public               work schedule: withhold private tracker identifiers and paths
 --staged               verify select: read the index without working-tree edits

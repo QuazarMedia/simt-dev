@@ -6,7 +6,6 @@ import { BM25F_FIELDS, fieldQueryTerms, scoreFtsBm25F } from './bm25f.mjs';
 import { directionalGraph, expandDirectional } from './directional.mjs';
 import { exactEntityCandidates, searchEntityCandidates } from './entities.mjs';
 import { conceptualPartners } from './lexical.mjs';
-import { rrfFuse } from './map.mjs';
 import { searchWithFeedback } from './prf.mjs';
 import { nativeConceptualPartners, searchFtsBm25F } from './store.mjs';
 import { rankByCosine } from './vectors.mjs';
@@ -196,7 +195,10 @@ function stemBoosts(task, paths) {
   const scopeTokens = scopeMatch
     ? scopeMatch[1].toLowerCase().split(/[,/.\s_-]+/).filter((t) => t.length >= 2).map(singularize)
     : [];
-  const queryStems = new Set([...scopeTokens, ...fieldQueryTerms(task).map(singularize)]);
+  const queryStems = new Set([
+    ...scopeTokens,
+    ...fieldQueryTerms(task).map(singularize).filter((t) => t.length >= 6),
+  ]);
   if (!queryStems.size) return [];
   const scopeSet = new Set(scopeTokens);
   const stemsByPath = new Map();
@@ -219,6 +221,30 @@ function stemBoosts(task, paths) {
     if (score > 0) hits.push({ path, score });
   }
   return hits.sort(byScore).slice(0, LIMIT);
+}
+
+function fuseChannels(lists, k = 40) {
+  const fused = new Map();
+  const bestScore = new Map();
+  for (const { id, items = [], weight = 1 } of lists) {
+    if (!Array.isArray(items) || weight <= 0 || !items.length) continue;
+    const topScore = id === 'bm25f' ? (items[0]?.score ?? 0) : 0;
+    for (let i = 0; i < items.length; i += 1) {
+      const entry = items[i];
+      const path = typeof entry === 'string' ? entry : entry?.path;
+      if (!path) continue;
+      const contrib = id === 'bm25f' && topScore > 0 && typeof entry?.score === 'number'
+        ? weight * (0.35 / (k + i + 1) + 0.65 * (entry.score / topScore) / (k + 1))
+        : weight / (k + i + 1);
+      fused.set(path, (fused.get(path) ?? 0) + contrib);
+      if (typeof entry === 'object' && typeof entry?.score === 'number') {
+        bestScore.set(path, Math.max(bestScore.get(path) ?? 0, entry.score));
+      }
+    }
+  }
+  return [...fused.entries()]
+    .map(([path, rank]) => ({ path, rank, score: bestScore.get(path) ?? 0 }))
+    .sort((a, b) => (a.rank !== b.rank ? (a.rank < b.rank ? 1 : -1) : cmp(a.path, b.path)));
 }
 
 export async function rankMapV2(root, graph, task, {
@@ -284,11 +310,11 @@ export async function rankMapV2(root, graph, task, {
     : null;
   const lists = [
     { id: 'entity', weight: 3, items: tier1 },
-    ...(tier2.length ? [{ id: 'entity', weight: 1.65, items: tier2 }] : []),
-    { id: 'bm25f', weight: 2, items: lexical },
+    ...(tier2.length ? [{ id: 'entity', weight: 1.0, items: tier2 }] : []),
+    { id: 'bm25f', weight: 2.0, items: lexical },
     ...(stems.length ? [{ id: 'stem', weight: 1.2, items: stems }] : []),
-    { id: 'directional', weight: 1, items: directional ? structuralHits(mapStructure, paths, exact, lexical) : [] },
-    { id: 'coupling', weight: 0.6, items: coupling ? couplingHits(fts ?? overlayRows, changes, couplingAnchors, paths, nativePartners) : [] },
+    { id: 'directional', weight: 0.9, items: directional ? structuralHits(mapStructure, paths, exact, lexical) : [] },
+    { id: 'coupling', weight: 0.45, items: coupling ? couplingHits(fts ?? overlayRows, changes, couplingAnchors, paths, nativePartners) : [] },
   ];
   if (queryVector && graph.embeddings?.length) {
     const embedded = rankByCosine(graph.embeddings, queryVector).filter(({ path }) => paths.has(path));
@@ -296,7 +322,7 @@ export async function rankMapV2(root, graph, task, {
   }
   if (lists.every(({ items }) => items.length === 0)) lists.push({ id: 'centrality', weight: 1, items: centrality(paths, graph.edges) });
   const tier = new Map(exact.map(({ path, tier: value }) => [path, value]));
-  const ranked = rrfFuse(lists).map((row) => ({ ...row, resolver: Number(matched.has(row.path)) }))
+  const ranked = fuseChannels(lists).map((row) => ({ ...row, resolver: Number(matched.has(row.path)) }))
     .sort((a, b) => (tier.get(a.path) === 1 ? 1 : 2) - (tier.get(b.path) === 1 ? 1 : 2) || b.rank - a.rank || cmp(a.path, b.path));
   return {
     ranked,

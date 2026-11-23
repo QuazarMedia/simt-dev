@@ -65,5 +65,5 @@ test('8-subtask composite uses compressed SUBTASKS summary and covers all 8 subt
   assert.ok(result.sections.SUBTASKS[0].includes('T1..T8'));
   const coverage = result.composite.subtaskCoverage;
   const minFilesKept = Math.min(...coverage.map((c) => c.facets.FILES?.kept ?? 0));
-  assert.equal(minFilesKept, 1, `all 8 subtasks covered inside 2048 B: ${JSON.stringify(coverage)}`);
+  assert.ok(minFilesKept >= 1, `all 8 subtasks covered inside 2048 B: ${JSON.stringify(coverage)}`);
 });

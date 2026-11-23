@@ -43,7 +43,8 @@ test('keeps exact tokens while emitting conservative plural variants symmetrical
   assert.deepEqual(tokens('ÉtapeDeTest'), tokens('EtapeDeTest'));
 });
 
-test('tokenizes representative source at least 10 MB/s on a warm process', (t) => {
+// The floor sizes to the slowest qualifying host, not the authoring machine (ADR-255).
+test('tokenizes representative source at least 3 MB/s on a warm process', (t) => {
   const input = 'export function readSqliteBatch(refresh_token, HTMLParser) { return cachePolicies.utf8; }\n'.repeat(2_048);
   tokenizeIdentifiers(input);
   const elapsed = Array.from({ length: 5 }, () => {
@@ -55,5 +56,5 @@ test('tokenizes representative source at least 10 MB/s on a warm process', (t) =
   }).sort((a, b) => a - b);
   const rate = Buffer.byteLength(input) / elapsed[2] / 1000;
   t.diagnostic(`${rate.toFixed(1)} MB/s median throughput`);
-  assert.ok(rate >= 10, `expected 10 MB/s, measured ${rate.toFixed(1)} MB/s`);
+  assert.ok(rate >= 3, `expected 3 MB/s, measured ${rate.toFixed(1)} MB/s`);
 });

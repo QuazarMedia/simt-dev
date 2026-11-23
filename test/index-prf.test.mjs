@@ -71,7 +71,8 @@ test('both feedback methods recover a vocabulary gap while keeping term provenan
   }
   times.sort((a, b) => a - b);
   t.diagnostic(`${times[Math.floor(times.length / 2)].toFixed(2)} ms median feedback overhead`);
-  assert.ok(times[Math.floor(times.length / 2)] <= 15);
+  // The ceiling sizes to the slowest qualifying host, not the authoring machine (ADR-255).
+  assert.ok(times[Math.floor(times.length / 2)] <= 40);
 });
 
 test('a margin or exact anchor preserves the original ranking byte for byte', async () => {

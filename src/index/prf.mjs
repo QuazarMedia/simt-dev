@@ -113,6 +113,15 @@ function overlayFeedback(fts, paths) {
   return { documents: all.size, files, terms, error: fts.error ?? null };
 }
 
+function hasTier1Anchor(anchors) {
+  for (const hits of anchors.values()) {
+    if (hits.some(({ kind, quoted }) => kind === 'path' || kind === 'suffix' || kind === 'qualified-symbol' || quoted === true)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Execute only after the caller has built or supplied a fielded index. */
 export async function searchWithFeedback(root, task, {
   ranking, graph, anchors, fts, method = 'bo1',
@@ -128,7 +137,9 @@ export async function searchWithFeedback(root, task, {
   const index = graph ?? await readGraph(root);
   const graphError = index.files.error ?? index.symbols.error ?? index.edges.error;
   if (graphError) return unchanged('index-unavailable', graphError);
-  if ((anchors ?? resolveEntityAnchors(task, index)).size > 0) return unchanged('exact-anchor');
+  const resolvedAnchors = anchors ?? resolveEntityAnchors(task, index);
+  const bareSymbolQuery = resolvedAnchors.size > 0 && String(task ?? '').trim().split(/\s+/).length === 1;
+  if (hasTier1Anchor(resolvedAnchors) || bareSymbolQuery) return unchanged('exact-anchor');
   const sources = feedbackSources(original, index.edges, index.files.length);
   if (!sources.length) return unchanged('no-feedback-sources');
   const paths = sources.map(({ path }) => path);

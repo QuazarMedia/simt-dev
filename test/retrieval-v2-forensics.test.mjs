@@ -20,8 +20,8 @@ import { buildFieldedFtsBodies, readGraph, reindex } from '../src/index/store.mj
 import { ensureGit, tempDir } from './fixture.mjs';
 
 // 1. A common lowercase prompt word matching a private helper must not hijack Tier-2
-//    and outrank the intended path-stem code match. Current: it does.
-test('a common prompt word anchors a private helper at Tier-2 above the intended path stem', async () => {
+//    and outrank the intended path-stem code match. Fixed in V03.
+test('a common prompt word does not anchor a private helper at Tier-2 above the intended path stem', async () => {
   const files = [
     { path: 'src/kernel/checks.mjs' },
     { path: 'src/mcp/schema.mjs' },
@@ -38,26 +38,25 @@ test('a common prompt word anchors a private helper at Tier-2 above the intended
   const { candidates } = await searchEntityCandidates('.', task, { ...graph, fts: graph.fieldedRows });
   const hijack = candidates.find(({ path }) => path === 'src/mcp/schema.mjs');
   const intended = candidates.find(({ path }) => path === 'src/kernel/checks.mjs');
-  assert.equal(hijack.tier, 2, 'the private check helper anchors Tier-2');
+  assert.ok(hijack.tier > 2, 'the private check helper does not anchor Tier-2');
   assert.ok(intended.tier > 2, 'the intended path stem carries no Tier-1/2 anchor');
   const ranked = (await rankMapV2('.', graph, task)).ranked;
   assert.ok(
-    ranked.findIndex(({ path }) => path === 'src/mcp/schema.mjs')
-      < ranked.findIndex(({ path }) => path === 'src/kernel/checks.mjs'),
-    'the Tier-2 private helper outranks the intended path stem',
+    ranked.findIndex(({ path }) => path === 'src/kernel/checks.mjs')
+      < ranked.findIndex(({ path }) => path === 'src/mcp/schema.mjs'),
+    'the intended path stem outranks the private helper',
   );
 });
 
-// 2. `directional.mjs` awards `enclosed_by` weight back to the owning file of a symbol
-//    seed, double-counting the anchor. Current: the self-loop is positive.
-test('enclosed_by awards weight back to the owning file of a symbol seed', () => {
+// 2. `directional.mjs` must not award `enclosed_by` weight back to the owning file of
+//    a symbol seed. Fixed in V03.
+test('enclosed_by does not award weight back to the owning file of a symbol seed', () => {
   const seed = 'sym:feature.mjs#check@1';
   const owner = 'file:feature.mjs';
   const edges = [{ src: owner, kind: 'contains', dst: seed }];
   const hits = expandDirectional(directionalGraph(edges), [{ node: seed, score: 1, exact: true }]);
   const self = hits.find(({ node }) => node === owner);
-  assert.ok(self, 'the owning file is reached from its own symbol seed');
-  assert.ok(self.score > 0, 'the enclosed_by self-loop carries positive weight');
+  assert.equal(self, undefined, 'the owning file is not scored from its own symbol seed');
 });
 
 // 3. The default `rankMapV2` does not exclude test paths (v1 filters `!isTestPath`).

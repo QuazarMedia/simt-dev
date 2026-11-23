@@ -54,6 +54,18 @@ function preferWitness(a, b) {
     || (a.weight === b.weight && cmp(a.key, b.key) < 0);
 }
 
+function ownerFileNode(node) {
+  if (!node.startsWith('sym:')) return null;
+  const hash = node.indexOf('#');
+  return hash > 4 ? `file:${node.slice(4, hash)}` : null;
+}
+
+function isSelfEnclosed(entry) {
+  return entry.witness.steps.length === 1
+    && entry.witness.steps[0].kind === 'enclosed_by'
+    && ownerFileNode(entry.witness.seed) === entry.node;
+}
+
 /**
  * Spread positive lexical evidence across two bounded frontiers.
  * The activation is a sum, while the witness follows its strongest contribution.
@@ -86,6 +98,7 @@ export function expandDirectional(graph, seeds) {
     }
     frontier = [...next.values()].sort(byRank).slice(0, HOP_CAP);
     for (const entry of frontier) {
+      if (isSelfEnclosed(entry)) continue;
       const previous = found.get(entry.node);
       const witness = preferWitness(entry.witness, previous?.witness) ? entry.witness : previous.witness;
       found.set(entry.node, { node: entry.node, score: (previous?.score ?? 0) + entry.score, witness });

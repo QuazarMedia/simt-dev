@@ -57,7 +57,9 @@ export function prepareMapStructure(graph) {
 // isolation; they are the engine's own walk, not a proxy.
 export function structuralHits({ nodes, byName, links }, paths, anchors, lexical) {
   const seeds = [];
+  const seedPaths = new Set();
   for (const { path, matches: hits } of anchors.slice(0, SEED_CAP)) {
+    seedPaths.add(path);
     const keys = new Set(hits.flatMap((hit) => byName.get(JSON.stringify([path, hit.matched])) ?? []));
     if (keys.size === 1) seeds.push({ node: [...keys][0], score: 1, exact: true });
     else seeds.push({ node: `file:${path}`, score: 1, exact: true });
@@ -70,7 +72,7 @@ export function structuralHits({ nodes, byName, links }, paths, anchors, lexical
   const best = new Map();
   for (const { node, score, witness } of ranked) {
     const path = nodes.get(node);
-    if (paths.has(path) && !best.has(path)) best.set(path, { path, score, witness });
+    if (paths.has(path) && !seedPaths.has(path) && !best.has(path)) best.set(path, { path, score, witness });
   }
   return [...best.values()].sort(byScore).slice(0, LIMIT);
 }
@@ -158,8 +160,11 @@ export async function rankMapV2(root, graph, task, { explain = false, queryVecto
     }));
   }).sort(byScore).slice(0, LIMIT);
   const changes = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')].sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
+  const tier1 = exact.filter(({ tier: value }) => value === 1);
+  const tier2 = exact.filter(({ tier: value }) => value === 2);
   const lists = [
-    { id: 'entity', weight: 3, items: exact },
+    { id: 'entity', weight: 3, items: tier1 },
+    ...(tier2.length ? [{ id: 'entity', weight: 0.35, items: tier2 }] : []),
     { id: 'bm25f', weight: 2, items: lexical },
     { id: 'directional', weight: 1, items: directional ? structuralHits(structure ?? prepareMapStructure(graph), paths, exact, lexical) : [] },
     { id: 'coupling', weight: 0.6, items: coupling ? couplingHits(fts ?? overlayRows, changes, exact.length ? exact : lexical, paths) : [] },
@@ -171,7 +176,7 @@ export async function rankMapV2(root, graph, task, { explain = false, queryVecto
   if (lists.every(({ items }) => items.length === 0)) lists.push({ id: 'centrality', weight: 1, items: centrality(paths, graph.edges) });
   const tier = new Map(exact.map(({ path, tier: value }) => [path, value]));
   const ranked = rrfFuse(lists).map((row) => ({ ...row, resolver: Number(matched.has(row.path)) }))
-    .sort((a, b) => (tier.get(a.path) ?? 3) - (tier.get(b.path) ?? 3) || b.rank - a.rank || cmp(a.path, b.path));
+    .sort((a, b) => (tier.get(a.path) === 1 ? 1 : 2) - (tier.get(b.path) === 1 ? 1 : 2) || b.rank - a.rank || cmp(a.path, b.path));
   return {
     ranked,
     matched: matched.size,

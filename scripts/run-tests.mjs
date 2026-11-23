@@ -22,7 +22,7 @@
 
 import { spawnSync } from 'node:child_process';
 
-import { files, tiers } from '../test/tier.mjs';
+import { files, tiers, INTEGRATION } from '../test/tier.mjs';
 
 const args = process.argv.slice(2);
 const which = args.find((arg) => !arg.startsWith('--'));
@@ -38,8 +38,11 @@ if (unknown.length > 0 || !tiers().includes(which)) {
 
 // A fixed concurrency, not the host CPU count: a result that changes with the machine
 // is not reproducible, and six-core and two-core runners used to run different suites.
-// Four is the declared budget in package.json's `test` script as well.
-const flags = ['--test', '--test-concurrency=4'];
+// The unit tier keeps the gate's declared budget of four, because its wall-clock bars
+// are calibrated under four-way load. The integration tier is CLI-spawn bound - the
+// parent idles while children run - and carries no bar sized against its load, so it
+// runs at eight: a developer's iteration tier halves without moving a calibration.
+const flags = ['--test', `--test-concurrency=${which === INTEGRATION ? 8 : 4}`];
 if (coverage) {
   // The exclusions are the files that are not the code under test: the tests themselves, this
   // runner, the CLI entry point (child processes) and the vendored Node builds for the SEA.

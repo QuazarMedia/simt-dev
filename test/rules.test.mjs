@@ -406,6 +406,10 @@ assert.deepEqual(leaking, [
     // its ruling is about, and the count moves because the records have to name them.
     'ADR-256',
     'ADR-257',
+    // ADR-258 joined when it landed: the ruling is ABOUT the dispatcher, the manifest
+    // schema and the ledger kind, so it names each of them; a record that named none
+    // of them could not be followed to the gate it changes.
+    'ADR-258',
   ]);
 });
 

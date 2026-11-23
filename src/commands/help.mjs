@@ -320,7 +320,10 @@ pack is experimental: frozen, no repository vendors one, and removal is a later
 ${CLI} docs commands --yes    render the command reference in docs/commands from the spec
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
-                           upgrade and the installers stay CLI-only by design)`;
+                           upgrade and the installers stay CLI-only by design)
+${CLI} mcp status             which servers the selected harnesses have configured,
+                           entry-level; a config file is read, an acceptance is
+                           never claimed (--harness narrows the scope)`;
 
 const FLAGS = `--public               work schedule: withhold private tracker identifiers and paths
 --staged               verify select: read the index without working-tree edits
@@ -355,11 +358,12 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --workspace <path>      where the skill sources live; "off" declines it
                         (default: SIMT_DEV_WORKSPACE, then the user config
                         file, then the sibling heuristic if it verifies)
---registry <path>       which skill registry to read (skills commands and
-                        graph lint; default: SIMT_REGISTRY, then this repo's
+--registry <path>       which registry to read: skills commands and graph lint the
+                        skill one (default: SIMT_REGISTRY, then this repo's
                         .simt/skills.graph.json, then the checkout's own
                         graph/skills.graph.json, then the one member of the
-                        workspace that holds one)
+                        workspace that holds one); mcp status / install the MCP
+                        catalog (default: the one this package ships)
 --concurrency <n>       compare: rows built at once (default 4, or
                         SIMT_CONCURRENCY; order-preserving whatever it is)
 --dry-run               report what would change, change nothing
@@ -435,7 +439,8 @@ const FLAGS = `--public               work schedule: withhold private tracker id
                          agent-hook: which dialect to answer in (claude, cursor,
                          codex, antigravity); agent-hooks / agents install: which
                          reader to write (one, not all); init: narrows the agent
-                         files and the agent-hooks to one reader
+                         files and the agent-hooks to one reader; mcp status /
+                         install: which harness's MCP config to read or write
 --model <id>            bench run: model identifier recorded and passed to the adapter
 --reps <n>              bench run: repetitions per task and arm (default: 3)
 --regrade <run>         bench run: re-grade a stored run from its archived agent patch

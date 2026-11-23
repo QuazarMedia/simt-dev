@@ -14,8 +14,16 @@ import { TOOLS } from '../mcp/tools.mjs';
 import { PROTOCOL_VERSION, SUPPORTED_VERSIONS, serve } from '../mcp/server.mjs';
 import { CLI } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
+import { commandRoot } from '../repo-root.mjs';
+import { resolveHarnessScope } from '../agents/scope.mjs';
+import { loadMcpRegistry } from '../mcpconfig/registry.mjs';
+import { mcpStatus } from '../mcpconfig/status.mjs';
 
 export async function mcpCommand(positional, flags) {
+  // A subcommand before the transport: `simt mcp status` reports, bare `simt mcp` serves.
+  // The serve path stays first-class because an editor's config names the bare form.
+  if (positional[0] === 'status') return mcpStatusCommand(flags);
+
   const version = packageVersion();
 
   if (flags.list === true) {
@@ -59,4 +67,46 @@ export async function mcpCommand(positional, flags) {
   } catch (error) {
     return fail(`mcp transport failed: ${error.message}`, EXIT.FAIL, `run: ${CLI} mcp --list to check the surface loads`);
   }
+}
+
+/**
+ * `simt mcp status`: which servers the selected harnesses have CONFIGURED, entry-level.
+ * Reports file facts only - a config file is a fact this tool reads; whether the harness
+ * accepted the server is a runtime fact it cannot, so "enabled" is never claimed here.
+ */
+async function mcpStatusCommand(flags) {
+  const root = commandRoot(flags);
+  const scope = await resolveHarnessScope(root, flags);
+  if (scope.error) return fail(scope.error, EXIT.USAGE, scope.remedy);
+  const loaded = await loadMcpRegistry(flags);
+  if (!loaded.ok) return fail(loaded.errors.join('; '), EXIT.FAIL, 'fix the registry, or name one with --registry <path>');
+  const { rows, problems } = await mcpStatus(root, scope, loaded.registry);
+
+  if (isJson(flags)) {
+    emitJson({ ok: problems.length === 0, command: 'mcp status', root, harnesses: rows, problems });
+    return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
+  }
+
+  const lines = [
+    `repo     ${root}`,
+    `scope    ${scope.source === 'flag' ? `--harness ${scope.ids[0]}` : scope.source === 'surfaces' ? `"surfaces" (${scope.ids.join(', ')})` : 'none selected'}`,
+  ];
+  if (scope.ids.length === 0) {
+    lines.push('NO SCOPE  no harness is selected, so nothing is reported as configured or absent here');
+    lines.push(`remedy   ${scope.remedy}`);
+    emit(lines.join('\n'));
+    return EXIT.OK;
+  }
+  const word = { present: 'PRESENT  ', absent: 'ABSENT   ', unreadable: 'INVALID  ', drift: 'DRIFT    ', other: 'NOT OURS ', skipped: 'SKIPPED  ' };
+  for (const row of rows) {
+    lines.push(`${word[row.state]} ${row.id.padEnd(12)} ${(row.path ?? '(no project file is documented)').padEnd(24)} ${row.server ?? row.note ?? ''}`);
+    if (row.state === 'absent' || row.state === 'drift') lines.push(`          ${''.padEnd(12)} install: ${CLI} mcp install --yes`);
+  }
+  if (problems.length > 0) {
+    lines.push('');
+    lines.push(`problems (${problems.length}):`);
+    for (const problem of problems) lines.push(`  ${problem}`);
+  }
+  emit(lines.join('\n'));
+  return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
 }

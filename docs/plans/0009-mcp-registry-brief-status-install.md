@@ -49,7 +49,7 @@ commit must not claim a mutation in a home directory.
 | --- | --- | --- | --- |
 | M01 | Complete | `graph/mcp.json` registry + loader + test | 8bcfa51a5a5ce89d5545347846fa320b4e89f6eb |
 | M02 | Complete | brief `MCP` section (packet + assemble) + test | 0f797909e047e701d1116382f4a0e4b0efce2512 |
-| M03 | queued | `simt mcp status` (dialect table, TOML read, entry-level compare) + test | — |
+| M03 | Complete | `simt mcp status` (dialect table, TOML read, entry-level compare) + test | 15f5c1d9cbb388b1e24261e426011ff54ede5641 |
 | M04 | queued | `simt mcp install` (merge, TOML write, `--harness`) + test | — |
 | M05 | queued | ADR + surface spec rows + docs; `simt check` clean | — |
 

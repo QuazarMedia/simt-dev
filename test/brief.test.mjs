@@ -131,6 +131,24 @@ test('a task that names a file still surfaces its skill and lesson', async (t) =
   assert.ok(!config.stdout.includes('broad'), config.stdout);
 });
 
+test('a task that names a capability carries the MCP section with its connect path', async (t) => {
+  // The registry is package data: the fixture repo holds none, so the shipped catalogue
+  // answers, and its one server is the simt surface itself.
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { code, stdout, stderr } = await run(root, ['brief', 'prepare the release notes for the next tag']);
+  assert.equal(code, 0, stderr);
+  assert.match(stdout, /MCP\n\s+simt-dev: .*`simt mcp status`.*`simt mcp install --yes`/, stdout);
+});
+
+test('a task with no capability overlap carries no MCP lines', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { code, stdout, stderr } = await run(root, ['brief', 'fix the keep helper in src/keep.mjs']);
+  assert.equal(code, 0, stderr);
+  assert.ok(!stdout.includes('MCP'), stdout);
+});
+
 test('a caution about unresolved Affects names only the decisions that govern the task', async (t) => {
   // Every decision's dangling token used to arrive beside the one that did govern the
   // file - 35 of them in this repository's own brief. `simt why` reports the corpus list.

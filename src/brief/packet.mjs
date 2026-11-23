@@ -30,7 +30,7 @@ export const PROMPT_CAP_BYTES = 2048;
  * The order is fixed and identical in every packet. A reader who has to search for the
  * command is paying the cost the packet exists to remove.
  */
-export const SECTIONS = ['TASK', 'SUBTASKS', 'ADVICE', 'COMMANDS', 'KNOWLEDGE', 'FILES', 'TESTS', 'DECISIONS', 'FEDERATION', 'SKILLS', 'LESSONS', 'CAUTIONS'];
+export const SECTIONS = ['TASK', 'SUBTASKS', 'ADVICE', 'COMMANDS', 'KNOWLEDGE', 'FILES', 'TESTS', 'DECISIONS', 'FEDERATION', 'SKILLS', 'MCP', 'LESSONS', 'CAUTIONS'];
 
 /**
  * What each section is worth when something has to go.
@@ -54,6 +54,9 @@ const SECTION_VALUE = {
   ADVICE: 2,
   LESSONS: 2,
   SKILLS: 3,
+  // A server pointer is one command, like a skill pointer: losing it costs the
+  // connect, not a fact.
+  MCP: 3,
   // A pointer to inputs the reader can list in one command, so losing it costs a
   // directory listing rather than a fact: beside the skill pointers.
   KNOWLEDGE: 3,

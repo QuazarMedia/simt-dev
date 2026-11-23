@@ -41,6 +41,7 @@ import {
   adapters,
   decisionJson,
   factsFrom,
+  group,
   hookPath,
   hookRows,
   installedIn,
@@ -485,15 +486,21 @@ async function hooksStatus(root, flags, command = 'agent-hooks status', install 
       problems.push(`${path} is not a JSON object, so this tool will not write into it`);
       continue;
     }
-    const found = installedIn(row, config).length;
+    // Entry-level, not whole-file: a repo that reformats the file or adds keys of its
+    // own is not drift. Only the entry this tool wrote is compared, against what the
+    // current version renders — an entry written by an older release reads as drift,
+    // because the bytes in the file are what the harness runs until install rewrites them.
+    const ours = installedIn(row, config);
+    const expected = JSON.stringify(group(row));
+    const stale = ours.some((entry) => JSON.stringify(entry) !== expected);
     const prompts = row.prompt ? installedIn(row, config, EVENTS[1]).length : 0;
     rows.push({
       id: row.id,
       path,
-      state: found > 0 ? 'present' : 'absent',
-      entries: found,
+      state: ours.length === 0 ? 'absent' : stale ? 'drift' : 'present',
+      entries: ours.length,
       prompt: row.prompt ? (prompts > 0 ? 'present' : 'absent') : null,
-      note: found > 0 ? (row.trust ?? null) : null,
+      note: ours.length === 0 ? null : stale ? `entry differs from what install would write; run ${CLI} ${install} --yes to restore it` : row.trust ?? null,
     });
   }
 

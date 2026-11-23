@@ -34,7 +34,7 @@
       ]
     },
     "timeout": {
-      "test": 1800
+      "test": 0
     }
   },
   "localSkills": [

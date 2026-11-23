@@ -51,6 +51,7 @@ import { embedTaskQuery } from '../index/vectors.mjs';
 import { searchFtsBm25 } from '../index/store.mjs';
 import { coverage } from '../index/coverage.mjs';
 import { loadRegistry } from '../graph/load.mjs';
+import { loadMcpRegistry, selectServers } from '../mcpconfig/registry.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { closure, rankSkills } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
@@ -523,6 +524,30 @@ export async function assembleBrief({
       if (deferred.length > 0) {
         packet.add('CAUTIONS', `skills deferred by the registry: ${deferred.map((entry) => entry.skill.name).sort().join(', ')}`, {
           why: ['a skill the registry marks deferred is not one this packet can stand in for'],
+        });
+      }
+    }
+  }
+
+  if (need(['MCP', 'CAUTIONS'])) {
+    const loaded = await loadMcpRegistry(flags);
+    if (!loaded.ok) {
+      packet.add('CAUTIONS', `the MCP registry did not load (${loaded.errors[0]}), so no server was offered`, {
+        why: ['every other section is independent of the registry, which is why this is a caution and not a failure'],
+      });
+    } else {
+      // The same context shape rankSkills scores with, so a server is offered for exactly
+      // the reasons a skill would be. The line names the connect path: status first,
+      // because install mutates files a reader may not want written.
+      const selected = selectServers(loaded.registry, {
+        repoStack: repo.signals,
+        taskTokens: tokenize(task),
+        paths: scope,
+        tree: [...filePaths],
+      });
+      for (const entry of selected) {
+        packet.add('MCP', `${entry.server.name}: ${entry.server.summary} Check \`${CLI} mcp status\`, connect with \`${CLI} mcp install --yes\`.`, {
+          why: entry.reasons,
         });
       }
     }

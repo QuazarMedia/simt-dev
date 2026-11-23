@@ -28,7 +28,7 @@ installed package plus `simt.json`), their staleness is cosmetic remedy text, an
 | id | state | slice | evidence |
 | --- | --- | --- | --- |
 | F01 | Complete | release-kind classifier script + test | 3722738e88e21cb34bf617443dff1fe99afa5fa4 |
-| F02 | queued | wire classifier into `publish.yml`; skill section; ADR-256 | — |
+| F02 | Complete | wire classifier into `publish.yml`; skill section; ADR-256 | e719eb333e750b57185b5e8e06e56cc12df5291c |
 | F03 | queued | `agent-hooks status` entry-level drift detection + test | — |
 
 ## F01 — release-kind classifier (scripts/classify-release.mjs)

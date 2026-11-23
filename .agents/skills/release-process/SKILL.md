@@ -102,6 +102,33 @@ workflow step. The burned versions and their deprecation commands are recorded i
 `RELEASING.md`; `test/packaging.test.mjs` refuses the burned placeholders in
 `package.json`.
 
+## Content-only releases
+
+A release whose diff since the previous tag touches only **served content** is
+**content-only**, and its `publish.yml` run skips the three binary builds and
+the formula sync (ADR-256). The set is closed, and the classifier is
+`scripts/classify-release.mjs`: `harnesses/`, `rules/`, `skills/`,
+`templates/`, `ecosystems/`, `docs/`, `packages/bench/`, `graph/skills.graph.json`,
+plus the release bookkeeping files (`package.json`, `simt.json`, `CHANGELOG.md`,
+`README.md`). One path outside it — `src/`, `bin/`, `scripts/`, `.github/` —
+makes the release full, and with no previous tag (the first release) it is full.
+
+**What runs:** the version guard, the npm stage (full suite, bench build, wheel
+parity), the release notes, and the PyPI channel — the wheel carries the npm
+bytes, so Python readers get the new content.
+
+**What lags — stated, not hidden:** binary-channel readers keep the previous
+**full** release's bytes until the next full release. The formula keeps pointing
+at that release, and a repository that installed `.simt/bin/simt` keeps it. For
+a content-only release, run the PyPI channel and **skip Homebrew**: its asset
+check verifies the three release assets exist, and they do not. The next full
+release rebuilds the binaries and re-syncs the formula from what is then served.
+
+**Forcing a full release:** set the Actions variable `SIMT_RELEASE_KIND` to
+`full` (repository Settings → Secrets and variables → Actions) before pushing
+the tag, and remove it after. The classifier reads it before anything else and
+refuses a value other than `full`.
+
 ## When Actions cannot run
 
 `node scripts/publish-local.mjs --version=X.Y.Z` is the manual twin: the same three

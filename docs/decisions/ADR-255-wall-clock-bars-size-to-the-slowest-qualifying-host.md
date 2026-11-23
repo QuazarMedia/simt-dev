@@ -30,11 +30,14 @@ host, not the interpreter:
 - PRF feedback overhead **17.3 ms** (v26) / **21.7 ms** (v24), and a settle past the
   25 ms re-baseline under concurrent load, against the 15 ms ceiling;
 - the evidence family — `/api/evidence` and its `/chains` endpoints, which collect
-  the same records — **177.3–198.0 ms** against the 75 ms read ceiling it shares with
-  the light routes; and in a later run, `/api/helm?path=status` — a route that held
-  75 in every earlier run — settles at **303.2 ms**. Which light route spikes is
-  per-run: the spikes are a property of this host under contention, not of any one
-  route;
+  the same records — **177.3–198.0 ms** under concurrent load, and
+  **446.7 ms** (`/api/evidence/chains?claim=F01`) settled under sustained full-suite
+  load; and in a later run, `/api/helm?path=status` — a route that held 75 in every
+  earlier run — settles at **303.2 ms**. Which light route spikes is per-run: the
+  spikes are a property of this host under contention, not of any one route. And the
+  sustained full-suite regime runs ~1.5× hotter than partial concurrent load
+  (`/api/check` 490.5 → 789.5 ms, light routes 303.2 → 446.7 ms), so the bars size
+  to the sustained settles;
 - `/api/check` **336.6–340.7 ms** isolated, **490.5 ms** under partial concurrent load,
   and **789.5 ms** settled under sustained full-suite load — at parity with
   `/api/status` on this host — against the 300 ms ceiling ADR-254 sized from a
@@ -55,12 +58,14 @@ code change. Only the bars can move.
    **40 ms** (was 15): the host settles at 17.3–22.5 ms isolated and past 25 under
    concurrent load, and a doubled overhead of ~50 ms still trips it.
 2. **The read ceiling absorbs the slow host's contention-spike class.** Since any light
-   route can spike to **303.2 ms** under concurrent load and which one does is per-run,
-   tiering each route that happens to spike would chase noise. The shared read ceiling
-   is **400 ms** (was 75): it sits above the worst settle observed on the slow
-   qualifying host, and a route that doubles its work still trips it (2 × 303.2 =
-   606 ms). `/api/status`, a multi-slot aggregate — check cache, hook routing, ledger,
-   leases, tracker, journal — is **1100 ms** (1.4× its 779.8 ms settle).
+   route can spike to **303.2 ms** under concurrent load and the evidence family
+   settles at **446.7 ms** under sustained full-suite load — and which route does is
+   per-run — tiering each route that happens to spike would chase noise. The shared
+   read ceiling is **650 ms** (was 75): it sits a headroom factor above the worst
+   sustained settle observed on the slow qualifying host (1.39× the 446.7 ms settle),
+   and a route that doubles its work still trips it (2 × 446.7 = 893 ms).
+   `/api/status`, a multi-slot aggregate — check cache, hook routing, ledger, leases,
+   tracker, journal — is **1100 ms** (1.4× its 779.8 ms settle).
 3. **ADR-254's 300 ms `/api/check` number is superseded by the same host measurement.**
    The suite ceiling under `--test-concurrency=4` is **1100 ms**: 1.39× the 789.5 ms
    sustained full-suite settle, on the headroom arithmetic ADR-254 itself used (300

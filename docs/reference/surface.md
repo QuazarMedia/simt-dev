@@ -230,7 +230,11 @@ next major, and removing one is a deprecation with a window like any other name.
 | `./src/graph/compile.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/graph/load.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/hooks/dispatcher.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/index/entities.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/index/map-v2.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/index/map.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/index/prf.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/index/store.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/knowledge/observations.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/measure/ablation.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/measure/corpus.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |

@@ -68,17 +68,19 @@ test('read routes stay inside the suite latency ceilings', async (t) => {
   t.after(() => studio.stop());
   const cookie = await session(studio);
   // The read ceiling sizes to the slowest qualifying host, not the authoring
-  // machine (ADR-255): on an M4 Max development host under concurrent suite
-  // load, light routes spike to 303.2 ms (`/api/helm?path=status`) and the
-  // evidence family to 198.0 ms, and which route spikes is per-run - so the
-  // shared ceiling absorbs the spike class (400 ms) rather than tiering each
-  // route that happens to spike. The two routes whose own work is larger keep
-  // their own ceilings, sized the same way: `/api/check` settles at 789.5 ms
-  // under sustained full-suite load (superseding the 300 ms ADR-254 settled
-  // from a 216.4 ms 2-vCPU CI measurement) and the multi-slot `/api/status`
-  // snapshot at 779.8 ms - at parity on this host, so both take 1100.
+  // machine (ADR-255): on an M4 Max development host, light routes spike to
+  // 303.2 ms (`/api/helm?path=status`) under concurrent suite load, and the
+  // evidence family settles at 446.7 ms (`/api/evidence/chains?claim=F01`)
+  // under sustained full-suite load - the sustained regime runs ~1.5x hotter
+  // than the partial one, and which route spikes is per-run - so the shared
+  // ceiling absorbs the spike class (650 ms) rather than tiering each route
+  // that happens to spike. The two routes whose own work is larger keep their
+  // own ceilings, sized the same way: `/api/check` settles at 789.5 ms under
+  // sustained full-suite load (superseding the 300 ms ADR-254 settled from a
+  // 216.4 ms 2-vCPU CI measurement) and the multi-slot `/api/status` snapshot
+  // at 779.8 ms - at parity on this host, so both take 1100.
   // ADR-255 supersedes the numbers in ADR-254 and ADR-228.
-  const READ_CEILING = 400;
+  const READ_CEILING = 650;
   const GATE_CEILING = 1100;
   const STATUS_CEILING = 1100;
   const routes = [

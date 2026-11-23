@@ -102,10 +102,8 @@ test('the source file outranks a shorter docs guide on a default query', async (
 });
 
 // 5. A 4-subtask composite at the 2,048-byte budget must surface both
-//    `test/<name>.test.mjs` and `src/config/<name>.json`.
-//    Current: the config artifact is never retrieved for its subtask, so the
-//    packet carries the test line and no config line.
-test('the 2,048-byte composite does not surface both the test and config artifacts', async () => {
+//    `test/<name>.test.mjs` and `src/config/<name>.json`. Fixed in V06.
+test('the 2,048-byte composite surfaces both the test and config artifacts', async () => {
   const root = await tempDir('retrieval-v2-forensics-composite-');
   const contents = {
     'simt.json': '{"brief":{"retrieval":"v2"}}',
@@ -129,8 +127,8 @@ test('the 2,048-byte composite does not surface both the test and config artifac
   const hasConfig = result.packed.text.includes('src/config/auth.json');
   assert.ok(hasTest, 'the test artifact is surfaced in the composite');
   assert.ok(
-    !hasConfig,
-    `the config artifact is never retrieved, so it is absent from the packet (test=${hasTest}, config=${hasConfig})`,
+    hasConfig,
+    `the config artifact is surfaced in the packet (test=${hasTest}, config=${hasConfig})`,
   );
 });
 

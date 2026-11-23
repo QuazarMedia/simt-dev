@@ -493,7 +493,7 @@ Columns follow `templates/plan/tracker.json`. `Lane` names disjoint file sets so
 
 | ID | Slice | Phase | Lane | Tier | Depends on | Size | Needs ADR | Success metric | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| V01 | Forensic regression suite pinning 6 v2 defects | 0 | bench | S | research 0005 D40 | S | — | 6 live v2 failure classes pinned; ADR-031 isolated | Queued | — |
+| V01 | Forensic regression suite pinning 6 v2 defects | 0 | bench | S | research 0005 D40 | S | — | 6 live v2 failure classes pinned; ADR-031 isolated | Complete | 41453de7e6c48b5b3ce04df735cc29d0c494badc |
 | V02 | Extended ablation arms, gates & phase profiler | 0 | bench | S | V01 | S | — | v2/v3 arms + strict MRR/MSC/latency promotion gates | Queued | — |
 | V03 | Calibrated anchors, `enclosed_by` guard & PRF unblock | 1 | lexical | M | V01 | M | P1 | 0 common-word Tier-2 hijacks; PRF unblocked | Queued | — |
 | V04 | Default `!isTestPath`, kind prior & path-stem lift | 1 | lexical | M | V03 | M | P1 | vocab-gap MRR=1.000; global overlay norm; lexical MRR up | Queued | — |

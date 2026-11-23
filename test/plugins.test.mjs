@@ -118,7 +118,9 @@ test('each package, run from its own copied runtime, blocks a push in its own di
   assert.equal(o.code, 2, 'opencode blocks with exit 2');
   assert.match(o.stdout, /"reason":/, 'opencode answers with the reason the plugin throws');
 
-  // An ordinary command is silent on every dialect: no decision document, exit 0.
+  // An ordinary command carries no denial in every dialect: exit 0, and silence on
+  // stdout - except cursor, whose failClosed install reads silence as a block, so its
+  // allow is the explicit document the deny template is paired with.
   for (const [kind, out, payload] of [
     ['claude', claude, { tool_name: 'Bash', tool_input: { command: 'ls' }, cwd: project }],
     ['cursor', cursor, { tool_name: 'Shell', tool_input: { command: 'ls' }, working_directory: project }],
@@ -127,6 +129,10 @@ test('each package, run from its own copied runtime, blocks a push in its own di
   ]) {
     const r = hook(out, kind, JSON.stringify(payload), project);
     assert.equal(r.code, 0, `${kind}: ordinary command exits 0`);
+    if (kind === 'cursor') {
+      assert.equal(JSON.parse(r.stdout).permission, 'allow', `cursor answered ${r.stdout}`);
+      continue;
+    }
     assert.equal(r.stdout, '', `${kind}: ordinary command is silent on stdout`);
   }
 });

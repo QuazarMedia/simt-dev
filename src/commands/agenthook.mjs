@@ -179,9 +179,15 @@ export async function agentHookCommand(args, flags) {
     }
   }
 
+  if (decision.decision === 'deny') {
+    emit(JSON.stringify(json));
+    for (const message of decision.messages) note(`blocked  ${message}`);
+    return row.denyExit;
+  }
+  // An allow is a document only for a harness that reads silence as a block; for those
+  // the exit stays 0, because the deny exit is the one every harness reads as refuse.
   emit(JSON.stringify(json));
-  for (const message of decision.messages) note(`blocked  ${message}`);
-  return row.denyExit;
+  return EXIT.OK;
 }
 
 export async function agentHooksCommand(sub, args, flags, { command = null, install = 'agent-hooks install' } = {}) {

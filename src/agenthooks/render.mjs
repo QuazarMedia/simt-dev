@@ -265,6 +265,7 @@ const ADAPTERS = Object.fromEntries(
       ...h,
       root: rootOf(PAYLOADS[id]),
       extract: extractOf(PAYLOADS[id]),
+      allow: () => applyText(h.allow, ''),
       deny: (message) => applyText(h.deny, message),
       ...(h.prompt ? { prompt: { ...h.prompt, context: (text) => applyText(h.prompt.delivery, text) } } : {}),
       ...(h.post ? { post: { ...h.post, context: (text) => applyText(h.post.delivery, text) } } : {}),
@@ -317,8 +318,11 @@ export function factsFrom(row, payload, { root } = {}) {
 
 /** The document to print for a decision, or null when there is nothing to say. */
 export function decisionJson(row, decision) {
-  if (decision.decision !== 'deny') return null;
-  return row.deny(decision.messages.join('\n'));
+  if (decision.decision === 'deny') return row.deny(decision.messages.join('\n'));
+  // An allow prints nothing for a harness that reads silence as consent. Cursor is the
+  // exception: its own install sets failClosed, which turns an empty stdout into a block,
+  // so it answers an allow with the explicit document its deny template is paired with.
+  return row.allow() ?? null;
 }
 
 /**

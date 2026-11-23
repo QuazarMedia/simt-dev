@@ -66,6 +66,13 @@ test('an ordinary command is not a decision, so nothing is printed', async () =>
   for (const row of adapters()) {
     const result = HOOK(row.id, shell[row.id]('ls -la', root));
     assert.equal(result.code, 0, `${row.id} exited ${result.code} on an ordinary command`);
+    if (row.id === 'cursor') {
+      // Cursor's install sets failClosed: silence on stdout is a block, so its allow
+      // is the explicit document the deny template is paired with, not an empty line.
+      const json = JSON.parse(result.stdout);
+      assert.equal(json.permission, 'allow', `cursor answered ${result.stdout}`);
+      continue;
+    }
     assert.equal(result.stdout, '', `${row.id} printed a decision for a command no policy names`);
   }
 });

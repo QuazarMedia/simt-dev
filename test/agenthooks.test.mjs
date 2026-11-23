@@ -11,7 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { constants } from 'node:fs';
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { decide, overrides } from '../src/agenthooks/decide.mjs';
@@ -466,6 +466,43 @@ test('status reports every reader, including the ones this tool does not write',
   const installed = cli(['agent-hooks', 'status', '--root', root]);
   for (const row of adapters()) assert.match(installed.text, new RegExp(`PRESENT\\s+${row.id}`));
   assert.match(installed.text, /trusted/, 'codex skips a hook nobody trusted, and status has to say so');
+});
+
+test('status reads an entry an older release wrote as drift, and install restores it', async () => {
+  // The entry the pre-failClosed release wrote: same command, one fewer field. The
+  // bytes in the file are what the harness runs, so this is drift, not present.
+  const stale = { version: 1, hooks: { preToolUse: [{ command: hookCommand('cursor'), timeout: 10, matcher: 'Shell|Write|Edit' }] } };
+  const root = await repo({ '.cursor/hooks.json': `${JSON.stringify(stale, null, 2)}\n` });
+
+  const text = cli(['agent-hooks', 'status', '--root', root]);
+  assert.equal(text.code, 0, text.text, 'drift is visibility, not a problem: exit 0, like the file-adapter drift');
+  assert.match(text.text, /DRIFT\s+cursor/);
+  assert.match(text.text, /simt agent-hooks install --yes/);
+
+  const payload = JSON.parse(cli(['agent-hooks', 'status', '--root', root, '--json']).stdout);
+  const cursor = payload.harnesses.find((h) => h.id === 'cursor');
+  assert.equal(cursor.state, 'drift');
+  assert.match(cursor.note, /install --yes/);
+
+  const install = cli(['agent-hooks', 'install', '--root', root, '--yes']);
+  assert.equal(install.code, 0, install.text);
+  const after = cli(['agent-hooks', 'status', '--root', root]);
+  assert.match(after.text, /PRESENT\s+cursor/, 'install rewrites the entry to what this version renders');
+});
+
+test('status compares the entry this tool wrote, not the file around it', async () => {
+  const root = await repo();
+  cli(['agent-hooks', 'install', '--root', root, '--yes']);
+  const file = join(root, hookPath('cursor'));
+  const config = JSON.parse(await readFile(file, 'utf8'));
+  // A key the repository owns and this tool never writes: extending the file is not
+  // drift, because only the entry is compared against what install would write.
+  config.owner = 'the repository';
+  await writeFile(file, `${JSON.stringify(config, null, 2)}\n`);
+
+  const text = cli(['agent-hooks', 'status', '--root', root]);
+  assert.equal(text.code, 0, text.text);
+  assert.match(text.text, /PRESENT\s+cursor/);
 });
 
 test('status fails on a config it cannot read, in both surfaces', async () => {

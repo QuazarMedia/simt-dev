@@ -397,9 +397,12 @@ function eventsOf(row, { prompt = false, post = false } = {}) {
  *
  * `command` overrides the entry point for one build: a package ships a self-contained
  * runtime and its config names that copy rather than the binary on PATH, so the shape
- * comes from this table and only the path differs.
+ * comes from this table and only the path differs. `status` compares an installed entry
+ * against this, so an entry rendered by an older release reads as drift rather than
+ * present: the bytes in the file are what the harness runs, and a newer release that
+ * changed them has not reached the reader until install rewrites the file.
  */
-function group(row, event = EVENTS[0], command = hookCommand(row.id, event)) {
+export function group(row, event = EVENTS[0], command = hookCommand(row.id, event)) {
   const timeout = row.timeout ?? TIMEOUT_SECONDS;
   if (event === 'prompt-submit') {
     // No matcher: both vendors document that field for tool events, and a matcher a

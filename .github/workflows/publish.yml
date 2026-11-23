@@ -12,7 +12,10 @@
 # carrying the same payload the tarball does), uploaded to the GitHub release
 # with its checksum and a provenance attestation. That binary is what the
 # formula downloads, and what a repository without npm installs with one line -
-# so it is built here, from the tagged tree, rather than by hand.
+# so it is built here, from the tagged tree, rather than by hand. A content-only
+# release changes only served content and skips that build plus the formula sync;
+# its binary-channel readers keep the previous full release's bytes until the
+# next full release, which the skill states rather than hides (ADR-256).
 #
 # Staging an npm release is the one step of a release that has to wait for a
 # human: `npm stage publish` puts the version in a staging area nothing installs
@@ -76,6 +79,7 @@ jobs:
       contents: read
     outputs:
       version: ${{ steps.v.outputs.version }}
+      kind: ${{ steps.kind.outputs.kind }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -91,6 +95,20 @@ jobs:
           fi
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag ${GITHUB_REF_NAME} matches package.json"
+      - id: kind
+        # The release fast lane (ADR-256): a content-only release - one whose
+        # diff since the previous tag touches only served content - skips the
+        # binary build and the formula sync. The classifier is closed-set and
+        # deterministic: scripts/classify-release.mjs diffs the previous tag
+        # against HEAD and classifies in src/distribute/release.mjs. The
+        # fetch-depth: 0 checkout above is what makes the previous tag reachable
+        # here. SIMT_RELEASE_KIND=full, set as a repository Actions variable,
+        # is read before the diff and forces a full release.
+        run: |
+          set -eu
+          kind="$(node scripts/classify-release.mjs)"
+          echo "kind=${kind}" >> "$GITHUB_OUTPUT"
+          echo "release kind: ${kind}"
 
   # -------------------------------------------------------------------------
   # npm
@@ -362,6 +380,10 @@ jobs:
   # converges to the truth instead of predicting it.
   build-binary:
     name: build ${{ matrix.target }}
+    # The fast lane (ADR-256): a content-only release skips the three native
+    # builds. Its binary-channel readers keep the previous full release's bytes
+    # until the next full release - stated in the skill and the ADR, not hidden.
+    if: needs.version.outputs.kind == 'full'
     needs: [version, create-release]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
@@ -443,6 +465,9 @@ jobs:
   # tag must never rewrite a newer mirror.
   sync-formula:
     name: Sync the Homebrew formula
+    # The mirror moves only when its source does: a content-only release builds
+    # no assets, so there is nothing new to mirror (ADR-256).
+    if: needs.version.outputs.kind == 'full'
     needs: [version, build-binary]
     runs-on: ubuntu-latest
     timeout-minutes: 10

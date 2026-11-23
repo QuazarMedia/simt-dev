@@ -106,6 +106,21 @@ test('binary: a re-run skips a version that is already staged', async () => {
   assert.match(workflow, /--clobber/, 'a re-run must replace an existing asset, not fail on it');
 });
 
+test('binary: the fast lane gates the build and the mirror on a full release', async () => {
+  // A content-only release (ADR-256) skips the three native builds and the
+  // formula sync; the kind is classified in the version job, whose fetch-depth-0
+  // checkout is what makes the previous tag reachable. The npm stage, the release
+  // notes and PyPI always run. If a gate below is removed, a content-only release
+  // quietly pays for builds that change nothing the binary does.
+  const workflow = await readFile(new URL('../.github/workflows/publish.yml', import.meta.url), 'utf8');
+  const versionJob = workflow.slice(workflow.indexOf('version:'), workflow.indexOf('publish-npm:'));
+  assert.match(versionJob, /id: kind/, 'the version job does not classify the release kind');
+  assert.match(versionJob, /classify-release\.mjs/, 'the kind does not come from the classifier script');
+  // Exactly the two binary jobs are gated - the release-notes job between them is not.
+  const gated = [...workflow.matchAll(/^\s{4}if: needs\.version\.outputs\.kind == 'full'\n\s{4}needs: \[version, ([\w-]+)\]/gm)].map((m) => m[1]);
+  assert.deepEqual(gated.sort(), ['build-binary', 'create-release'].sort());
+});
+
 test('binary: the asset name is the package name plus version plus target', () => {
   // The build script, the CI step and the formula all name assets from this one
   // function. The package name, not the command: it sits beside the npm tarball

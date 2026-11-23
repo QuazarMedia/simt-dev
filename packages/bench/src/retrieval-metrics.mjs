@@ -1,5 +1,10 @@
 import { performance } from 'node:perf_hooks';
 
+import { searchEntityCandidates } from '../../../src/index/entities.mjs';
+import { rrfFuse } from '../../../src/index/map.mjs';
+import { couplingHits, prepareMapStructure, structuralHits } from '../../../src/index/map-v2.mjs';
+import { searchWithFeedback } from '../../../src/index/prf.mjs';
+import { searchFtsBm25F } from '../../../src/index/store.mjs';
 import { mean } from '../../../src/measure/stats.mjs';
 import { cmp } from '../../../src/util/sort.mjs';
 
@@ -138,6 +143,55 @@ export async function measureRetrievalLatency({
     await dispose(repo);
   }
   return { cold: summarizeLatency(cold), warm: summarizeLatency(warm) };
+}
+
+/**
+ * Attribute one `rankMapV2` call to its five phases (plan 0006 V02) so a scale
+ * run's latency lands on the channel that caused it. Phases run the engine's
+ * own primitives with `rankMapV2`'s exact arguments, sequentially, because a
+ * timed parallel block would split wall time between channels the run did not
+ * isolate. `ftsMs` includes the guarded PRF expansion: it is the lexical
+ * channel, and the 17-query defect lives in that channel, not in the fielded
+ * search alone. `packMs` is the residual fusion and ranking assembly.
+ */
+export async function measureMapPhases({ root, graph, task, now = () => performance.now() }) {
+  // `root` may be null: every engine call below takes its data from the
+  // supplied `graph`/fielded rows and only falls back to SQLite when those
+  // are absent, so the profiler stays usable offline.
+  if (!graph || typeof task !== 'string') throw new Error('map phases require a graph and task');
+  const time = async (fn) => {
+    const started = now();
+    const value = await fn();
+    return [value, now() - started];
+  };
+  const paths = new Set(graph.files.map(({ path }) => path));
+  const fts = graph.nativeLexical ? undefined : graph.fieldedRows;
+  const [entityResult, entityMs] = await time(() => searchEntityCandidates(root, task, { ...graph, fts }));
+  const [lexicalResult, lexicalMs] = await time(async () => {
+    const rows = await searchFtsBm25F(root, task, { fts });
+    const feedback = await searchWithFeedback(root, task, { ranking: rows, graph, anchors: entityResult.anchors, fts });
+    return feedback.ranking.filter(({ path }) => paths.has(path));
+  });
+  const exact = entityResult.candidates.filter(({ tier, path }) => tier <= 2 && paths.has(path));
+  const phrases = new Map(entityResult.candidates.map(({ path, phrase, components }) => [path, { phrase, score: components.proximity }]));
+  const lexical = [...lexicalResult].map((row) => ({
+    ...row, score: row.score + (phrases.get(row.path)?.score ?? 0), phrase: phrases.get(row.path)?.phrase ?? [],
+  })).sort((a, b) => b.score - a.score || cmp(a.path, b.path));
+  const changes = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')]
+    .sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
+  const [directional, graphMs] = await time(() => {
+    const prepared = prepareMapStructure(graph);
+    return structuralHits(prepared, paths, exact, lexical);
+  });
+  const [couplingResult, couplingMs] = await time(() =>
+    couplingHits(fts ?? [], changes, exact.length ? exact : lexical, paths));
+  const [ranked, packMs] = await time(() => rrfFuse([
+    { id: 'entity', weight: 3, items: exact },
+    { id: 'bm25f', weight: 2, items: lexical },
+    { id: 'directional', weight: 1, items: directional },
+    { id: 'coupling', weight: 0.6, items: couplingResult },
+  ]));
+  return { ftsMs: lexicalMs, entityMs, graphMs, couplingMs, packMs, ranked: ranked.length };
 }
 
 /** Reports preserve task weighting and make unknown denominators explicit. */

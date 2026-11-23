@@ -35,8 +35,10 @@ host, not the interpreter:
   75 in every earlier run — settles at **303.2 ms**. Which light route spikes is
   per-run: the spikes are a property of this host under contention, not of any one
   route;
-- `/api/check` **336.6–340.7 ms** isolated, **490.5 ms** under concurrent load, against
-  the 300 ms ceiling ADR-254 sized from a 216.4 ms 2-vCPU CI measurement;
+- `/api/check` **336.6–340.7 ms** isolated, **490.5 ms** under partial concurrent load,
+  and **789.5 ms** settled under sustained full-suite load — at parity with
+  `/api/status` on this host — against the 300 ms ceiling ADR-254 sized from a
+  216.4 ms 2-vCPU CI measurement;
 - `/api/status` **779.8 ms** (v26) / **286.2 ms** (v24) against the 75 ms read ceiling.
 
 The tokenizer is already regex-optimal — a forward-only boundary rewrite measured
@@ -60,11 +62,12 @@ code change. Only the bars can move.
    606 ms). `/api/status`, a multi-slot aggregate — check cache, hook routing, ledger,
    leases, tracker, journal — is **1100 ms** (1.4× its 779.8 ms settle).
 3. **ADR-254's 300 ms `/api/check` number is superseded by the same host measurement.**
-   The suite ceiling under `--test-concurrency=4` is **700 ms**: 1.4× the 490.5 ms
-   concurrent-load settle, on the headroom arithmetic ADR-254 itself used (300 over
-   216.4). A route that doubles its work still trips it on the slowest qualifying host
-   (2 × 490.5 = 981 ms), and it stays far above the fast-host settles (105.1 ms
-   authoring machine per ADR-228, 216.4 ms CI runner).
+   The suite ceiling under `--test-concurrency=4` is **1100 ms**: 1.39× the 789.5 ms
+   sustained full-suite settle, on the headroom arithmetic ADR-254 itself used (300
+   over 216.4). A route that doubles its work still trips it on the slowest qualifying
+   host (2 × 789.5 = 1579 ms), and it stays far above the fast-host settles (105.1 ms
+   authoring machine per ADR-228, 216.4 ms CI runner). On this host `/api/check` and
+   `/api/status` settle at parity, so both take the same number.
 4. **The statistic does not change.** Warm medians, the same sample counts, and the
    settled re-measure stand; only the numbers move. No route gets a softer statistic
    to hide behind.

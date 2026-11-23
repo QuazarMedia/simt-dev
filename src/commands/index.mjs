@@ -369,6 +369,10 @@ export const IMPLEMENTED = {
     const { mcpCommand } = await import('./mcp.mjs');
     return (args, flags) => mcpCommand(['status'], flags);
   },
+  'mcp install': async () => {
+    const { mcpCommand } = await import('./mcp.mjs');
+    return (args, flags) => mcpCommand(['install'], flags);
+  },
   //. A bare command: the kind is a positional, so there is no group and
   // no default subcommand to resolve.
   plugin: async () => (await import('./plugin.mjs')).pluginCommand,

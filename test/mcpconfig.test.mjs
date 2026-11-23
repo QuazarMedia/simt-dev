@@ -1,13 +1,17 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { loadMcpRegistry, selectServers, validateMcpRegistry } from '../src/mcpconfig/registry.mjs';
 import { canonical, dialects, renderEntry } from '../src/mcpconfig/dialects.mjs';
-import { parseToml } from '../src/mcpconfig/toml.mjs';
+import { parseToml, replaceOwnedTables } from '../src/mcpconfig/toml.mjs';
 import { mcpStatus } from '../src/mcpconfig/status.mjs';
+import { planMcpInstall } from '../src/mcpconfig/install.mjs';
+import { pending } from '../src/write/plan.mjs';
+import { git, simt as simtCli } from './fixture.mjs';
 
 /** A valid registry with one stdio server, for shape tests that mutate freely. */
 function sample() {
@@ -210,5 +214,141 @@ test('status: a file this tool cannot trust is unreadable, and only that fails t
     assert.match(problems[0], /not valid JSON/);
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('toml: replaceOwnedTables rewrites the owned blocks and keeps every other byte', () => {
+  const text = [
+    'notify = [ "a", "b" ]',
+    '',
+    '[mcp_servers.simt]',
+    'command = "old"',
+    '',
+    '[other.table]',
+    'keep = 1',
+  ].join('\n');
+  const out = replaceOwnedTables(text, 'mcp_servers', { simt: { command: 'simt', args: ['mcp'] } });
+  // The foreign lines stay, in place; the owned block is replaced with the entry.
+  assert.match(out, /^notify = \[ "a", "b" \]\n/m);
+  assert.match(out, /\[other\.table\]\nkeep = 1/);
+  assert.match(out, /\[mcp_servers\.simt\]\ncommand = "simt"\nargs = \["mcp"\]/);
+  assert.ok(!out.includes('command = "old"'));
+  // The second pass over its own output is a no-op: install idempotence rests on this.
+  assert.equal(replaceOwnedTables(out, 'mcp_servers', { simt: { command: 'simt', args: ['mcp'] } }), out);
+});
+
+test('install: a fresh repo plans the registry entries into every selected harness', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    const registry = sample();
+    const { changes, notes, problems } = await planMcpInstall(dir, { ids: ['cursor', 'codex'] }, registry);
+    assert.deepEqual(problems, []);
+    const cursor = changes.find((c) => c.path === '.cursor/mcp.json');
+    assert.equal(cursor.before, null);
+    assert.deepEqual(JSON.parse(cursor.after).mcpServers.simt, { command: 'simt', args: ['mcp'] });
+    const codex = changes.find((c) => c.path === '.codex/config.toml');
+    assert.match(codex.after, /\[mcp_servers\.simt\]\ncommand = "simt"\nargs = \["mcp"\]/);
+    // The plugin row is reported, not written; a harness out of scope is named skipped.
+    assert.ok(notes.some((n) => n.id === 'deepseek' && n.state === 'not-ours'));
+    assert.ok(notes.some((n) => n.id === 'gemini' && n.state === 'skipped'));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('install: a second install over its own output is unchanged', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    const registry = sample();
+    const first = await planMcpInstall(dir, { ids: ['cursor', 'codex'] }, registry);
+    for (const c of first.changes) {
+      await mkdir(join(dir, dirname(c.path)), { recursive: true });
+      await writeFile(join(dir, c.path), c.after);
+    }
+    const second = await planMcpInstall(dir, { ids: ['cursor', 'codex'] }, registry);
+    assert.equal(pending(second.changes).length, 0, JSON.stringify(second.changes));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('install: a repo-owned key survives with its order, and a drifted ours is replaced in place', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    await repo(dir, {
+      '.cursor/mcp.json': JSON.stringify({ mcpServers: { other: { command: 'x', args: [] }, simt: { command: 'simt' } }, otherTop: 1 }),
+    });
+    const { changes, problems } = await planMcpInstall(dir, { ids: ['cursor'] }, sample());
+    assert.deepEqual(problems, []);
+    const parsed = JSON.parse(changes.find((c) => c.path === '.cursor/mcp.json').after);
+    assert.deepEqual(Object.keys(parsed), ['mcpServers', 'otherTop']);
+    assert.deepEqual(Object.keys(parsed.mcpServers), ['other', 'simt']);
+    assert.deepEqual(parsed.mcpServers.simt, { command: 'simt', args: ['mcp'] });
+    assert.deepEqual(parsed.mcpServers.other, { command: 'x', args: [] });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('install: a scope of one plans one file, and names the rest skipped', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    const { changes, notes } = await planMcpInstall(dir, { ids: ['cursor'] }, sample());
+    assert.deepEqual(changes.map((c) => c.path), ['.cursor/mcp.json']);
+    assert.ok(notes.some((n) => n.id === 'codex' && n.state === 'skipped'));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('install: a config this tool cannot parse is named, and the plan says refuse', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    await repo(dir, {
+      '.cursor/mcp.json': '{ not json',
+      '.codex/config.toml': '[mcp_servers.simt]\ncommand = "simt"\nargs = ["mcp"]\n',
+    });
+    const { problems } = await planMcpInstall(dir, { ids: ['cursor', 'codex'] }, sample());
+    assert.equal(problems.length, 1);
+    assert.match(problems[0], /not valid JSON/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('install (CLI): --yes writes every selected harness, and the next run is up to date', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    await git(['init', '-q', root]);
+    const run = (args) => simtCli([...args, '--root', root], { maxBuffer: 8 << 20 });
+    const first = await run(['mcp', 'install', '--yes', '--harness', 'cursor']);
+    assert.equal(first.code, 0, first.stderr);
+    const written = JSON.parse(await readFile(join(root, '.cursor', 'mcp.json'), 'utf8'));
+    assert.deepEqual(written.mcpServers.simt, { command: 'simt', args: ['mcp'] });
+    const second = await run(['mcp', 'install', '--harness', 'cursor']);
+    assert.equal(second.code, 0, second.stderr);
+    assert.match(second.stdout, /up to date/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('install (CLI): a broken config is refused, and no other harness is written', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    await git(['init', '-q', root]);
+    // Surfaces selects both harnesses, so the refusal must hold across a write that
+    // would have landed.
+    await writeFile(join(root, 'simt.json'), JSON.stringify({ surfaces: ['cursor', 'codex'] }));
+    await mkdir(join(root, '.cursor'), { recursive: true });
+    await writeFile(join(root, '.cursor', 'mcp.json'), '{ not json');
+    const run = (args) => simtCli([...args, '--root', root], { maxBuffer: 8 << 20 });
+    const result = await run(['mcp', 'install', '--yes']);
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr + result.stdout, /not valid JSON/);
+    // The refusal is all-or-nothing: the other harness got nothing.
+    assert.equal(existsSync(join(root, '.codex', 'config.toml')), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

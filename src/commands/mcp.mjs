@@ -18,11 +18,15 @@ import { commandRoot } from '../repo-root.mjs';
 import { resolveHarnessScope } from '../agents/scope.mjs';
 import { loadMcpRegistry } from '../mcpconfig/registry.mjs';
 import { mcpStatus } from '../mcpconfig/status.mjs';
+import { planMcpInstall } from '../mcpconfig/install.mjs';
+import { applyPlan, pending } from '../write/plan.mjs';
 
 export async function mcpCommand(positional, flags) {
-  // A subcommand before the transport: `simt mcp status` reports, bare `simt mcp` serves.
-  // The serve path stays first-class because an editor's config names the bare form.
+  // A subcommand before the transport: `simt mcp status` reports, `mcp install` writes,
+  // bare `simt mcp` serves. The serve path stays first-class because an editor's config
+  // names the bare form.
   if (positional[0] === 'status') return mcpStatusCommand(flags);
+  if (positional[0] === 'install') return mcpInstallCommand(flags);
 
   const version = packageVersion();
 
@@ -109,4 +113,51 @@ async function mcpStatusCommand(flags) {
   }
   emit(lines.join('\n'));
   return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
+}
+
+/**
+ * `simt mcp install`: write the registry's servers into each selected harness's
+ * project-scoped config. Preview without `--yes`; a config that cannot be parsed is
+ * refused and named, and no other harness is written.
+ */
+async function mcpInstallCommand(flags) {
+  const root = commandRoot(flags);
+  const scope = await resolveHarnessScope(root, flags);
+  if (scope.error) return fail(scope.error, EXIT.USAGE, scope.remedy);
+  if (scope.ids.length === 0) {
+    return fail('no harness is selected, so there is nothing to write', EXIT.USAGE, scope.remedy);
+  }
+  const loaded = await loadMcpRegistry(flags);
+  if (!loaded.ok) return fail(loaded.errors.join('; '), EXIT.FAIL, 'fix the registry, or name one with --registry <path>');
+
+  const { changes, notes, problems } = await planMcpInstall(root, scope, loaded.registry);
+  if (problems.length > 0) {
+    // Refusal is all-or-nothing: one unreadable config means nothing is written, because
+    // a half-written install across harnesses is a state the reader cannot untell.
+    return fail(problems.join('; '), EXIT.FAIL, 'fix the named file, then re-run; no harness was written');
+  }
+
+  const result = await applyPlan(root, changes, { mode: { apply: flags.yes === true }, label: 'mcp install' });
+  const todo = pending(changes);
+
+  const lines = [
+    `repo     ${root}`,
+    `scope    ${scope.source === 'flag' ? `--harness ${scope.ids[0]}` : `"surfaces" (${scope.ids.join(', ')})`}`,
+  ];
+  for (const note of notes) {
+    if (note.state === 'not-ours') lines.push(`NOT OURS ${note.id.padEnd(12)} ${note.note ?? ''}`);
+    else if (note.state === 'skipped') lines.push(`SKIPPED  ${note.id.padEnd(12)} ${note.note ?? ''}`);
+  }
+  if (result.applied) {
+    for (const path of result.written) lines.push(`wrote    ${path}`);
+    if (result.written.length === 0) lines.push('up to date  every selected config already holds the registry entries');
+    if (notes.length > 0) lines.push('');
+  } else {
+    for (const c of todo) lines.push(`would write ${c.path}  (${c.reason})`);
+    if (todo.length === 0) lines.push('up to date  every selected config already holds the registry entries');
+    lines.push('');
+    lines.push(`apply  run: ${CLI} mcp install --yes`);
+  }
+  emit(lines.join('\n'));
+  return EXIT.OK;
 }

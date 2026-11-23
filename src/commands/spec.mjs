@@ -120,6 +120,7 @@ export const SPEC = [
   { path: 'map', usage: '[--task "<task>"] [--retrieval v2] [--explain]', summary: 'the files a task is most likely to touch, within a byte budget', flags: ["allow-remote","budget","embed","explain","level","recall","retrieval","task"], values: { retrieval: ["v1", "v2"], level: ['outline', 'names', 'signatures'] }, },
   { path: 'mcp', usage: '[--list]', summary: 'serve the read-only MCP surface over stdio', flags: ["list"], },
   { path: 'mcp status', usage: '--harness <id>', summary: 'which servers the selected harnesses have configured, entry-level', flags: ["harness", "registry"], },
+  { path: 'mcp install', usage: '--harness <id> --yes', writes: 'repo', summary: 'write the registry servers into the selected harnesses project configs', flags: ["harness", "registry", "yes"], },
   // The default is the read: `pack` alone lints the working directory,
   // the way `skills` alone indexes and `graph` alone lints.
   // No sibling repository vendors a pack, so the group is frozen: it works, it is

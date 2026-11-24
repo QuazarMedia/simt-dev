@@ -37,6 +37,7 @@ import { git, gitPaths, gitText } from '../sys/git.mjs';
 import { ZERO_SHA, parsePushedRefs, resolveAlreadyPassedSkip, resolveNonCodeSkip } from './push-skip.mjs';
 import { focusedGate, focusedThreshold } from './focused-push.mjs';
 import { focusedRunTimeoutMs } from '../testing/focused-run.mjs';
+import { parseTestReport } from '../testing/parsers.mjs';
 import { tail } from '../util/text.mjs';
 
 // The classification API stays importable from this module: `hooks` is what a consumer
@@ -706,6 +707,15 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     // leave a green ledger line for a run the bound had already failed.
     const passed = outcome.code === 0 && !outcome.timedOut;
     const recordedExit = outcome.timedOut && outcome.code === 0 ? 1 : outcome.code;
+    const outputText = `${outcome.stdout ?? ''}\n${outcome.stderr ?? ''}`;
+    // A failed `test` run leaves the failing test ids in its ledger line, so the next
+    // push can re-run exactly them (ADR-258). Ids, not logs: the output digest keeps
+    // the detail. Output the parser cannot read carries none.
+    let failedTests = null;
+    if (name === 'test' && !passed) {
+      const report = parseTestReport(outputText);
+      if (report !== null && report.failed.length > 0) failedTests = report.failed;
+    }
     // The ledger is not the gate. A tree that cannot be named leaves no line, and the
     // claim check then finds nothing, which is the direction that cannot invent a run.
     try {
@@ -719,9 +729,10 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
         cmd,
         exit: recordedExit,
         ms: Date.now() - started,
-        output: `${outcome.stdout ?? ''}\n${outcome.stderr ?? ''}`,
+        output: outputText,
         gate: name,
         kind,
+        ...(failedTests !== null ? { failedTests } : {}),
         // The tree the gate actually ran in, not the tree the ledger lives in: for a
         // pre-push run those differ, and the skip query reads this line.
         subject: root,

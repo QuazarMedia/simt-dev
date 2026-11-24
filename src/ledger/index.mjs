@@ -126,7 +126,7 @@ export async function indexTreeId(root) {
 
 export async function recordRun(
   root,
-  { cmd, exit, ms, output, gate = null, kind = null, subject = null, revision = null, toolchain = null, cwd = null, outcome = null, verification = null },
+  { cmd, exit, ms, output, gate = null, kind = null, subject = null, revision = null, toolchain = null, cwd = null, outcome = null, verification = null, failedTests = null },
 ) {
   const { entries: prior } = await readLedger(root).catch(() => ({ entries: [] }));
   // The tree the gate RAN ON, which is not always the tree the ledger lives in. A
@@ -161,6 +161,8 @@ export async function recordRun(
     wallMs: ms,
     outputDigest: `sha256-${createHash('sha256').update(output).digest('hex')}`,
     summary: summarise(output, exit),
+    // The failing test ids of a failed run, for the re-run lever (ADR-258): ids, not logs.
+    ...(Array.isArray(failedTests) && failedTests.length > 0 ? { failedTests } : {}),
     ...(exit !== 0
       ? {
           errorLine: normaliseErrorLine(firstErrorLine(output)),

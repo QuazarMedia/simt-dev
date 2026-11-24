@@ -24,7 +24,9 @@ import { parseToml } from './toml.mjs';
 export async function mcpStatus(root, scope, registry) {
   const rows = [];
   const problems = [];
-  const table = dialects();
+  // With a root, the table sees the repository's `.simt/harnesses/` records, not
+  // only the shipped set: status reports what install would write, so it must see the same.
+  const table = dialects(root);
   for (const id of Object.keys(table)) {
     const d = table[id];
     if (d.path === null) {

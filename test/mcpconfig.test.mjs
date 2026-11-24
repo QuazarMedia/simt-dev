@@ -315,6 +315,28 @@ test('copilot: install writes the servers container with a type, and status read
   }
 });
 
+test('custom harness: a repo-local .simt/harnesses record is visible to install and status', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    // A custom harness onboards by data: a local record whose loader.mcp facet names its
+    // file and container. install and status thread the root, so they must reach it;
+    // without the root, the table is the shipped set alone and the record is invisible.
+    await repo(dir, { '.simt/harnesses/custom.json': JSON.stringify({ id: 'custom', loader: { mcp: { path: '.custom/mcp.json', key: 'mcpServers', verified: 'a vendor documents it' } } }) });
+    const registry = sample();
+    const { changes, problems } = await planMcpInstall(dir, { ids: ['custom'] }, registry);
+    assert.deepEqual(problems, []);
+    const change = changes.find((c) => c.path === '.custom/mcp.json');
+    assert.equal(change.before, null);
+    assert.deepEqual(JSON.parse(change.after).mcpServers.simt, { command: 'simt', args: ['mcp'] });
+    await mkdir(join(dir, '.custom'), { recursive: true });
+    await writeFile(join(dir, '.custom/mcp.json'), change.after);
+    const fresh = await mcpStatus(dir, { ids: ['custom'] }, registry);
+    assert.equal(fresh.rows.find((r) => r.id === 'custom').state, 'present');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('install: a second install over its own output is unchanged', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
   try {

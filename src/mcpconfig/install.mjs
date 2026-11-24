@@ -24,7 +24,9 @@ export async function planMcpInstall(root, scope, registry) {
   const changes = [];
   const notes = [];
   const problems = [];
-  const table = dialects();
+  // With a root, the table sees the repository's `.simt/harnesses/` records, not
+  // only the shipped set: a custom harness onboards by data, and install must reach it.
+  const table = dialects(root);
   for (const id of Object.keys(table)) {
     const d = table[id];
     if (d.path === null) {

@@ -406,8 +406,9 @@ assert.deepEqual(leaking, [
     // its ruling is about, and the count moves because the records have to name them.
     'ADR-256',
     'ADR-257',
-    // ADR-259 names the gate-view modules (tier.mjs, run-tests.mjs, package.json) its
-    // ruling settles, so it leaks like the others.
+    // ADR-258 names the dispatcher and schema modules its ruling settles; ADR-259
+    // names the gate-view modules. Both leak like the others.
+    'ADR-258',
     'ADR-259',
   ]);
 });

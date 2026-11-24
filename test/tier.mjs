@@ -9,6 +9,12 @@
 // a second copy of the test set, and the failure is silent in the direction that matters: a
 // new integration file left out of the list still passes `test:unit`, and the tier it was
 // missing from is the one the change needed.
+//
+// The pre-push gate runs a third view, `gate`: every file except the ones that measure the
+// tool (benches) or carry wall-clock bars calibrated on an idle machine (studio). It is a
+// view, not a tier - it overlaps both real tiers - and its exclusion is the file's name
+// prefix, classified here so a new bench or studio file joins it without a list to update
+// (ADR-259).
 
 import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -16,11 +22,22 @@ import { fileURLToPath } from 'node:url';
 
 export const UNIT = 'unit';
 export const INTEGRATION = 'integration';
+export const GATE = 'gate';
 
 // Every way a test file reaches the CLI: the shared `simt` helper (imported as `simtCli`),
 // the `BIN` path, or its own spawn (`child_process`, including the dynamic `import()` form a
 // file uses when it needs one call and not an import at the top).
 const SPAWNS = /child_process|\bsimtCli\b|\bBIN\b/;
+
+// The families the gate view leaves out, by name prefix: benches measure the tool and take
+// minutes; studio tests assert wall-clock ceilings sized to a quiet machine (ADR-254/255),
+// and a push gate running beside other work is not one. Neither is evidence a change needs,
+// and both are what made the pre-push gate slow and flaky (ADR-259).
+const GATE_EXCLUDE = /^(bench|pack-bench|studio-)/;
+
+export function gateExcluded(name) {
+  return GATE_EXCLUDE.test(name);
+}
 
 export function tierOf(source) {
   return SPAWNS.test(source) ? INTEGRATION : UNIT;
@@ -30,13 +47,15 @@ export function tiers() {
   return [UNIT, INTEGRATION];
 }
 
-/** The test files in one tier, or in every tier in the order `all` runs them. */
+/** The test files in one tier, the `gate` view, or every file in the order `all` runs them. */
 export async function files(tier) {
   const here = dirname(fileURLToPath(import.meta.url));
   const names = (await readdir(here)).filter((name) => name.endsWith('.test.mjs')).sort();
   const chosen = [];
   for (const name of names) {
-    if (tier === 'all' || tierOf(await readFile(join(here, name), 'utf8')) === tier) chosen.push(join(here, name));
+    if (tier === GATE && gateExcluded(name)) continue;
+    if (tier !== 'all' && tier !== GATE && tierOf(await readFile(join(here, name), 'utf8')) !== tier) continue;
+    chosen.push(join(here, name));
   }
   return chosen;
 }

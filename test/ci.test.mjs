@@ -554,22 +554,32 @@ test('the own copy runs a gate this repository can actually pass', async () => {
   }
 });
 
-test('the test script names its files, because the floor cannot run the obvious spelling', async () => {
-  // `node --test test/` is the obvious spelling and it is wrong on two of the three node
-  // versions this repository's own gate runs. 22 and 24 resolve the argument as a module
-  // path and fail with `Cannot find module '.../test'`; only 26 walks the directory. The
-  // suite was therefore green on the author's machine and red on four of the six matrix
-  // legs, and nothing inside the package could tell - so the SHAPE of the script is
-  // asserted here rather than the version that happens to be installed.
-  //
-  // The second half is the one that stops the obvious repair landing. A pattern naming
-  // fewer files than the directory holds drops tests without failing anything, which is
-  // how a suite goes to 700 tests and nobody notices for a month.
+test('the gate script runs the tier view, and test:all names its files', async () => {
+  // `npm test` is the pre-push gate (ADR-259): it runs the `gate` view - every test file
+  // except benches and studio. The exclusion is a name-prefix classification in
+  // `test/tier.mjs`, not a pattern here: a narrowing glob in package.json is how a suite
+  // goes to 700 tests and nobody notices for a month, and the view keeps the gate from
+  // paying minutes for benches and flaking on studio's wall-clock ceilings.
   const pkg = JSON.parse(await readFile(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
-  const patterns = pkg.scripts.test.split(/\s+/).filter((arg) => !arg.startsWith('-'));
-  assert.ok(patterns.length > 0, 'the test script passes nothing to --test');
+  assert.equal(
+    pkg.scripts.test,
+    'node scripts/run-tests.mjs gate',
+    'the gate script must run the tier view, so the exclusion stays classified in test/tier.mjs',
+  );
 
-  for (const pattern of patterns) {
+  // `test:all` is the full suite for named triggers, and it is the script that must name
+  // its files. `node --test test/` is the obvious spelling and it is wrong on two of the
+  // three node versions this repository's own gate runs: 22 and 24 resolve the argument
+  // as a module path and fail with `Cannot find module '.../test'`; only 26 walks the
+  // directory. The suite was therefore green on the author's machine and red on four of
+  // the six matrix legs, and nothing inside the package could tell - so the SHAPE of the
+  // script is asserted here rather than the version that happens to be installed.
+  // A pattern naming fewer files than the directory holds drops tests without failing
+  // anything, and that is the second half of the invariant.
+  const all = pkg.scripts['test:all'].split(/\s+/).filter((arg) => !arg.startsWith('-'));
+  assert.ok(all.length > 0, 'test:all passes nothing to --test');
+
+  for (const pattern of all) {
     assert.doesNotMatch(
       pattern,
       /\/$/,
@@ -583,12 +593,12 @@ test('the test script names its files, because the floor cannot run the obvious 
       `^${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '[^/]*')}$`,
     );
   const uncovered = files.filter(
-    (f) => !patterns.some((p) => matches(p).test(`test/${f}`)),
+    (f) => !all.some((p) => matches(p).test(`test/${f}`)),
   );
   assert.deepEqual(
     uncovered,
     [],
-    `the test script does not run ${uncovered.join(', ')}; a narrowing pattern drops tests silently`,
+    `test:all does not run ${uncovered.join(', ')}; a narrowing pattern drops tests silently`,
   );
 });
 

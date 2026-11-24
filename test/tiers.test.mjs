@@ -7,11 +7,11 @@
 
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { INTEGRATION, UNIT, files, tierOf, tiers } from './tier.mjs';
+import { GATE, INTEGRATION, UNIT, files, gateExcluded, tierOf, tiers } from './tier.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -41,4 +41,21 @@ test('every unit file really has no child process', async () => {
   for (const path of await files(UNIT)) {
     assert.doesNotMatch(await readFile(path, 'utf8'), /child_process|spawnSync|execFile\(/, path);
   }
+});
+
+test('the gate view runs everything its exclusion does not name, and the exclusion is the bench and studio families', async () => {
+  // The gate view is a complement, not a third partition: a file the exclusion names must
+  // be out of the view and a file it does not name must be in, for every file that exists.
+  // A view that silently ran less than its complement is the same failure as a hand-
+  // maintained list dropping a tier (ADR-137, ADR-259).
+  const all = (await readdir(HERE)).filter((name) => name.endsWith('.test.mjs'));
+  const gate = new Set((await files(GATE)).map((p) => basename(p)));
+
+  for (const name of all) {
+    assert.equal(gate.has(name), !gateExcluded(name), `${name}: the gate view disagrees with its exclusion`);
+  }
+  assert.ok(gateExcluded('bench.test.mjs'));
+  assert.ok(gateExcluded('pack-bench.test.mjs'));
+  assert.ok(gateExcluded('studio-server.test.mjs'));
+  assert.ok(!gateExcluded('ci.test.mjs'), 'a gate file is not excluded');
 });

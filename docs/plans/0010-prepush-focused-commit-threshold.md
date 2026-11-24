@@ -65,7 +65,7 @@ silent, never a skip.
 | PT01 | Complete | ADR-258 record in `docs/decisions/` | 4ba1909428c8c4f6105c03509ec7e07f8e395b12 |
 | PT02 | Complete | `src/hooks/focused-push.mjs` + extract `src/testing/focused-run.mjs` + test | db648e0142051f371ca8e86c4a614306ada33943 |
 | PT03 | Complete | dispatcher wiring + manifest validation + self-adoption + test | f3db4b35ccbabd46a4332b114c7c089e2a999f6c |
-| PT04 | Queued | ledger evidence test for `test-focused` | — |
+| PT04 | Complete | ledger evidence test for `test-focused` | 419186aa8f5369b6705ef2ad3a026c58ea9ee353 |
 | PT05 | Queued | ledger records failed-test identities on a failed `test` run + test | — |
 | PT06 | Queued | dispatcher re-run-failures lever + test | — |
 

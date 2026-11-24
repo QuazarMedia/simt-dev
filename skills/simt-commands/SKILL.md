@@ -15,8 +15,8 @@ add `--yes` and hope.
 
 `init`, `sync`, `plan done`, `slice start`, `slice finish`, `slice abandon`,
 `agents install`, `agent-hooks install`, `hooks install`, `mcp install`, `doctor --fix`,
-`ignore`, `ci`, `shared install`, `lessons review`, `decide`, `undo`,
-`skills install`, `bench mine|run|ablate|probes|variants`, `pack new|publish`,
+`ignore`, `shared install`, `lessons review`, `decide`, `undo`,
+`skills install`, `bench mine|run|ablate|probes`, `pack new|publish`,
 `lease`, `plugin <harness>`, `workspace upgrade`
 
 ### Read-only commands (no flag needed)
@@ -82,10 +82,9 @@ Pick the command by what you need, not by what you remember:
 | Compare sibling repositories | `simt compare` | Adoption and drift matrix |
 | Check local model endpoints | `simt local doctor` | `--allow-remote` to probe |
 | See what a shared install would write | `simt shared plan` | `shared install --yes` writes it |
-| Render the README command list | `simt docs readme` | From the spec; `--yes` writes it |
+| Render the command reference | `simt docs commands --yes` | docs/commands from the spec |
 | Compile a skill | `simt skills compile [<name>]` | Agent Skills standard |
 | Score the registry | `simt skills eval [corpus]` | Against recorded transcripts |
-| Refresh the workflows | `simt ci` | This package's own `.github` |
 
 ## Doors (JSON in, facts out)
 

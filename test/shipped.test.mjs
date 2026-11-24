@@ -26,7 +26,7 @@ import { loadRules, select } from '../src/projection/project.mjs';
 import { desiredRegion, mdcTargets } from '../src/projection/rules.mjs';
 import { ESTATE_NAME } from '../src/decisions/index.mjs';
 import { loadMdcRules, renderMdc, ruleName } from '../src/projection/mdc.mjs';
-import { SURFACES, rulePath, surface, undocumentedKeys } from '../src/projection/surfaces.mjs';
+import { rulePath, surface, surfaces, undocumentedKeys } from '../src/projection/surfaces.mjs';
 import { compose } from '../src/projection/markers.mjs';
 import { renderShim } from '../src/hooks/shim.mjs';
 import { buildManifest } from '../src/projection/manifest.mjs';
@@ -503,7 +503,7 @@ test('every frontmatter key a surface emits is one its vendor documents', () => 
 });
 
 test('no surface emits a rule file without a path or a documented way to load it', () => {
-  for (const s of SURFACES) {
+  for (const s of surfaces()) {
     assert.ok(s.label && s.readers.length > 0, `${s.id} does not name who reads it`);
     assert.ok(
       typeof s.verified === 'string' && s.verified.length > 0,
@@ -534,7 +534,7 @@ test('a rule rendered for every surface is clean on every surface', async () => 
     const { body } = renderMdc(rule, {});
     const name = ruleName(rule);
     let written = 0;
-    for (const s of SURFACES) {
+    for (const s of surfaces()) {
       if (s.rule === null) continue;
       const rel = rulePath(s.id, name);
       assert.ok(rel, `${s.id} has no path for rule ${rule.id}`);

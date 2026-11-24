@@ -23,8 +23,8 @@ import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_SURFACES,
-  POINTERS,
-  SURFACES,
+  pointers,
+  surfaces,
   foldsRules,
   resolveSurfaces,
   rulePath,
@@ -60,7 +60,7 @@ test('every surface row names the document it was verified against', () => {
   // A row whose `verified` is null was not checked against a vendor document. That
   // is allowed, and it must be visible, because a surface list that quietly grew a
   // guessed row puts an unverified assumption into every repo that adopts it.
-  for (const s of SURFACES) {
+  for (const s of surfaces()) {
     assert.ok(s.id && s.label && s.readers, `${s.id}: needs an id, a label and its readers`);
     assert.ok(['region', 'file', 'pointer'].includes(s.kind), `${s.id}: unknown kind ${s.kind}`);
     if (s.kind === 'file') {
@@ -75,7 +75,7 @@ test('a row that claims no reader of the primary file is the row that must carry
   // obliges. A harness nobody has verified against a document gets no row here (S42
   // filed it: a row whose `verified` cites nothing is decoration that misdescribes the
   // artefact), which is why nothing below reads the candidate list.
-  for (const s of SURFACES) {
+  for (const s of surfaces()) {
     assert.ok(
       ['all', 'some', 'none'].includes(s.readsAgentsMd),
       `${s.id}: readsAgentsMd is "${s.readsAgentsMd}", which is not one of all|some|none`,
@@ -98,7 +98,7 @@ test('no two rows would hand the same reader the same rule (S42)', () => {
   // are the duplicate-source-of-truth defect, one at the file layer and one at the
   // reader layer, and neither is visible in a list of ids.
   const paths = new Map();
-  for (const s of SURFACES) {
+  for (const s of surfaces()) {
     if (!s.rule) continue;
     assert.ok(!paths.has(s.rule), `${s.id} and ${paths.get(s.rule)} both project ${s.rule}`);
     paths.set(s.rule, s.id);
@@ -107,7 +107,7 @@ test('no two rows would hand the same reader the same rule (S42)', () => {
   // second would overwrite the first: the reader would load one rule set and no
   // `harness detect` could say which row put it there.
   const dirs = new Map();
-  for (const s of SURFACES) {
+  for (const s of surfaces()) {
     for (const dir of s.configDirs ?? []) {
       assert.ok(!dirs.has(dir), `${s.id} and ${dirs.get(dir)} both claim ${dir}`);
       dirs.set(dir, s.id);
@@ -128,7 +128,7 @@ test('a per-rule surface emits only frontmatter keys the vendor documents', () =
   // The guard this file exists for. `documentedKeys` is the vendor's own list; a key
   // invented here would be inert at best, and on Antigravity an unrecognised value
   // silently discards the rule with no message at all.
-  for (const s of SURFACES) {
+  for (const s of surfaces()) {
     if (!s.ruleFrontmatter) continue;
     assert.ok(
       Array.isArray(s.documentedKeys) && s.documentedKeys.length > 0,
@@ -169,7 +169,7 @@ test('the default is exactly one surface, and it is the one with no per-rule pat
 
   // Every other surface must still be reachable, or "one by default" would be a
   // deletion rather than a default.
-  for (const s of SURFACES) {
+  for (const s of surfaces()) {
     if (s.id === 'opencode') continue;
     const on = resolveSurfaces(null, { surfaces: s.id });
     assert.deepEqual(on.ids, [s.id], `${s.id} must be selectable on its own`);
@@ -426,10 +426,10 @@ test('narrowing the surfaces narrows the files, and AGENTS.md is always there', 
 
 test('a pointer is a symlink to AGENTS.md, and both names are declared', async () => {
   assert.deepEqual(
-    POINTERS.map((p) => `${p.path} -> ${p.to}`),
+    pointers().map((p) => `${p.path} -> ${p.to}`),
     ['CLAUDE.md -> AGENTS.md', 'GEMINI.md -> AGENTS.md'],
   );
-  for (const p of POINTERS) {
+  for (const p of pointers()) {
     assert.ok(p.readers && p.verified, `${p.id} must name its readers and its source`);
   }
 });

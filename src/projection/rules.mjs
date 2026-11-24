@@ -359,7 +359,7 @@ export async function ruleBodies(root, manifest, flags) {
   const rules = await loadMdcRules();
   if (rules.length === 0) {
     notes.push('no canonical .mdc rules shipped in this build');
-    const resolved = resolveSurfaces(manifest, flags ?? {});
+    const resolved = resolveSurfaces(manifest, flags ?? {}, root);
     return { resolved, bodies, problems, notes, skipped };
   }
 
@@ -376,7 +376,7 @@ export async function ruleBodies(root, manifest, flags) {
   //
   // Nothing is lost by dropping it here: `plan` returns `surfaceProblems` from this same
   // `resolveSurfaces` call, and `checkTargets` reads it independently at project.mjs.
-  const resolved = resolveSurfaces(manifest, flags ?? {});
+  const resolved = resolveSurfaces(manifest, flags ?? {}, root);
 
   // A manifest key that no shipped rule declares is a typo, or a leftover from a rule
   // that was renamed. Both read as "configured" in the one file a reviewer opens to

@@ -26,7 +26,7 @@ import { join } from 'node:path';
 
 import { PACKAGE_ROOT } from '../workspace.mjs';
 import { parseFrontmatter } from '../text/frontmatter.mjs';
-import { LOADERS } from '../projection/loaders.mjs';
+import { loaders } from '../projection/loaders.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { readBefore } from '../diff.mjs';
 import { readIfExists } from '../util/fs.mjs';
@@ -91,8 +91,8 @@ const ADAPTERS = {
 };
 
 /** The reader-table row for a harness's agents directory, or null when none is documented. */
-function agentInfo(id) {
-  const row = LOADERS.find((l) => l.id === id);
+function agentInfo(id, root = null) {
+  const row = loaders(root).find((l) => l.id === id);
   return row?.agents ?? null;
 }
 
@@ -100,18 +100,20 @@ function agentInfo(id) {
  * The path a harness reads the agent from, sourced from the reader table rather
  * than spelled here. Null for a harness that documents no agents directory.
  */
-export function agentPath(id) {
-  const info = agentInfo(id);
+export function agentPath(id, root = null) {
+  const info = agentInfo(id, root);
   return info ? join(info.dir, `${AGENT_STEM}${info.ext}`) : null;
 }
 
 /**
  * Every reader, with the agents path it documents and the note for the ones that
  * do not. The command reports these so a harness this tool does not write is
- * named rather than silent.
+ * named rather than silent. With a root, the table sees the repository's
+ * `.simt/harnesses/` records, so a custom harness that documents an agents
+ * directory is listed.
  */
-export function agentRows() {
-  return LOADERS.map((l) => ({
+export function agentRows(root = null) {
+  return loaders(root).map((l) => ({
     id: l.id,
     label: l.label,
     path: l.agents ? join(l.agents.dir, `${AGENT_STEM}${l.agents.ext}`) : null,
@@ -120,16 +122,16 @@ export function agentRows() {
 }
 
 /** The adapters that both have a reader-table path and a renderer, in reader order. */
-export function adapters() {
-  return agentRows()
+export function adapters(root = null) {
+  return agentRows(root)
     .filter((r) => r.path !== null)
     .map((r) => ADAPTERS[r.id])
     .filter(Boolean);
 }
 
 /** One adapter by id, or null when the harness has no path or no renderer. */
-export function adapter(id) {
-  return ADAPTERS[id] && agentInfo(id) !== null ? ADAPTERS[id] : null;
+export function adapter(id, root = null) {
+  return ADAPTERS[id] && agentInfo(id, root) !== null ? ADAPTERS[id] : null;
 }
 
 /** Parse the neutral frontmatter of the source file: `key: value` lines. */
@@ -227,10 +229,10 @@ export async function planAgents(root, { harness, harnesses = null } = {}) {
   // `harness` stays for a caller that has exactly one id, and null means every adapter,
   // which only a test or an explicit discovery path asks for.
   const wanted = harnesses ?? (harness === undefined ? null : [harness]);
-  const rows = wanted === null ? adapters() : adapters().filter((a) => wanted.includes(a.id));
+  const rows = wanted === null ? adapters(root) : adapters(root).filter((a) => wanted.includes(a.id));
   const plan = [];
   for (const row of rows) {
-    const path = agentPath(row.id);
+    const path = agentPath(row.id, root);
     const existing = await readIfExists(join(root, path));
     const result = rendered(row, agent, existing);
     plan.push({ id: row.id, path, action: result.action, text: result.text });

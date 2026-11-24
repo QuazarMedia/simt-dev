@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 
 import { plan, checkTargets, loadRules } from '../src/projection/project.mjs';
 import { desiredRegion } from '../src/projection/rules.mjs';
-import { canScope, SURFACES, undocumentedKeys } from '../src/projection/surfaces.mjs';
+import { canScope, surfaces, undocumentedKeys } from '../src/projection/surfaces.mjs';
 
 /** Write what a plan decided, the way `sync` does, so a test can gate or read it. */
 async function writePlanned(root, p) {
@@ -74,7 +74,7 @@ test('every surface either keeps the profile at session start or writes the file
   // together. A surface that cannot narrow must keep the body: writing only the scoped
   // file would be a rule that reader never loads.
   const root = await scopedRepo();
-  for (const surface of SURFACES) {
+  for (const surface of surfaces()) {
     const desired = await desiredRegion(root, { surfaces: surface.id });
     if (canScope(surface)) {
       assert.equal(desired.narrowing, true, surface.id);
@@ -178,7 +178,7 @@ test('an empty scope is refused too', async () => {
 // --------------------------------------------------------------- the surface table
 
 test('only surfaces whose scoping key was read in the vendor docs can narrow', () => {
-  const byId = new Map(SURFACES.map((s) => [s.id, s]));
+  const byId = new Map(surfaces().map((s) => [s.id, s]));
   for (const id of ['cursor', 'antigravity', 'copilot']) {
     assert.equal(canScope(byId.get(id)), true, `${id} documents a scoping key`);
   }
@@ -192,7 +192,7 @@ test('every key the scoped shape emits is in the vendor docs, checked on both sh
 });
 
 test('an eager rule still emits no scoping frontmatter (decision 3)', () => {
-  const byId = new Map(SURFACES.map((s) => [s.id, s]));
+  const byId = new Map(surfaces().map((s) => [s.id, s]));
   assert.deepEqual(byId.get('cursor').ruleFrontmatter({ id: 'x', description: 'd', alwaysApply: true }), [
     'description: d',
     'alwaysApply: true',

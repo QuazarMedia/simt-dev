@@ -168,7 +168,7 @@ async function documentsFor(root, surface) {
   }
 
   if (surface.id === 'claude') {
-    const claudeLoader = loader('claude');
+    const claudeLoader = loader('claude', root);
     const seenImports = new Set();
     for (const candidate of ['CLAUDE.md', 'CLAUDE.local.md']) {
       if (!(await isRegularFile(root, candidate))) continue;
@@ -212,7 +212,7 @@ async function documentsFor(root, surface) {
   if (surface.rule) {
     const dir = surface.rule.slice(0, surface.rule.lastIndexOf('/'));
     const suffix = surface.rule.slice(surface.rule.lastIndexOf('.') + 1);
-    const row = loader(surface.id);
+    const row = loader(surface.id, root);
     const ruleEntry = row?.start.find((e) => e.dir === dir && e.atStart) ?? null;
     // Antigravity scans `.agents/rules/` flat (`tree: 'flat'`) and ignores nested
     // directories; Cursor, Claude and Copilot walk subdirectories (`tree: 'nested'`).
@@ -271,7 +271,7 @@ async function documentsFor(root, surface) {
 /** One repository: what its readers load, and what of it this tool wrote. */
 export async function measureRoot(root) {
   const { manifest, exists, error } = await readManifest(root);
-  const resolved = resolveSurfaces(manifest, {});
+  const resolved = resolveSurfaces(manifest, {}, root);
   const documents = [];
   for (const surface of resolved.surfaces) {
     documents.push(...(await documentsFor(root, surface)));
@@ -301,7 +301,7 @@ export async function measureRoot(root) {
     // The gate's own finding, for the same reason `check` uses it: one answer to
     // "does this reader reach the end of the region", so a meter that disagreed with
     // the gate would be a second bug to find.
-    for (const finding of readLimitFindings(text ?? '', regionDoc.file)) {
+    for (const finding of readLimitFindings(text ?? '', regionDoc.file, root)) {
       findings.push(finding.detail);
       readLimits.push({
         file: finding.file,
@@ -316,7 +316,7 @@ export async function measureRoot(root) {
   // chain and per-file caps: Codex's 32 KiB applies to the merged root-to-cwd
   // chain, so a repository where every individual AGENTS.md sits under 32 KiB can still
   // drop its deepest file once merged; Antigravity's 24,000 B cap applies per rule file.
-  const codexLoader = loader('codex');
+  const codexLoader = loader('codex', root);
   if (codexLoader?.cap?.scope === 'chain') {
     for (const dir of await instructionDirs(root)) {
       const view = await viewOf(root, codexLoader, { cwd: join(root, dir) });
@@ -341,7 +341,7 @@ export async function measureRoot(root) {
     }
   }
 
-  const antigravityCap = loader('antigravity')?.cap;
+  const antigravityCap = loader('antigravity', root)?.cap;
   if (antigravityCap?.scope === 'file') {
     for (const doc of documents) {
       if (!doc.file.startsWith('.agents/rules/') || doc.readerBytes <= antigravityCap.bytes) continue;

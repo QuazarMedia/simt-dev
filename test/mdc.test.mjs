@@ -242,8 +242,8 @@ test('rulePaths returns every pointer and named file when no rule dir exists', a
   // list here is the defect this row is about: `GEMINI.md` was missing from it, and from
   // the scanner, for as long as the Antigravity pointer existed — which is precisely the
   // failure the comment on `RULE_FILES` predicted before it happened.
-  const { POINTERS, SURFACES } = await import('../src/projection/surfaces.mjs');
-  const expected = [...new Set([...RULE_FILES, ...POINTERS.map((p) => p.path)])].sort();
+  const { pointers, surfaces } = await import('../src/projection/surfaces.mjs');
+  const expected = [...new Set([...RULE_FILES, ...pointers().map((p) => p.path)])].sort();
 
   // The claim is still worth making: a repository with no rule directory yields only the
   // named documents, not a scan of every surface.
@@ -251,7 +251,7 @@ test('rulePaths returns every pointer and named file when no rule dir exists', a
   const found = (await rulePaths(dir)).map((p) => p.slice(dir.length + 1));
   assert.deepEqual(found, expected);
   assert.ok(!found.some((p) => p.startsWith('.')), 'no surface directory should appear when none exists');
-  assert.ok(SURFACES.some((s) => typeof s.rule === 'string'), 'the glob source must not be empty, or this proves nothing');
+  assert.ok(surfaces().some((s) => typeof s.rule === 'string'), 'the glob source must not be empty, or this proves nothing');
 });
 
 test('every surface that declares a rule path is scanned, and nothing else is', async () => {
@@ -259,8 +259,8 @@ test('every surface that declares a rule path is scanned, and nothing else is', 
   // scanner that names them by hand misses whichever surface was added last, silently:
   // a hand-written rule contradicting a ruling in a directory nobody scans is reported
   // as no contradiction at all.
-  const { SURFACES } = await import('../src/projection/surfaces.mjs');
-  const dirs = SURFACES.filter((s) => typeof s.rule === 'string').map((s) => s.rule.split('/').slice(0, -1).join('/'));
+  const { surfaces } = await import('../src/projection/surfaces.mjs');
+  const dirs = surfaces().filter((s) => typeof s.rule === 'string').map((s) => s.rule.split('/').slice(0, -1).join('/'));
   assert.deepEqual([...new Set(dirs)].sort(), [
     '.agents/rules',
     '.claude/rules',
@@ -328,11 +328,11 @@ test('a surface added later is scanned without anyone editing the scanner', () =
 
   // And the default is the real list, so the parameter is not a way to narrow a scan
   // in production: with no argument it is every shipped surface.
-  const { SURFACES } = surfacesModule;
-  assert.deepEqual(ruleGlobs(), ruleGlobs(SURFACES));
+  const { surfaces } = surfacesModule;
+  assert.deepEqual(ruleGlobs(), ruleGlobs(surfaces()));
   assert.equal(
     ruleGlobs().length,
-    SURFACES.filter((s) => typeof s.rule === 'string').length,
+    surfaces().filter((s) => typeof s.rule === 'string').length,
   );
 });
 

@@ -72,14 +72,19 @@ import { harnessLoaders } from '../harness/records.mjs';
 // The rows are the records' loader facets: one file per harness under
 // `harnesses/`, read by src/harness/records.mjs. The order is the records' loaderOrder,
 // which is the order this table used to spell out, so a truncated report loses the same
-// rows it always lost.
-export const LOADERS = harnessLoaders();
+// rows it always lost. With a root, the table also sees the repository's
+// `.simt/harnesses/` records: a custom harness onboards its reader row by data.
+export function loaders(root = null) {
+  return harnessLoaders(root);
+}
 
-export const LOADER_IDS = LOADERS.map((l) => l.id);
+export function loaderIds(root = null) {
+  return loaders(root).map((l) => l.id);
+}
 
 /** Loader row `id` or null. */
-export function loader(id) {
-  return LOADERS.find((l) => l.id === id) ?? null;
+export function loader(id, root = null) {
+  return loaders(root).find((l) => l.id === id) ?? null;
 }
 
 /**

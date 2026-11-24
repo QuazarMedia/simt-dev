@@ -95,8 +95,8 @@ async function gitHooksSlot(root) {
  */
 async function agentHooksSlot(root) {
   const harnesses = [];
-  for (const row of adapters()) {
-    const path = hookPath(row.id);
+  for (const row of adapters(root)) {
+    const path = hookPath(row.id, root);
     let existing = null;
     try {
       existing = await readFile(join(root, path), 'utf8');

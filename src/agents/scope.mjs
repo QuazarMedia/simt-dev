@@ -15,8 +15,8 @@ import { CLI } from '../name.mjs';
 import { adapter, adapters } from './render.mjs';
 
 /** The sentence every no-scope refusal ends with. One spelling, three commands. */
-function noScopeRemedy() {
-  const ids = adapters().map((row) => row.id);
+function noScopeRemedy(root = null) {
+  const ids = adapters(root).map((row) => row.id);
   return `add "surfaces": ["${ids[0]}"] to the manifest, or pass --harness <id> (one of: ${ids.join(', ')})`;
 }
 
@@ -33,7 +33,7 @@ function noScopeRemedy() {
  * @returns {Promise<{ids?: string[], harnesses?: object[], source?: string, error?: string, remedy?: string}>}
  */
 export async function resolveHarnessScope(root, flags = {}) {
-  const known = new Set(adapters().map((row) => row.id));
+  const known = new Set(adapters(root).map((row) => row.id));
   if (flags.harness !== undefined) {
     if (!known.has(flags.harness)) {
       return {
@@ -41,7 +41,7 @@ export async function resolveHarnessScope(root, flags = {}) {
         remedy: `--harness <id>, one of: ${[...known].join(', ')}`,
       };
     }
-    return { ids: [flags.harness], harnesses: [adapter(flags.harness)], source: 'flag' };
+    return { ids: [flags.harness], harnesses: [adapter(flags.harness, root)], source: 'flag' };
   }
 
   const { manifest } = await readManifest(root).catch(() => ({ manifest: null }));
@@ -52,10 +52,10 @@ export async function resolveHarnessScope(root, flags = {}) {
       ids: [],
       harnesses: [],
       source: 'none',
-      remedy: `nothing to do: no harness is selected. ${noScopeRemedy()}`,
+      remedy: `nothing to do: no harness is selected. ${noScopeRemedy(root)}`,
     };
   }
-  return { ids, harnesses: ids.map((id) => adapter(id)).filter(Boolean), source: 'surfaces' };
+  return { ids, harnesses: ids.map((id) => adapter(id, root)).filter(Boolean), source: 'surfaces' };
 }
 
 /** The line a command prints when it wrote nothing because nothing was selected. */
@@ -63,7 +63,7 @@ export function noScopeLine(root, command) {
   return [
     `repo     ${root}`,
     'SKIP     no harness is selected, so this command has nothing to write',
-    `remedy   ${noScopeRemedy()}`,
+    `remedy   ${noScopeRemedy(root)}`,
     `         then: ${CLI} ${command} --yes`,
   ].join('\n');
 }

@@ -33,12 +33,16 @@ import { harnessPlugins } from './harness/records.mjs';
 import { PACKAGE_NAME, BIN_REL } from './name.mjs';
 
 // The plugin layouts, as records : where each kind's runtime, entry point and hooks
-// document land. A new kind is a new record, not a branch in each helper below.
-const PLUGINS = harnessPlugins();
-const pluginOf = (kind) => PLUGINS.find((r) => r.id === kind);
+// document land. A new kind is a new record, not a branch in each helper below. With a
+// root, the table also sees the repository's `.simt/harnesses/` records: a custom
+// harness onboards its package layout by data.
+const plugins = (root = null) => harnessPlugins(root);
+const pluginOf = (kind, root = null) => plugins(root).find((r) => r.id === kind);
 
 /** The kinds `simt plugin` builds, in the order the help line names them. */
-export const PLUGIN_KINDS = PLUGINS.map((r) => r.id);
+export function pluginKinds(root = null) {
+  return plugins(root).map((r) => r.id);
+}
 
 /**
  * The package this code ships in: the runtime a generated package copies. Resolved
@@ -50,13 +54,13 @@ function packageRoot() {
 }
 
 /** Where the runtime copy lands inside a package, relative to the package root. */
-function runtimeDir(kind) {
-  return pluginOf(kind).runtimeDir;
+function runtimeDir(kind, root = null) {
+  return pluginOf(kind, root).runtimeDir;
 }
 
 /** The entry point a package's config names: its own copy of the runtime, not PATH. */
-function entryPoint(kind) {
-  const { runtimeDir: dir, rootVar } = pluginOf(kind);
+function entryPoint(kind, root = null) {
+  const { runtimeDir: dir, rootVar } = pluginOf(kind, root);
   const bin = join(dir, BIN_REL);
   // The vendor's own variables must survive as literal text in the generated config, so
   // they are escaped here: an unescaped ${...} would interpolate a JS binding that does
@@ -67,8 +71,8 @@ function entryPoint(kind) {
 }
 
 /** The project root a package's hook resolves against, from the vendor's env var. */
-function rootFlag(kind) {
-  const { projectVar } = pluginOf(kind);
+function rootFlag(kind, root = null) {
+  const { projectVar } = pluginOf(kind, root);
   if (!projectVar) {
     // Gemini documents no project-dir env var, but its base input carries cwd, which the
     // adapter reads; passing a flag the vendor never sets would only expand to "".
@@ -80,8 +84,8 @@ function rootFlag(kind) {
 /** Where the hooks document lands inside a package, relative to the package root.
  *  OpenCode is the one whose document is a file the tool loads whole (its root
  *  `server` file) rather than a hooks config to merge. */
-function hooksPath(kind) {
-  return pluginOf(kind).hooksPath;
+function hooksPath(kind, root = null) {
+  return pluginOf(kind, root).hooksPath;
 }
 
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
@@ -93,7 +97,7 @@ const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
  */
 async function packageFiles(kind, { root = process.cwd(), out } = {}) {
   const pkg = JSON.parse(await readFile(join(packageRoot(), 'package.json'), 'utf8'));
-  const command = `${entryPoint(kind)} agent-hook pre-tool-use --harness ${kind}${rootFlag(kind)}`;
+  const command = `${entryPoint(kind, root)} agent-hook pre-tool-use --harness ${kind}${rootFlag(kind, root)}`;
   const files = [];
 
   if (kind === 'claude') {
@@ -135,7 +139,7 @@ async function packageFiles(kind, { root = process.cwd(), out } = {}) {
     });
   }
 
-  files.push({ path: hooksPath(kind), text: hookDocument(kind, { command }) });
+  files.push({ path: hooksPath(kind, root), text: hookDocument(kind, { command }, root) });
   return files;
 }
 
@@ -145,8 +149,9 @@ async function packageFiles(kind, { root = process.cwd(), out } = {}) {
  * the same in both cases, so a dry run and an apply agree on what will land.
  */
 export async function buildPackage(kind, { root = process.cwd(), out, apply = false } = {}) {
-  if (!PLUGIN_KINDS.includes(kind)) {
-    throw new Error(`unknown package kind \`${kind}\`; one of: ${PLUGIN_KINDS.join(', ')}`);
+  const kinds = pluginKinds(root);
+  if (!kinds.includes(kind)) {
+    throw new Error(`unknown package kind \`${kind}\`; one of: ${kinds.join(', ')}`);
   }
 
   const pkg = JSON.parse(await readFile(join(packageRoot(), 'package.json'), 'utf8'));
@@ -165,7 +170,7 @@ export async function buildPackage(kind, { root = process.cwd(), out, apply = fa
   }
 
   if (apply) {
-    const runtimeTarget = join(out, runtimeDir(kind));
+    const runtimeTarget = join(out, runtimeDir(kind, root));
     await mkdir(runtimeTarget, { recursive: true });
     // The runtime is the same set of paths npm publishes (the `files` field) plus
     // package.json. Copying anything less ships a binary that answers the hook and then
@@ -188,7 +193,7 @@ export async function buildPackage(kind, { root = process.cwd(), out, apply = fa
     kind,
     out,
     apply,
-    runtime: { target: runtimeDir(kind), parts: [...pkg.files, 'package.json'] },
+    runtime: { target: runtimeDir(kind, root), parts: [...pkg.files, 'package.json'] },
     files,
     notes,
   };

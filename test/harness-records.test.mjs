@@ -30,6 +30,10 @@ import {
   harnessSurfaces,
   loadHarnesses,
 } from '../src/harness/records.mjs';
+import { surfaces } from '../src/projection/surfaces.mjs';
+import { loaders } from '../src/projection/loaders.mjs';
+import { adapters, hookPath } from '../src/agenthooks/render.mjs';
+import { pluginKinds } from '../src/plugins.mjs';
 
 // The shipped records, read in the test so a view can be pinned against the data it
 // must return unreshaped. The records are the known-good values: they were generated
@@ -171,4 +175,47 @@ test('a root with no .simt/ reads the shipped set alone', async (t) => {
   const root = await tmpRoot();
   t.after(() => rm(root, { recursive: true, force: true }));
   assert.deepEqual(loadHarnesses(root), loadHarnesses());
+});
+
+// The MCP config path was the first view to read a root; the others froze their tables at
+// import time, and a repository that onboarded a harness by data saw it in `mcp install`
+// and nowhere else. This is the net that the non-MCP views read the same records: one
+// repository-local record with every facet they read, and each view must name it.
+test('a repo-local record is visible to the non-MCP views, not just the MCP config path', async (t) => {
+  const root = await tmpRoot();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const local = join(root, '.simt', 'harnesses');
+  await mkdir(local, { recursive: true });
+  await writeFile(
+    join(local, 'custom.json'),
+    JSON.stringify({
+      id: 'custom',
+      surfaceOrder: 99,
+      loaderOrder: 99,
+      pluginOrder: 99,
+      surface: { id: 'custom', label: 'Custom harness', readers: 'a custom agent', primary: null, kind: 'file', rule: null, configDirs: ['.custom'], verified: 'a vendor documents it' },
+      loader: {
+        id: 'custom',
+        label: 'Custom',
+        start: [{ scope: 'project', path: 'AGENTS.md', tree: 'chain', atStart: true, why: 'custom' }],
+        hooks: { path: '.custom/hooks.json', verified: 'a vendor documents it' },
+      },
+      hooks: { id: 'custom', event: 'preToolUse', matcher: '.*', denyExit: 2, allow: { decision: 'allow' }, deny: { decision: 'deny' }, verified: 'a vendor documents it' },
+      plugin: { rootVar: null, projectVar: 'CUSTOM_PROJECT_DIR', hooksPath: '.custom/hooks.json', runtimeDir: '.custom/simt' },
+    }),
+  );
+
+  // The projection view sees the surface row.
+  assert.ok(surfaces(root).some((s) => s.id === 'custom'));
+  // The reader view sees the row, and the hooks file path resolves through it.
+  assert.ok(loaders(root).some((l) => l.id === 'custom'));
+  assert.equal(hookPath('custom', root), '.custom/hooks.json');
+  // The hook dialect view: the record's hooks facet is an adapter.
+  assert.ok(adapters(root).some((a) => a.id === 'custom'));
+  // The package view: the layout is a buildable kind.
+  assert.ok(pluginKinds(root).includes('custom'));
+
+  // Without a root none of the views see it: the shipped set alone, exactly as before.
+  assert.equal(surfaces().some((s) => s.id === 'custom'), false);
+  assert.equal(pluginKinds().includes('custom'), false);
 });

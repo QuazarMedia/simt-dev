@@ -23,7 +23,7 @@
 import { stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
-import { LOADERS, caps } from '../projection/loaders.mjs';
+import { caps, loaders } from '../projection/loaders.mjs';
 import { BYTES_PER_TOKEN } from './context.mjs';
 import { bytes, filesUnder, frontmatter, readText } from './fs.mjs';
 
@@ -375,8 +375,9 @@ export async function expandClaudeImports(
 }
 
 /** Every reader's view of one repository, in table order. */
-export async function viewAll(root, rows = LOADERS, options = {}) {
+export async function viewAll(root, rows = null, options = {}) {
+  const table = rows ?? loaders(root);
   const out = [];
-  for (const row of rows) out.push(await viewOf(root, row, options));
+  for (const row of table) out.push(await viewOf(root, row, options));
   return out;
 }

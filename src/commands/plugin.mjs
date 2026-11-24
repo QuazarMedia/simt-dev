@@ -8,19 +8,12 @@
 
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { buildPackage, PLUGIN_KINDS } from '../plugins.mjs';
+import { buildPackage, pluginKinds } from '../plugins.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
 export async function pluginCommand(args, flags) {
   const kind = args[0];
-  if (!kind || !PLUGIN_KINDS.includes(kind)) {
-    return fail(
-      kind ? `unknown package kind \`${kind}\`` : 'plugin needs a kind',
-      EXIT.USAGE,
-      `one of: ${PLUGIN_KINDS.join(', ')}`,
-    );
-  }
 
   const out = flags.out;
   if (!out) {
@@ -28,7 +21,18 @@ export async function pluginCommand(args, flags) {
   }
 
   const { apply } = writeMode(flags);
+  // Root before the kind check: with a root, the kinds include the repository's own
+  // `.simt/harnesses/` records, so a custom harness is a buildable kind.
   const root = commandRoot(flags);
+  const kinds = pluginKinds(root);
+  if (!kind || !kinds.includes(kind)) {
+    return fail(
+      kind ? `unknown package kind \`${kind}\`` : 'plugin needs a kind',
+      EXIT.USAGE,
+      `one of: ${kinds.join(', ')}`,
+    );
+  }
+
   const plan = await buildPackage(kind, { root, out, apply });
 
   // The `--diff` pairs: the generated files, created or refreshed . The

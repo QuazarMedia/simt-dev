@@ -64,12 +64,17 @@ export async function agentHooksExplainCommand(args, flags) {
   }
 
   const id = flags.harness ?? null;
-  const row = id ? adapter(id) : null;
+  // The repository the command runs in: with a root, a custom harness recorded in its
+  // `.simt/harnesses/` is an explainable one, not just the shipped set. Named for its
+  // source because the payload's own `root` (the directory the agent worked in) arrives
+  // only after the adapter reads it.
+  const cwdRepo = repoRoot(process.cwd());
+  const row = id ? adapter(id, cwdRepo) : null;
   if (row === null) {
     return fail(
       id === null ? 'agent-hooks explain needs --harness' : `unknown harness \`${id}\``,
       EXIT.FAIL,
-      `--harness <id>, one of: ${adapters().map((entry) => entry.id).join(', ')}`,
+      `--harness <id>, one of: ${adapters(cwdRepo).map((entry) => entry.id).join(', ')}`,
     );
   }
 

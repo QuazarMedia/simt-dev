@@ -56,7 +56,7 @@ async function gather(flags) {
   // repository in the estate uses, because a reader works in more than one of these roots
   // and the file is per-machine rather than per-repository.
   const surfaces = [...new Set(rows.flatMap((row) => row.desired.surfaces))];
-  const targets = await sharedTargets(surfaces);
+  const targets = await sharedTargets(surfaces, target.root);
   // Deduped across roots, in the order the first root names them: two roots that both
   // selected a rule and both refused to carry it are one line, not two identical ones.
   const excluded = [];
@@ -382,7 +382,7 @@ export async function sharedWarning(root, manifest, flags) {
   // this repository could do about it — a sibling declares it and `shared plan` reports it.
   const rules = desired.shareable.filter((r) => declared.rules.has(r.id));
   const targets = [];
-  for (const t of await sharedTargets(desired.surfaces)) {
+  for (const t of await sharedTargets(desired.surfaces, root)) {
     if (t.path === null) continue;
     targets.push({ surface: t.surface, path: t.path, ...(await sharedCoverage(t.path, rules)) });
   }

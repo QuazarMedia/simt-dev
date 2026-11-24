@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { LOADERS, caps, loader } from '../src/projection/loaders.mjs';
+import { caps, loader, loaders } from '../src/projection/loaders.mjs';
 import { viewOf } from '../src/measure/loaderView.mjs';
 import { tempDir, keepTemp } from './fixture.mjs';
 import { simt as simtCli } from './fixture.mjs';
@@ -53,7 +53,7 @@ const run = (args) => simtCli(args, { maxBuffer: 16 << 20 }).then(({ code, stdou
 // --- provenance ----------------------------------------------------------------
 
 test('every loader row cites the document each claim came from', () => {
-  for (const row of LOADERS) {
+  for (const row of loaders()) {
     assert.ok(row.verified && row.verified.length > 40, `${row.id} has no provenance`);
     assert.match(row.verified, /read 2026-/, `${row.id} does not say when it was read`);
     assert.ok(row.order, `${row.id} states no concatenation order`);
@@ -82,7 +82,7 @@ test('every loader row cites the document each claim came from', () => {
 });
 
 test('a cap is stated with the scope it applies to', () => {
-  for (const row of LOADERS) {
+  for (const row of loaders()) {
     for (const c of caps(row)) {
       assert.ok(['chain', 'file', 'tokens'].includes(c.scope), `${row.id} cap scope ${c.scope}`);
       assert.ok(c.appliesTo, `${row.id} cap does not say what it applies to`);

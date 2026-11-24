@@ -123,10 +123,10 @@ function fileCap(row) {
  * @returns {Promise<{surface: string, label: string, path: string|null, why: string,
  *   cap: {bytes: number, appliesTo: string, why: string}|null}[]>}
  */
-export async function sharedTargets(surfaces) {
+export async function sharedTargets(surfaces, root = null) {
   const out = [];
   for (const id of [...surfaces].sort()) {
-    const row = loader(id);
+    const row = loader(id, root);
     if (row === null) {
       out.push({
         surface: id,

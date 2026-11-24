@@ -12,8 +12,8 @@ import { surfacesLine } from '../projection/surfaces.mjs';
 
 // The harness ids `--harness` accepts, from the table the renderers read: a second list
 // in this file is the one that would go stale the day a reader is added.
-function harnessIds() {
-  return adapters().map((row) => row.id);
+function harnessIds(root = null) {
+  return adapters(root).map((row) => row.id);
 }
 
 /** Scan whichever rule files exist, named or globbed. A missing file is not a
@@ -138,7 +138,7 @@ function render(payload, manifest, { npm = true, manager = null, version, packag
     // The remedy is the flag the reader did not pass, and the ids it accepts: "no harness
     // was given" without either sends them to the help page for a flag this line can name.
     lines.push(`  ${'skip'.padEnd(9)} agent files and agent-hooks  no --harness given, so no harness is selected`);
-    lines.push(`            remedy: ${CLI} init --harness <id>, one of: ${harnessIds().join(', ')}`);
+    lines.push(`            remedy: ${CLI} init --harness <id>, one of: ${harnessIds(payload.root).join(', ')}`);
   } else if (payload.agentHooks === null) {
     lines.push(`  ${'skip'.padEnd(9)} agent-hooks  opted out with --no-agents; the agent files are skipped with it`);
   } else {

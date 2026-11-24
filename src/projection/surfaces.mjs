@@ -113,9 +113,13 @@ const RULE_FRONTMATTER = {
   copilot: (rule) => [`applyTo: ${rule.scope ? `"${rule.scope.join(',')}"` : '"**"'}`],
 };
 
-export const SURFACES = harnessSurfaces().map((row) =>
-  RULE_FRONTMATTER[row.id] ? { ...row, ruleFrontmatter: RULE_FRONTMATTER[row.id] } : row,
-);
+// With a root, the table also sees the repository's `.simt/harnesses/` records: a
+// custom harness onboards its surface row by data, the way every other facet does.
+export function surfaces(root = null) {
+  return harnessSurfaces(root).map((row) =>
+    RULE_FRONTMATTER[row.id] ? { ...row, ruleFrontmatter: RULE_FRONTMATTER[row.id] } : row,
+  );
+}
 
 /**
  * Pointers: files that must exist and must carry no content.
@@ -125,7 +129,9 @@ export const SURFACES = harnessSurfaces().map((row) =>
  * that fails loudly, whereas a stale copy is a file full of confidently wrong
  * rules that nobody notices for a release.
  */
-export const POINTERS = harnessPointers();
+export function pointers(root = null) {
+  return harnessPointers(root);
+}
 
 /**
  * The global standard: what a repo gets when it has not chosen.
@@ -188,12 +194,11 @@ export function foldsRules(resolved) {
  * file would be absent from a reader that cannot scope it, and a rule nobody loads is
  * worse than a rule that loads eagerly (ADR-071).
  */
-export function canScope(surface) {
-  return surface.rule !== null && surface.rule !== undefined && SCOPE_KEYS.has(surface.id);
+export function canScope(surface, root = null) {
+  return (
+    surface.rule !== null && surface.rule !== undefined && harnessScopeKeys(root).has(surface.id)
+  );
 }
-
-/** Surface ids whose scoping key was read in the vendor's own documentation. */
-const SCOPE_KEYS = harnessScopeKeys();
 
 /**
  * Surfaces whose reader already loads the primary document, so a per-rule file for
@@ -211,7 +216,9 @@ export function readsPrimary(resolved) {
   return foldsRules(resolved) && resolved.surfaces.some((s) => s.readsPrimary === true);
 }
 
-export const SURFACE_IDS = SURFACES.map((s) => s.id);
+export function surfaceIds(root = null) {
+  return surfaces(root).map((s) => s.id);
+}
 
 /**
  * Config directories whose presence implies a harness is in use, for the ones this
@@ -285,9 +292,12 @@ export const CANDIDATE_DIRS = [
  * unrecognised `trigger` is to discard the rule with no message, so the repo looks
  * configured and is not.
  */
-export function undocumentedKeys(surfaceRows = SURFACES) {
+export function undocumentedKeys(surfaceRows = null) {
+  // No argument: the one authority, `surfaces()`. A list passed in is the table to
+  // derive from - the seam the tests use to probe a surface that does not exist.
+  const rows = surfaceRows ?? surfaces();
   const bad = [];
-  for (const s of surfaceRows) {
+  for (const s of rows) {
     if (!s.ruleFrontmatter) continue;
     const documented = Array.isArray(s.documentedKeys) ? s.documentedKeys : [];
     // Both shapes, because a scoping key is emitted only on the scoped shape: probing
@@ -313,8 +323,8 @@ export function undocumentedKeys(surfaceRows = SURFACES) {
 }
 
 /** Surface `id` or null. */
-export function surface(id) {
-  return SURFACES.find((s) => s.id === id) ?? null;
+export function surface(id, root = null) {
+  return surfaces(root).find((s) => s.id === id) ?? null;
 }
 
 /** The absolute-ish path a rule takes on a surface, given the rule's bare name. */
@@ -329,8 +339,8 @@ export function frontmatterBlock(lines) {
   return ['---', ...lines, '---'].join('\n');
 }
 
-export function rulePath(surfaceId, name) {
-  const s = surface(surfaceId);
+export function rulePath(surfaceId, name, root = null) {
+  const s = surface(surfaceId, root);
   if (!s || !s.rule) return null;
   return s.rule.replace('{name}', name);
 }
@@ -346,7 +356,7 @@ export function rulePath(surfaceId, name) {
  * otherwise silently reduce the estate to AGENTS.md, and a repo that believes it
  * is covered by Copilot instructions would not be.
  */
-export function resolveSurfaces(manifest, flags = {}) {
+export function resolveSurfaces(manifest, flags = {}, root = null) {
   const problems = [];
   let ids = null;
   let source = 'default';
@@ -364,13 +374,13 @@ export function resolveSurfaces(manifest, flags = {}) {
   const seen = new Set();
   const chosen = [];
   for (const id of ids) {
-    if (!surface(id)) {
-      problems.push(`unknown surface "${id}"; known: ${SURFACE_IDS.join(', ')}`);
+    if (!surface(id, root)) {
+      problems.push(`unknown surface "${id}"; known: ${surfaceIds(root).join(', ')}`);
       continue;
     }
     if (seen.has(id)) continue;
     seen.add(id);
-    chosen.push(surface(id));
+    chosen.push(surface(id, root));
   }
   return { surfaces: chosen, ids: chosen.map((s) => s.id), source, problems };
 }

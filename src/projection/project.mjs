@@ -31,7 +31,7 @@ import { readLockText } from './lock-file.mjs';
 import { budgetCutFinding } from '../kernel/budget.mjs';
 import { measureRoot } from '../measure/context.mjs';
 import { loadMdcRules } from './mdc.mjs';
-import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
+import { foldsRules, resolveSurfaces, surfaceIds, surfaces } from './surfaces.mjs';
 import { pointerState, pointerTargets, scopedTargets } from './targets.mjs';
 import { CLI, LOCK_FILE, PACKAGE_NAME } from '../name.mjs';
 import { MANIFEST_FILE, WORKFLOW_FILE_NAME } from '../name.mjs';
@@ -130,12 +130,12 @@ export async function plan(root, flags = {}) {
 
 async function projectionTargets(root, flags, desired, includeLock) {
   const { stack, facts, profiles, fallback, notes, body, meta, all, manifest } = desired;
-  const surfaces = resolveSurfaces(manifest, flags);
+  const resolvedSurfaces = resolveSurfaces(manifest, flags, root);
   const [target, mdc, scoped, baselines, packages, lock] = await Promise.all([
     targetFor(root, root, body, meta),
     mdcTargets(root, meta.sha, manifest, flags),
     desired.narrowing === true
-      ? scopedTargets(root, desired.scoped ?? [], meta.sha, surfaces, notes)
+      ? scopedTargets(root, desired.scoped ?? [], meta.sha, resolvedSurfaces, notes)
       : { targets: [] },
     baselineTargets(root, meta.sha, { adopt: flags.baselines === true }),
     packageRegions(root, flags, profiles),
@@ -151,9 +151,9 @@ async function projectionTargets(root, flags, desired, includeLock) {
     facts,
     profiles,
     fallback,
-    surfaces: surfaces.ids,
-    surfaceSource: surfaces.source,
-    surfaceProblems: surfaces.problems,
+    surfaces: resolvedSurfaces.ids,
+    surfaceSource: resolvedSurfaces.source,
+    surfaceProblems: resolvedSurfaces.problems,
     rules: all,
     targets: [target, ...nested, ...mdc.targets, ...scoped.targets, ...baselines.targets, ...(lock ? [lock] : [])],
     packages: packages.regions.map((r) => ({ path: r.path, profiles: r.profiles })),
@@ -337,7 +337,7 @@ export async function checkTargets(root, flags = {}) {
   // packages. Nothing here rebuilds a file.
   const primary = projection.targets.find((t) => t.kind === 'region' && t.file === PRIMARY_TARGET);
   findings.push(...targetFindings(primary));
-  findings.push(...readLimitFindings(primary.previous ?? '', PRIMARY_TARGET));
+  findings.push(...readLimitFindings(primary.previous ?? '', PRIMARY_TARGET, root));
 
   // Every package of a monorepo is a projection root in its own right, so the gate
   // covers it the way it covers the root. A nested region that drifts is as stale as
@@ -440,9 +440,9 @@ export async function checkTargets(root, flags = {}) {
     findings.push(budgetCutFinding({ file: PRIMARY_TARGET, ...packed }));
   }
 
-  const resolved = resolveSurfaces(manifest, flags);
+  const resolved = resolveSurfaces(manifest, flags, root);
   for (const p of resolved.problems) {
-    findings.push({ file: `${MANIFEST_FILE}`, status: 'invalid', detail: p, remedy: `known surfaces: ${SURFACE_IDS.join(', ')}` });
+    findings.push({ file: `${MANIFEST_FILE}`, status: 'invalid', detail: p, remedy: `known surfaces: ${surfaceIds(root).join(', ')}` });
   }
   const signals = new Set([...stack, ...facts]);
   const rules = all.filter((r) => isEligible(r, signals, declared.optIn));
@@ -571,7 +571,7 @@ async function orphanedRuleFiles(root, resolved) {
   // that used to write it, so restricting this to the SELECTED set finds nothing:
   // the one repo that needs the note is the one that dropped the surface. Measured,
   // that was every surface in the estate after the change.
-  for (const s of SURFACES.filter((x) => x.readsPrimary === true && x.rule)) {
+  for (const s of surfaces(root).filter((x) => x.readsPrimary === true && x.rule)) {
     const dir = s.rule.slice(0, s.rule.lastIndexOf('/'));
     if (seen.has(dir)) continue;
     seen.add(dir);
@@ -630,11 +630,11 @@ async function regionOpts(root) {
 // about a region rather than about a diff. It reads the structured fields instead of
 // re-deriving the limit, because a second implementation of "which reader stops, and
 // where" is a second thing to keep right - and a second thing to quote in a message.
-export function readLimitFindings(text, file) {
+export function readLimitFindings(text, file, root = null) {
   const state = parse(text);
   if (state.status !== 'ok' || typeof state.endByte !== 'number') return [];
   const findings = [];
-  for (const surface of SURFACES) {
+  for (const surface of surfaces(root)) {
     if (surface.primary !== file) continue;
     for (const limit of surface.readLimits ?? []) {
       if (state.endByte <= limit.bytes) continue;

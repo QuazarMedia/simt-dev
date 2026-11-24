@@ -24,8 +24,8 @@ import { homedir } from 'node:os';
 import { isAbsolute, join } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
-import { SURFACES, CANDIDATE_DIRS } from '../projection/surfaces.mjs';
-import { LOADERS, LOADER_IDS, caps, loader } from '../projection/loaders.mjs';
+import { surfaces, CANDIDATE_DIRS } from '../projection/surfaces.mjs';
+import { caps, loader, loaderIds, loaders } from '../projection/loaders.mjs';
 import { viewAll } from '../measure/loaderView.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
@@ -98,7 +98,7 @@ export async function harnessCommand(positional, flags) {
  */
 async function scan(root, { mcp = false } = {}) {
   const rows = [];
-  for (const s of SURFACES) {
+  for (const s of surfaces(root)) {
     for (const dir of s.configDirs ?? []) {
       if (await isDirectory(root, dir)) {
         rows.push(row(dir, s.label, { id: s.id, verified: s.verified ?? null, readsAgentsMd: s.readsAgentsMd, rule: s.rule }));
@@ -138,7 +138,7 @@ async function isDirectory(root, dir) {
  */
 async function scanMcpFiles(root) {
   const rows = [];
-  for (const loader of LOADERS) {
+  for (const loader of loaders(root)) {
     const mcp = loader.mcp;
     if (mcp?.path == null) continue;
     const file = join(root, mcp.path);
@@ -259,13 +259,13 @@ function block(scan, pad) {
 export async function harnessLoadersCommand(positional, flags) {
   const root = commandRoot(flags);
   const wanted = typeof flags.reader === 'string' ? flags.reader : null;
-  const rows = wanted === null ? LOADERS : [loader(wanted)].filter(Boolean);
+  const rows = wanted === null ? loaders(root) : [loader(wanted, root)].filter(Boolean);
 
   if (rows.length === 0) {
     return fail(
       `unknown reader "${wanted}"`,
       EXIT.USAGE,
-      `known readers: ${LOADER_IDS.join(', ')}`,
+      `known readers: ${loaderIds(root).join(', ')}`,
     );
   }
 

@@ -17,7 +17,7 @@ import { join } from 'node:path';
 
 import { parse, inject } from './markers.mjs';
 import { ruleName } from './mdc.mjs';
-import { foldsRules, frontmatterBlock, POINTERS, rulePath } from './surfaces.mjs';
+import { foldsRules, frontmatterBlock, pointers, rulePath } from './surfaces.mjs';
 import { foldChecks } from '../kernel/checks.mjs';
 import { frontmatterBlock as extractBlock, stripFrontmatter } from '../text/frontmatter.mjs';
 
@@ -49,11 +49,11 @@ export async function ruleTargets(root, rule, body, sha, resolved, notes) {
     // Skipped, never deleted. ADR-021 ruling 6: `sync` does not remove a file it once
     // generated, so `compare` reports the leftover with a remedy and a human removes it.
     if (folding && s.readsPrimary === true) {
-      const rel = rulePath(s.id, name);
+      const rel = rulePath(s.id, name, root);
       if (rel) notes.push(`${rel}: not written; ${s.label} reads AGENTS.md, where the rule is already folded`);
       continue;
     }
-    const rel = rulePath(s.id, name);
+    const rel = rulePath(s.id, name, root);
     if (!rel) continue;
     const path = join(root, rel);
 
@@ -194,7 +194,7 @@ export function pointerTargets(root, resolved = null) {
     resolved === null
       ? null
       : new Set(resolved.map((s) => (typeof s === 'string' ? s : s.id)));
-  return POINTERS.filter((p) => ids === null || ids.has(p.surface)).map((p) => ({
+  return pointers(root).filter((p) => ids === null || ids.has(p.surface)).map((p) => ({
     file: p.path,
     surface: p.id,
     owner: p.surface,

@@ -11,7 +11,7 @@
 // substring scan reports that file as violating the very rule it is correctly
 // restating. So every match is checked for prohibition context first.
 
-import { POINTERS, SURFACES } from './surfaces.mjs';
+import { pointers, surfaces } from './surfaces.mjs';
 
 /** Files whose text is a hand-written rule surface. Scanned for conflicts only;
  *  generated regions are excluded at read time by the caller.
@@ -38,8 +38,8 @@ export const RULE_FILES = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md'];
  *  not. So one file this tool writes was scanned and the other was not, with nothing
  *  in the source saying which was which: the difference was an accident of the order
  *  the two were added. Derived from `POINTERS` now, so it cannot recur. */
-function pointerFiles() {
-  return POINTERS.map((p) => p.path);
+function pointerFiles(root = null) {
+  return pointers(root).map((p) => p.path);
 }
 
 /**
@@ -56,13 +56,13 @@ function pointerFiles() {
  * *files*, and `CONTRIBUTING.md` belongs to no surface at all.
  *
  * Takes the list as an argument rather than closing over it so the derivation can be
- * shown on a surface that does not exist. The default is `SURFACES`, so every caller
- * still reads the one authority; there is no way to pass anything else in production.
+ * shown on a surface that does not exist. The one authority is `surfaces(root)`, which
+ * the callers in this file pass in; a table passed here is the one to derive from.
  *
- * @param {{rule?: string}[]} [surfaces]
+ * @param {{rule?: string}[]} [surfaceRows]
  */
-export function ruleGlobs(surfaces = SURFACES) {
-  return surfaces.filter((s) => typeof s.rule === 'string').map((s) => {
+export function ruleGlobs(surfaceRows = surfaces()) {
+  return surfaceRows.filter((s) => typeof s.rule === 'string').map((s) => {
     const slash = s.rule.lastIndexOf('/');
     const extension = s.rule.slice(s.rule.lastIndexOf('.'));
     // The FINAL extension, not the whole tail after `{name}`. Copilot's template is
@@ -87,8 +87,8 @@ export function ruleGlobs(surfaces = SURFACES) {
 export async function rulePaths(root) {
   const { readdir } = await import('node:fs/promises');
   const { join } = await import('node:path');
-  const out = [...new Set([...RULE_FILES, ...pointerFiles()])].map((f) => join(root, f));
-  for (const glob of ruleGlobs()) {
+  const out = [...new Set([...RULE_FILES, ...pointerFiles(root)])].map((f) => join(root, f));
+  for (const glob of ruleGlobs(surfaces(root))) {
     const star = glob.lastIndexOf('*');
     const dir = join(root, glob.slice(0, star));
     const tail = glob.slice(star + 1);

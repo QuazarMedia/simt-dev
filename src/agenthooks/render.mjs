@@ -47,7 +47,7 @@
 // fires in a harness whose payload we guessed wrong.
 
 import { CLI } from '../name.mjs';
-import { LOADERS } from '../projection/loaders.mjs';
+import { loaders } from '../projection/loaders.mjs';
 import { harnessHooks, harnessPayloads } from '../harness/records.mjs';
 import { renderOpencodePlugin } from './opencode.mjs';
 import { EVENTS } from './policy.mjs';
@@ -71,14 +71,14 @@ export function hookCommand(id, event = EVENTS[0]) {
 }
 
 /** The path a config file lives at, from the reader table rather than a second list. */
-export function hookPath(id) {
-  const row = LOADERS.find((l) => l.id === id);
+export function hookPath(id, root = null) {
+  const row = loaders(root).find((l) => l.id === id);
   return row?.hooks?.path ?? null;
 }
 
 /** The reader rows that document a hooks file, and the ones that document none. */
-export function hookRows() {
-  return LOADERS.map((l) => ({
+export function hookRows(root = null) {
+  return loaders(root).map((l) => ({
     id: l.id,
     label: l.label,
     path: l.hooks?.path ?? null,
@@ -255,35 +255,38 @@ function applyText(value, text) {
 // `deny`, `prompt.context` and `post.context` apply its templates. Module-internal on
 // purpose: `adapters()` and `adapter()` are the only doors in, and both check the
 // reader table, so an id with no hooks file is no adapter.
-const HOOKS = harnessHooks();
-const PAYLOADS = harnessPayloads();
+const adaptersTable = (root = null) => {
+  const hooks = harnessHooks(root);
+  const payloads = harnessPayloads(root);
+  return Object.fromEntries(
+    Object.entries(hooks).map(([id, h]) => [
+      id,
+      {
+        ...h,
+        root: rootOf(payloads[id]),
+        extract: extractOf(payloads[id]),
+        allow: () => applyText(h.allow, ''),
+        deny: (message) => applyText(h.deny, message),
+        ...(h.prompt ? { prompt: { ...h.prompt, context: (text) => applyText(h.prompt.delivery, text) } } : {}),
+        ...(h.post ? { post: { ...h.post, context: (text) => applyText(h.post.delivery, text) } } : {}),
+      },
+    ]),
+  );
+};
 
-const ADAPTERS = Object.fromEntries(
-  Object.entries(HOOKS).map(([id, h]) => [
-    id,
-    {
-      ...h,
-      root: rootOf(PAYLOADS[id]),
-      extract: extractOf(PAYLOADS[id]),
-      allow: () => applyText(h.allow, ''),
-      deny: (message) => applyText(h.deny, message),
-      ...(h.prompt ? { prompt: { ...h.prompt, context: (text) => applyText(h.prompt.delivery, text) } } : {}),
-      ...(h.post ? { post: { ...h.post, context: (text) => applyText(h.post.delivery, text) } } : {}),
-    },
-  ]),
-);
-
-/** The six adapters, in the order the reader table lists them. */
-export function adapters() {
-  return hookRows()
+/** The adapters, in the order the reader table lists them. With a root, a repository's
+ *  `.simt/harnesses/` records are adapters too, so their hooks dialect is rendered. */
+export function adapters(root = null) {
+  const table = adaptersTable(root);
+  return hookRows(root)
     .filter((r) => r.path !== null)
-    .map((r) => ADAPTERS[r.id])
+    .map((r) => table[r.id])
     .filter(Boolean);
 }
 
-export function adapter(id) {
-  const row = ADAPTERS[id];
-  return row && hookPath(id) !== null ? row : null;
+export function adapter(id, root = null) {
+  const row = adaptersTable(root)[id];
+  return row && hookPath(id, root) !== null ? row : null;
 }
 
 /**
@@ -498,8 +501,8 @@ export function rendered(row, existing, options = {}) {
  * and only the entry point differs — the package's copy of the binary, named by `command`.
  * Returns null for a harness this tool has no adapter for or that documents no hooks file.
  */
-export function hookDocument(id, { command, prompt = false, post = false } = {}) {
-  const row = adapter(id);
+export function hookDocument(id, { command, prompt = false, post = false } = {}, root = null) {
+  const row = adapter(id, root);
   if (!row) return null;
   if (row.file) return renderOpencodePlugin({ command: command ?? hookCommand(id), prompt });
   const config = withHook(row, {}, { prompt, post, command });

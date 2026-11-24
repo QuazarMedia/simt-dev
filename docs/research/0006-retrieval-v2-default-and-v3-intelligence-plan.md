@@ -502,7 +502,7 @@ Columns follow `templates/plan/tracker.json`. `Lane` names disjoint file sets so
 | V07 | Fair budget accounting, soft `SUBTASKS` & subtask floor | 1 | composite | M | V06 | M | P1 | MSC@2048>=0.85, MFC>=0.80; legacy pack beats v1 | Complete | c822b36 · test: node --test test/brief-fair-budget.test.mjs test/brief-submodular.test.mjs test/brief-render.test.mjs test/brief-multitask.test.mjs |
 | V08 | SQLite-native 10k-file acceleration (`map` & `why`) | 1 | perf | L | V01 | L | — | warm 10k p50: `map<=80ms`, `why<=15ms`, `brief<=130ms` | Complete | dd3e84c · test: node --test test/scale-latency-regression.test.mjs test/map.test.mjs test/why-graph.test.mjs |
 | V09 | Track A paired qualification & 10k scale verification | 2 | rollout | M | V02, V05, V07, V08 | M | P1 | v2 beats v1 on every stratum & latency bar | Complete | 0ee65b2 |
-| V10 | Promote v2 to default & ratify superseding ADR | 2 | rollout | S | V09 | S | P1 | v2 default; `--retrieval v1` rollback; isolated suite 100% | Queued | — |
+| V10 | Promote v2 to default & ratify superseding ADR | 2 | rollout | S | V09 | S | P1 | v2 default; `--retrieval v1` rollback; isolated suite 100% | Complete | 082b61f |
 | V11 | Commit-history IR channel (`commit_fts`, v7 schema) | 3 | history | M | V10 | M | P2 | `Locus`/`AmaLgam` maxp+sum2 channel; <=15ms refresh | Queued | — |
 | V12 | Repo-mined bilingual PMI concept thesaurus (`concept_map`) | 3 | history | L | V11 | L | P2 | zero-overlap vocab-gap recovery; 0% drift on exact queries | Queued | — |
 | V13 | Post-retrieval QPP-weighted adaptive fusion (NQC + gap) | 3 | rank | M | V10 | M | P3 | zero Fusion Tax; QPP weights beat static RRF + `--explain` | Queued | — |

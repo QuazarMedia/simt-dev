@@ -20,25 +20,28 @@ test('retrieval mode and graph switches restore documented behavior on the same 
   const manifest = join(root, 'simt.json');
   await writeFile(join(root, 'a.mjs'), 'import "./b.mjs";\nexport function a() { return 1; }\n');
   await writeFile(join(root, 'b.mjs'), 'import "./a.mjs";\nexport function b() { return 1; }\n');
-  await writeFile(manifest, JSON.stringify({ brief: { retrieval: 'v2' }, limits: { graph: { cycles: true } } }));
+  await writeFile(manifest, JSON.stringify({ brief: {}, limits: { graph: { cycles: true } } }));
   await ensureGit(root);
-  await reindex(root, { fielded: true });
+  await reindex(root);
   const index = join(root, SQLITE_FILE);
   const original = await readFile(index);
 
   const task = 'Fix a.mjs and document b.mjs';
-  assert.deepEqual((await document(root, 'map', [], { task })).files,
-    (await document(root, 'map', [], { task, retrieval: 'v1' })).files);
-  const experimental = await document(root, 'brief', [task], { retrieval: 'v2' });
-  assert.equal(experimental.subtasks.length, 2);
+  const defaultMap = await document(root, 'map', [], { task });
+  assert.equal(defaultMap.retrieval, 'v2');
+  assert.deepEqual(defaultMap.files, (await document(root, 'map', [], { task, retrieval: 'v2' })).files);
+  assert.equal((await document(root, 'map', [], { task, retrieval: 'v1' })).retrieval, undefined);
+  const defaultBrief = await document(root, 'brief', [task]);
+  assert.equal(defaultBrief.retrieval, 'v2');
+  assert.equal(defaultBrief.subtasks.length, 2);
   assert.equal((await document(root, 'brief', [task], { retrieval: 'v1' })).subtasks, undefined);
   assert.equal((await promptOptIn(root)).retrieval, 'v2');
   assert.ok((await document(root, 'check')).findings.some(({ status }) => status === 'import-cycle'));
   assert.ok(Array.isArray((await document(root, 'why', ['a.mjs'])).witnesses?.command));
   assert.equal((await document(root, 'why', ['a.mjs'], { retrieval: 'v1' })).witnesses, undefined);
 
-  await writeFile(manifest, JSON.stringify({ brief: {} }));
-  assert.equal((await promptOptIn(root)).retrieval, undefined);
+  await writeFile(manifest, JSON.stringify({ brief: { retrieval: 'v1' } }));
+  assert.equal((await promptOptIn(root)).retrieval, 'v1');
   assert.ok((await document(root, 'check')).findings.every(({ status }) => status !== 'import-cycle'));
   assert.deepEqual(await readFile(index), original);
 });

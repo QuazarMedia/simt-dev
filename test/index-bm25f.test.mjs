@@ -52,7 +52,7 @@ test('native weighted FTS5 and in-memory BM25F agree on ordered section scores',
 
 test('migrates a v5 database without changing baseline ranking, then updates fielded rows incrementally', async () => {
   const root = await fixture();
-  await reindex(root);
+  await reindex(root, { fielded: false });
   const database = new DatabaseSync(join(root, SQLITE_FILE));
   try {
     database.exec(`drop table fts;
@@ -71,7 +71,7 @@ test('migrates a v5 database without changing baseline ranking, then updates fie
   assert.ok(legacy.length > 0);
   assert.deepEqual(await searchFtsBm25F(root, 'refresh token'), []);
 
-  await reindex(root);
+  await reindex(root, { fielded: false });
   assert.deepEqual(await readFts(root), legacy);
   assert.deepEqual(await searchFtsBm25(root, 'refresh token'), ranking);
   assert.deepEqual((await readGraph(root)).files, files);
@@ -83,7 +83,7 @@ test('migrates a v5 database without changing baseline ranking, then updates fie
     version.close();
   }
 
-  await reindex(root, { fielded: true });
+  await reindex(root);
   assert.equal((await searchFtsBm25F(root, 'refreshTokenRotation'))[0].path, 'src/auth.mjs');
   await writeFile(join(root, 'src', 'auth.mjs'), 'export const validateReceipt = true;\n');
   await git(['add', 'src/auth.mjs'], { cwd: root });

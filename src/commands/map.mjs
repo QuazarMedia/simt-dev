@@ -4,6 +4,7 @@
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
+import { retrievalMode } from '../index/retrieval-mode.mjs';
 import { searchFtsBm25, searchFtsBm25FBundle } from '../index/store.mjs';
 import {
   DEFAULT_BUDGET,
@@ -30,9 +31,9 @@ export async function mapCommand(args, flags) {
     return fail(`budget must be a non-negative integer`, EXIT.USAGE, `run: ${CLI} map --budget 2048`);
   }
   const task = typeof flags.task === 'string' ? flags.task : '';
-  const retrieval = flags.retrieval ?? (flags.explain === true ? 'v2' : 'v1');
-  if (retrieval !== 'v1' && retrieval !== 'v2') {
-    return fail(`unknown retrieval version ${retrieval}`, EXIT.USAGE, 'use --retrieval v1 or v2');
+  const retrieval = retrievalMode(flags.retrieval);
+  if (retrieval === null) {
+    return fail(`unknown retrieval version ${flags.retrieval}`, EXIT.USAGE, 'use --retrieval v1 or v2');
   }
   const experimental = retrieval === 'v2';
   const searching = task.trim().length > 0;

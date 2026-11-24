@@ -311,7 +311,7 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
       }
     }
   }
-  if (graph.stale) add('CAUTIONS', 'stale', 'The live index has incomplete source evidence. Run simt index --retrieval v2.', 0, 1, true);
+  if (graph.stale) add('CAUTIONS', 'stale', 'The live index has incomplete source evidence. Run simt index.', 0, 1, true);
 
   const items = candidates.items();
   const drillDown = detailCommands(task, tasks, { paths: named, selected: subtask });

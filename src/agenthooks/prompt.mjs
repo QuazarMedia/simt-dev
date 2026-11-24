@@ -49,7 +49,7 @@ export async function promptOptIn(root) {
   const declared = manifest.brief?.bytes;
   const asked = Number.isFinite(declared) && declared > 0 ? declared : PROMPT_CAP_BYTES;
   return { optedIn: true, bytes: Math.min(Math.max(1, Math.floor(asked)), PROMPT_CAP_BYTES),
-    ...(manifest.brief.retrieval === 'v2' ? { retrieval: 'v2' } : {}),
+    retrieval: manifest.brief.retrieval === 'v1' ? 'v1' : 'v2',
   };
 }
 

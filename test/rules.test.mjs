@@ -198,6 +198,9 @@ test('every partial supersession in the corpus is found, with its kind and its r
     // guarantee for the guarded writer path, and the index applies that claim to the
     // target record rather than rewriting its status line.
     'ADR-212',
+    // ADR-252 joined when ADR-256 landed: its frontmatter supersedes ruling 1's opt-in
+    // default for retrieval v2 once Track A qualification passed.
+    'ADR-252',
   ]);
   for (const d of decisions) {
     for (const p of d.partial) {

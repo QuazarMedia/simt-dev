@@ -276,7 +276,7 @@ export async function reindex(root, opts = {}) {
   const adapter = await resolveAdapter(root, opts);
   const stored = await readBuildMeta(root);
   const hadFielded = stored.meta.fts_fields === '1';
-  const fielded = hadFielded || opts.fielded === true;
+  const fielded = hadFielded || opts.fielded !== false;
   const inputs = inputsDigest(root, { adapter, packages });
   const priorInputs = version === '5' ? inputsDigest(root, { adapter, packages, schema: version }) : inputs;
   const resolution = resolutionDigest(root, listed);

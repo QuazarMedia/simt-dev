@@ -593,8 +593,11 @@ test('experimental map explains exact entity, lexical, graph and coupling contri
   assert.equal(index.code, 0, index.stdout + index.stderr);
   assert.equal((await invoke(['--task', 'resolveToken', '--explain'])).stdout, cold.stdout);
   const plain = JSON.parse((await invoke(['--task', 'resolveToken'])).stdout);
-  assert.equal(plain.retrieval, undefined);
+  assert.equal(plain.retrieval, 'v2');
   assert.equal(plain.evidence, undefined);
+  const legacy = JSON.parse((await invoke(['--task', 'resolveToken', '--retrieval', 'v1'])).stdout);
+  assert.equal(legacy.retrieval, undefined);
+  assert.equal(legacy.evidence, undefined);
 
   const context = JSON.parse((await invoke(['--task', 'kaleidoscope', '--explain'])).stdout);
   assert.equal(context.basis, 'unmatched');

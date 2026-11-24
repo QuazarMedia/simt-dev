@@ -263,3 +263,4 @@ in [architecture/history.md](architecture/history.md).
 | [253](decisions/ADR-253-the-commit-message-opens-with-what.md) | The commit message opens with What | accepted · 2026-11-22 |
 | [254](decisions/ADR-254-the-gate-ceiling-sizes-to-the-slowest-runner.md) | the gate ceiling sizes to the slowest runner, not the authoring machine | accepted · 2026-11-22 |
 | [255](decisions/ADR-255-wall-clock-bars-size-to-the-slowest-qualifying-host.md) | wall-clock bars size to the slowest qualifying host, not the authoring machine | accepted · 2026-11-23 |
+| [256](decisions/ADR-256-retrieval-v2-is-the-default.md) | Retrieval v2 is the default | accepted · 2026-11-24 · V10 |

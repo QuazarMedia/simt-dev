@@ -4,7 +4,8 @@
       "simt": {
         "type": "local",
         "command": [
-          "simt",
+          "/Users/saidelimam/.nvm/versions/node/v26.7.0/bin/node",
+          "/Users/saidelimam/Documents/GitHub/simt/simt-dev/bin/simt.mjs",
           "mcp"
         ]
       }

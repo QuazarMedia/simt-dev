@@ -62,7 +62,7 @@ silent, never a skip.
 
 | id | state | slice | evidence |
 | --- | --- | --- | --- |
-| PT01 | In progress | ADR-258 record in `docs/decisions/` | — |
+| PT01 | Complete | ADR-258 record in `docs/decisions/` | 4ba1909428c8c4f6105c03509ec7e07f8e395b12 |
 | PT02 | Queued | `src/hooks/focused-push.mjs` + extract `src/testing/focused-run.mjs` + test | — |
 | PT03 | Queued | dispatcher wiring + manifest validation + self-adoption + test | — |
 | PT04 | Queued | ledger evidence test for `test-focused` | — |

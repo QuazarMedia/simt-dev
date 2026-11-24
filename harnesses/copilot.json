@@ -78,8 +78,8 @@
     "agentsNote": "no file-based agents are documented for Copilot in any first-party page checked on 2026-10-30",
     "mcp": {
       "path": ".vscode/mcp.json",
-      "key": null,
-      "verified": "GitHub Copilot MCP docs (read 2026-10-14): the VS Code extension reads .vscode/mcp.json; Copilot CLI reads .mcp.json, .github/mcp.json or ~/.copilot/mcp-config.json; a repository-level configuration entered on github.com is not a file at all"
+      "key": "servers",
+      "verified": "VS Code MCP configuration reference (code.visualstudio.com/docs/agents/reference/mcp-configuration, read 2026-11-24): the editor-managed .vscode/mcp.json uses a `servers` container and every entry requires a `type` (`stdio` for command/args, `http`/`sse` for url); the native Copilot harness instead reads ~/.copilot/mcp-config.json and a workspace-root .mcp.json in the `mcpServers` format - not a project file this tool can own without colliding with claude's .mcp.json; the Local harness is deprecated, removal February 2027"
     },
     "verified": "GitHub Copilot documentation (docs.github.com/en/copilot, read 2026-10-14) — repository-wide instructions live at .github/copilot-instructions.md; path-specific instructions live at .github/instructions/**/NAME.instructions.md with applyTo globs and an optional excludeAgent; agent instructions are one or more AGENTS.md anywhere in the repository, nearest wins, or a single root CLAUDE.md or GEMINI.md; no byte cap is published",
     "note": "Which Copilot reader consumes these differs — the cloud agent and code review are documented as reading repository and path-specific instructions — so the row is one reader with a split, the same split `surfaces.mjs` records on the copilot row."

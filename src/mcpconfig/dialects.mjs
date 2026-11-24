@@ -9,7 +9,7 @@
 
 import { loadHarnesses } from '../harness/records.mjs';
 
-/** Every dedicated MCP config file this tool knows names its servers under `mcpServers`. */
+/** A dedicated MCP config file names its servers under `mcpServers` unless the facet names its own key. */
 const DEDICATED_CONTAINER = 'mcpServers';
 
 /**
@@ -30,8 +30,9 @@ export function dialects(root = null) {
       id: record.id,
       path: mcp.path,
       format: mcp.path.endsWith('.toml') ? 'toml' : 'json',
-      // A shared config file keeps the key the facet names; a dedicated file is a
-      // single-purpose document whose container is the vendor constant.
+      // The key the facet names wins for any file - shared (opencode's `mcp.servers`)
+      // or dedicated (copilot's editor-managed `servers`); the vendor constant is the
+      // fallback for a dedicated file whose facet names none.
       container: mcp.key ?? DEDICATED_CONTAINER,
     };
   }
@@ -40,17 +41,21 @@ export function dialects(root = null) {
 
 /**
  * The entry a server's transport renders to, in the shape the harness reads. Most
- * harnesses take `command` + `args` for stdio, `url` for http; opencode V2 requires a
- * `type` and a single `command` array, and ignores the pair - verified: `opencode mcp
- * list` reported no servers against the old shape. Status and install render from this
- * one call with the dialect row's id, so they cannot disagree about what an entry means.
+ * harnesses take `command` + `args` for stdio, `url` for http; two deviate. opencode V2
+ * requires a `type` and a single `command` array, and ignores the pair - verified:
+ * `opencode mcp list` reported no servers against the old shape. VS Code's editor-managed
+ * .vscode/mcp.json requires a `type` on every entry - the same class of defect: a shape
+ * the reader silently drops. Status and install render from this one call with the
+ * dialect row's id, so they cannot disagree about what an entry means.
  */
 export function renderEntry(server, harness = null) {
   if (server.transport.type === 'stdio') {
     if (harness === 'opencode') return { type: 'local', command: [server.transport.command, ...(server.transport.args ?? [])] };
+    if (harness === 'copilot') return { type: 'stdio', command: server.transport.command, args: server.transport.args ?? [] };
     return { command: server.transport.command, args: server.transport.args ?? [] };
   }
   if (harness === 'opencode') return { type: 'remote', url: server.transport.url };
+  if (harness === 'copilot') return { type: 'http', url: server.transport.url };
   return { url: server.transport.url };
 }
 

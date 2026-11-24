@@ -105,17 +105,21 @@ test('dialects: one row per harness, and the facet stays the source of location'
   assert.equal(table.cursor.path, '.cursor/mcp.json');
   // A shared config file keeps the key its facet names, nested for opencode.
   assert.equal(table.opencode.container, 'mcp.servers');
+  // A dedicated file the facet names its own container for: VS Code's editor-managed format.
+  assert.equal(table.copilot.container, 'servers');
   // A harness whose servers are a plugin row has no file this tool reads.
   assert.equal(table.deepseek.path, null);
 });
 
-test('renderEntry: opencode reads the V2 shape, every other harness the pair', () => {
+test('renderEntry: opencode and copilot read their typed shapes, every other harness the pair', () => {
   const server = sample().servers[0];
   assert.deepEqual(renderEntry(server), { command: 'simt', args: ['mcp'] });
   assert.deepEqual(renderEntry(server, 'opencode'), { type: 'local', command: ['simt', 'mcp'] });
+  assert.deepEqual(renderEntry(server, 'copilot'), { type: 'stdio', command: 'simt', args: ['mcp'] });
   const http = { id: 'x', transport: { type: 'http', url: 'https://m' } };
   assert.deepEqual(renderEntry(http), { url: 'https://m' });
   assert.deepEqual(renderEntry(http, 'opencode'), { type: 'remote', url: 'https://m' });
+  assert.deepEqual(renderEntry(http, 'copilot'), { type: 'http', url: 'https://m' });
 });
 
 test('canonical: key order is not drift', () => {
@@ -280,6 +284,32 @@ test('opencode: install writes the V2 entry, and status reads that shape back', 
     await writeFile(join(dir, 'opencode.json'), JSON.stringify({ mcp: { servers: { simt: { command: 'simt', args: ['mcp'] } } } }));
     const stale = await mcpStatus(dir, { ids: ['opencode'] }, registry);
     assert.equal(stale.rows.find((r) => r.id === 'opencode').state, 'drift');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('copilot: install writes the servers container with a type, and status reads it back', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    const registry = sample();
+    const { changes, problems } = await planMcpInstall(dir, { ids: ['copilot'] }, registry);
+    assert.deepEqual(problems, []);
+    const change = changes.find((c) => c.path === '.vscode/mcp.json');
+    // The editor-managed format: a `servers` container, and a `type` on every entry.
+    assert.deepEqual(JSON.parse(change.after).servers.simt, { type: 'stdio', command: 'simt', args: ['mcp'] });
+    await mkdir(join(dir, '.vscode'), { recursive: true });
+    await writeFile(join(dir, '.vscode/mcp.json'), change.after);
+    const fresh = await mcpStatus(dir, { ids: ['copilot'] }, registry);
+    assert.equal(fresh.rows.find((r) => r.id === 'copilot').state, 'present');
+    // An entry in the right container without the required type is drift; an entry in
+    // the container this tool used to write is absent - it is not where the reader looks.
+    await writeFile(join(dir, '.vscode/mcp.json'), JSON.stringify({ servers: { simt: { command: 'simt', args: ['mcp'] } } }));
+    const stale = await mcpStatus(dir, { ids: ['copilot'] }, registry);
+    assert.equal(stale.rows.find((r) => r.id === 'copilot').state, 'drift');
+    await writeFile(join(dir, '.vscode/mcp.json'), JSON.stringify({ mcpServers: { simt: { command: 'simt', args: ['mcp'] } } }));
+    const old = await mcpStatus(dir, { ids: ['copilot'] }, registry);
+    assert.equal(old.rows.find((r) => r.id === 'copilot').state, 'absent');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -111,6 +111,9 @@ export const KEYS = [
   { key: 'gates.cwd', owner: 'repo', since: '0.10.0', check: (v) => (isStringMap(v) ? null : 'gates.cwd must be an object of gate name to a directory') },
   { key: 'gates.evidence', owner: 'repo', since: '0.10.0', check: (v) => (v === 'warn' || v === 'block' ? null : 'gates.evidence must be "warn" or "block"') },
   { key: 'gates.prePushSkipTest', owner: 'repo', since: '0.10.0', check: (v) => skipTestProblem(v) },
+  // ADR-258: the commit count at or below which a pre-push runs only the tests that
+  // import its files. Absent means 1, so a single-commit push is focused by default.
+  { key: 'gates.prePushFocusedCommits', owner: 'repo', since: '0.14.0', check: (v) => (isPositiveInt(v) ? null : 'gates.prePushFocusedCommits must be a positive integer') },
   { key: 'localSkills', owner: 'repo', since: '0.7.0', check: (v) => (isSkillList(v) ? null : 'localSkills must be a list of skill ids or provenance records') },
   { key: 'profiles', owner: 'repo', since: '0.8.0', check: (v) => (isStringList(v) ? null : 'profiles must be a list of profile ids') },
   { key: 'substitutions', owner: 'repo', since: '0.8.0', check: (v) => (isObject(v) ? null : 'substitutions must be an object keyed by rule id') },

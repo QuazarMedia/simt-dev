@@ -4,6 +4,6 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 
 | Command | Flags | What it does |
 | --- | --- | --- |
-| `simt impact <file\|symbol\|file#symbol>... \| --changed \| --task "<prompt>" [--only <section>]` | `--all`, `--changed`, `--only`, `--retrieval`, `--task`, `--with-knowledge` | trace the import closure, tests and related evidence for a change |
+| `simt impact <file\|symbol\|file#symbol>... \| --changed \| --task "<prompt>" [--only <section>] [--max-hops <n>]` | `--all`, `--changed`, `--max-hops`, `--only`, `--retrieval`, `--task`, `--with-knowledge` | trace the import closure, tests and related evidence for a change |
 
 None of these write to the repository.

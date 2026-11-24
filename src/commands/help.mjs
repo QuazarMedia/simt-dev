@@ -334,6 +334,7 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --json                 structured output (compact; one document, one line)
 --pretty                indent --json for a human
 --max-bytes <n>         hard ceiling on emitted bytes (0 = unlimited, default 0)
+--max-hops <n>          impact: cap the importer walk at n hops (a direct importer is 1)
 --budget <n>            context budget for a brief (default 2048)
 --only <section>        brief: emit only one section (skills)
 --all                   skills brief: the whole packet, no byte ceiling

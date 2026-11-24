@@ -35,6 +35,12 @@ test('dependents are the importers, and the last CODEOWNERS line wins', () => {
   assert.equal(reach.truncated, false);
   const capped = dependents('src/keep.mjs', imports, 1);
   assert.equal(capped.truncated, true);
+  // test/mid.test.mjs sits at hop 3: a depth cap of 2 leaves the importers whole
+  // and cuts the test, saying it was cut - not an uncapped answer with a cap on it.
+  const hopCapped = dependents('src/keep.mjs', imports, 64, 2);
+  assert.deepEqual(hopCapped.importers, ['src/mid.mjs', 'src/use.mjs']);
+  assert.deepEqual(hopCapped.tests, []);
+  assert.equal(hopCapped.truncated, true);
   assert.deepEqual(ownersOf('*\t@platform\nsrc/keep.mjs @api\n', 'src/keep.mjs'), ['@api']);
   assert.deepEqual(ownersOf('*\t@platform\nsrc/keep.mjs @api\n', 'src/other.mjs'), ['@platform']);
 });
@@ -159,6 +165,81 @@ test('impact --only answers with one section, filtered or refused', async () => 
     assert.match(refused.stderr, /one of importers, tests, cochange, conceptual, governs, owners, consumers/);
   } finally {
     await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test('impact --max-hops caps the walk by depth, in both channels', async () => {
+  // The chain a <- b <- c <- test/c.test.mjs puts each kind of edge on its own hop,
+  // so a cap of 1 and a cap of 2 cut at visibly different places.
+  const root = await mkdtemp(join(tmpdir(), 'idx-impact-hops-'));
+  try {
+    await mkdir(join(root, 'src'), { recursive: true });
+    await mkdir(join(root, 'test'), { recursive: true });
+    await writeFile(join(root, 'src', 'a.mjs'), 'export function a() { return 1; }\n');
+    await writeFile(join(root, 'src', 'b.mjs'), "import { a } from './a.mjs';\nexport function b() { return a(); }\n");
+    await writeFile(join(root, 'src', 'c.mjs'), "import { b } from './b.mjs';\nexport function c() { return b(); }\n");
+    await writeFile(join(root, 'test', 'c.test.mjs'), "import { c } from '../src/c.mjs';\n");
+    await git(['init', '-q', root]);
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'chain']);
+
+    const run = (flags) => capture(() => impactCommand(['src/a.mjs'], { root, workspace: 'off', json: true, ...flags }));
+
+    const full = await run({});
+    assert.equal(full.code, 0, full.stderr);
+    const whole = JSON.parse(full.stdout);
+    assert.deepEqual(whole.importers, ['src/b.mjs', 'src/c.mjs']);
+    assert.deepEqual(whole.tests, ['test/c.test.mjs']);
+    assert.equal(whole.truncated, false);
+
+    const one = await run({ maxHops: 1 });
+    assert.equal(one.code, 0, one.stderr);
+    const cutOne = JSON.parse(one.stdout);
+    assert.deepEqual(cutOne.importers, ['src/b.mjs']);
+    assert.deepEqual(cutOne.tests, []);
+    // The walk stopped because it was asked to, so the list says it is cut.
+    assert.equal(cutOne.truncated, true);
+
+    const two = await run({ maxHops: 2 });
+    assert.equal(two.code, 0, two.stderr);
+    const cutTwo = JSON.parse(two.stdout);
+    assert.deepEqual(cutTwo.importers, ['src/b.mjs', 'src/c.mjs']);
+    assert.deepEqual(cutTwo.tests, []);
+    assert.equal(cutTwo.truncated, true);
+
+    // The v1 channel caps identically: a walk that cut importers at one depth must cut
+    // tests at the same depth, not answer them from the uncapped closure.
+    const v1 = await run({ retrieval: 'v1', maxHops: 2 });
+    assert.equal(v1.code, 0, v1.stderr);
+    const v1Doc = JSON.parse(v1.stdout);
+    assert.deepEqual(v1Doc.importers, ['src/b.mjs', 'src/c.mjs']);
+    assert.deepEqual(v1Doc.tests, []);
+    assert.equal(v1Doc.truncated, true);
+
+    // The precise channel caps the same way: rows at the cap are reported, their
+    // expansion is not, and the cut is said out loud.
+    const v2 = await run({ retrieval: 'v2', maxHops: 1 });
+    assert.equal(v2.code, 0, v2.stderr);
+    const v2Doc = JSON.parse(v2.stdout);
+    assert.deepEqual(v2Doc.importers, ['src/b.mjs']);
+    assert.equal(v2Doc.truncated, true);
+
+    // The MCP door threads the cap through like the CLI does.
+    const tool = TOOLS.find(({ name }) => name === 'impact');
+    const mcp = await tool.run({ root, targets: ['src/a.mjs'], workspace: 'off', maxHops: 2 });
+    assert.deepEqual(mcp.importers, ['src/b.mjs', 'src/c.mjs']);
+    assert.equal(mcp.truncated, true);
+
+    // A non-integer cap is a usage error at both doors, not a walk of a guessed depth.
+    const refused = await run({ maxHops: 'two' });
+    assert.equal(refused.code, 2);
+    assert.match(refused.stderr, /--max-hops must be a positive integer/);
+
+    const argv = await simt(['impact', 'src/a.mjs', '--max-hops', 'zero'], { cwd: root });
+    assert.equal(argv.code, 2);
+    assert.match(argv.stderr, /--max-hops must be a positive integer/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });
 

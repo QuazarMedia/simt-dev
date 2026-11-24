@@ -172,6 +172,9 @@ export const VALUE_FLAGS = new Set([
   // for an ephemeral port and any other number names the one the caller wants.
   'port',
   'paths',
+  // impact: how many hops the reverse walk may take. A value, not a switch, because
+  // "cap the walk" without a number would have to guess how deep the reader wants it.
+  'max-hops',
   // agent-hooks explain: the harness JSON to read when a harness pipes nothing. A value
   // rather than a switch, because a payload with no file named would have to be guessed.
   'payload',
@@ -384,12 +387,12 @@ export function parse(argv) {
           return { ok: false, error: usage(`--${raw} must be a non-negative integer, received ${value}`) };
         }
         flags[camel(raw)] = n;
-      } else if (raw === 'reps') {
+      } else if (raw === 'reps' || raw === 'max-hops') {
         const n = Number(value);
         if (!Number.isInteger(n) || n < 1) {
-          return { ok: false, error: usage(`--reps must be a positive integer, received ${value}`) };
+          return { ok: false, error: usage(`--${raw} must be a positive integer, received ${value}`) };
         }
-        flags.reps = n;
+        flags[camel(raw)] = n;
       } else if (raw === 'port') {
         const n = Number(value);
         if (!Number.isInteger(n) || n < 0 || n > 65535) {

@@ -23,13 +23,14 @@ const CONTRACT_EXT = new Set(['json', 'yaml', 'yml']);
 /**
  * Non-test files that import `file`, directly or through other files, and the
  * tests that import that closure. Past the limit, the rest is reported as
- * truncated rather than dropped silently.
+ * truncated rather than dropped silently; past `maxHop` hops, so is the rest.
  *
  * @param {string} file
  * @param {{src: string, dst: string, kind?: string}[]} imports
  * @param {number} [limit]
+ * @param {number|null} [maxHop] a direct importer is hop 1; null walks to the count limit
  */
-export function dependents(file, imports, limit = IMPACT_LIMIT) {
+export function dependents(file, imports, limit = IMPACT_LIMIT, maxHop = null) {
   const reverse = new Map();
   for (const edge of imports) {
     if (edge.kind && edge.kind !== 'import') continue;
@@ -38,27 +39,44 @@ export function dependents(file, imports, limit = IMPACT_LIMIT) {
     else reverse.set(edge.dst, [edge.src]);
   }
   const importers = [];
+  // A capped walk reports its own tests: the uncapped answer comes from `coverage` over
+  // the full closure, and a cap that left it alone would cut importers at one depth
+  // and tests at none - the same channel disagreement `coverage` exists to prevent.
+  const hopTests = new Set();
   const seen = new Set([file]);
-  const queue = [file];
+  const queue = [[file, 0]];
   let truncated = false;
   while (queue.length > 0) {
-    const current = queue.shift();
+    const [current, hop] = queue.shift();
+    const nextHop = hop + 1;
     const next = reverse.get(current);
     if (!next) continue;
     for (const src of next) {
       if (seen.has(src)) continue;
       seen.add(src);
-      if (isTestPath(src)) continue;
+      if (isTestPath(src)) {
+        if (maxHop !== null) {
+          if (nextHop > maxHop) truncated = true;
+          else hopTests.add(src);
+        }
+        continue;
+      }
+      // A cap reached with importers still to report is truncation, not absence:
+      // the reader must be told the list stops because it was asked to.
+      if (maxHop !== null && nextHop > maxHop) {
+        truncated = true;
+        continue;
+      }
       if (importers.length >= limit) {
         truncated = true;
         continue;
       }
       importers.push(src);
-      queue.push(src);
+      queue.push([src, nextHop]);
     }
   }
   importers.sort();
-  const tests = coverage({ imports }, [file]).filter((path) => path !== file);
+  const tests = maxHop === null ? coverage({ imports }, [file]).filter((path) => path !== file) : [...hopTests].sort();
   const shown = tests.length > limit ? tests.slice(0, limit) : tests;
   if (tests.length > limit) truncated = true;
   return { importers, tests: shown, truncated };
@@ -134,13 +152,16 @@ function byImpact(a, b) {
   return a.tier - b.tier || byStrength(a, b) || cmp(a.path, b.path);
 }
 
-export function traceImpact(topology, targets, { root = null, limit = IMPACT_LIMIT } = {}) {
+export function traceImpact(topology, targets, { root = null, limit = IMPACT_LIMIT, maxHop = null } = {}) {
   const { nodes, imports, callers, moduleUses, uncertain, bindingCoverage, unknownDynamic, isHub } = topology;
   const seeds = new Set(targets.map(({ file }) => file));
   const best = new Map();
   const states = [new Map(), new Map()];
   const queue = [];
   let conservativeFallback = unknownDynamic && targets.some(({ symbol }) => symbol);
+  // A row at the hop cap still has outgoing edges: the walk stops by depth, so
+  // `truncated` must say it was cut, not that the list is whole.
+  let depthCut = false;
   function enqueue(node, path, hop, throughHub, impactScore) {
     const row = { node, path, hop, throughHub, impactScore, tier: throughHub ? 2 : hop === 1 ? 0 : 1 };
     const previous = best.get(path);
@@ -163,6 +184,13 @@ export function traceImpact(topology, targets, { root = null, limit = IMPACT_LIM
   for (const row of queue) {
     const { node, path, hop, throughHub, impactScore } = row;
     if (states[Number(throughHub)].get(node) !== row) continue;
+    if (maxHop !== null && hop >= maxHop) {
+      const outgoing = (node === path
+        ? (imports.get(path)?.size ?? 0)
+        : (callers.get(node)?.size ?? 0)) + (uncertain.get(path)?.size ?? 0);
+      if (outgoing > 0) depthCut = true;
+      continue;
+    }
     const mediated = throughHub || (hop > 0 && isHub(path));
     const score = impactScore / Math.max(1, imports.get(path)?.size ?? 0) ** DEGREE_POWER;
     if (node === path) {
@@ -200,7 +228,7 @@ export function traceImpact(topology, targets, { root = null, limit = IMPACT_LIM
     list.push(path);
     tiers[TIERS[tier]].push({ path, hop, impactScore });
   }
-  return { importers, tests, truncated, tiers, suppressedHubMediated, bindingCoverage, conservativeFallback };
+  return { importers, tests, truncated: truncated || depthCut, tiers, suppressedHubMediated, bindingCoverage, conservativeFallback };
 }
 
 /**

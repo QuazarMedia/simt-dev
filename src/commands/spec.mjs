@@ -80,7 +80,7 @@ export const SPEC = [
   // `--only <section>` answers with one section of the report; the set mirrors IMPACT_SECTIONS
   // in src/commands/impact.mjs, which this file cannot import without pulling the command's
   // whole graph into the registry (spec.test.mjs refuses that for index.mjs).
-  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>" [--only <section>]', mcp: { name: 'impact', flags: ['all', 'changed', 'only', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace the import closure, tests and related evidence for a change', flags: ['all', 'changed', 'only', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'], only: ['importers', 'tests', 'cochange', 'conceptual', 'governs', 'owners', 'consumers'] }, },
+  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>" [--only <section>] [--max-hops <n>]', mcp: { name: 'impact', flags: ['all', 'changed', 'max-hops', 'only', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace the import closure, tests and related evidence for a change', flags: ['all', 'changed', 'max-hops', 'only', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'], only: ['importers', 'tests', 'cochange', 'conceptual', 'governs', 'owners', 'consumers'] }, },
   { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v2]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2"] }, },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated

@@ -24,6 +24,7 @@ export const TOOLS_READ = [
         changed: { type: 'boolean' },
         retrieval: { type: 'string', enum: ['v1', 'v2'] },
         only: { type: 'string', enum: IMPACT_SECTIONS },
+        maxHops: { type: 'integer', minimum: 1 },
         all: { type: 'boolean' },
         withKnowledge: { type: 'boolean' },
       },

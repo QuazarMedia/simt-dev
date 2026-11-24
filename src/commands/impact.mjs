@@ -95,6 +95,13 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
   const retrieval = retrievalMode(flags.retrieval ?? (advanced ? 'v2' : undefined));
   if (retrieval === null) throw issue('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
   if (retrieval === 'v1' && advanced) throw issue('this query requires retrieval v2', EXIT.USAGE, 'pass --retrieval v2');
+  // The parser already checks CLI callers; this is the library and MCP door, which
+  // receive flags without that check. A cap is a positive integer, not a string:
+  // `Number` of anything else would walk a depth the reader did not ask for.
+  const maxHop = flags.maxHops === undefined || flags.maxHops === null ? null : flags.maxHops;
+  if (maxHop !== null && (!Number.isInteger(maxHop) || maxHop < 1)) {
+    throw issue(`--max-hops must be a positive integer`, EXIT.USAGE, 'pass --max-hops 1, --max-hops 2, …');
+  }
   const precise = retrieval === 'v2';
   let changes = [];
   try {
@@ -117,7 +124,7 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
   if (task && !targets.length) throw issue('the task names no unambiguous file or symbol', EXIT.USAGE, `run: ${CLI} map --task "<prompt>"`);
   const focus = targets[0];
   const sources = new Set(targets.map(({ file }) => file));
-  const reach = precise ? traceImpact(impactTopology(graph, gone), targets, { root }) : dependents(focus.file, graph.edges);
+  const reach = precise ? traceImpact(impactTopology(graph, gone), targets, { root, maxHop }) : dependents(focus.file, graph.edges, undefined, maxHop);
   const [governanceItems, owners, consumers, extra] = targets.length ? await Promise.all([
     governance(root, sources, files, commands),
     readOwners(root, sources),

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, readFile, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, symlink, utimes, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
@@ -105,4 +105,20 @@ test('why and file checks can address a newly created path', async () => {
     body: '- Limit file lines. <!-- simt-check: max-file-lines -->',
   }], { limits: { fileLines: { warn: 1, error: 2 } } });
   assert.ok(findings.some(({ file, status }) => file === 'draft.mjs' && status === 'file-lines'));
+});
+
+test('a git index written moments ago does not break the stamp-fast snapshot read', async () => {
+  const root = await tempDir('index-live-unsafe-stamp-');
+  await writeFile(join(root, 'a.mjs'), 'import "./b.mjs";\nexport function a() { return 1; }\n');
+  await writeFile(join(root, 'b.mjs'), 'import "./a.mjs";\nexport function b() { return 1; }\n');
+  await ensureGit(root);
+  await reindex(root, { fielded: true });
+  // Force the racy-git window: a stamp git wrote within the last second is unsafe, so the
+  // stamp-fast path must fall through to the slow snapshot that computes a tree digest.
+  const now = new Date();
+  await utimes(join(root, '.git', 'index'), now, now);
+  const graph = await loadLiveGraph(root, { text: false, fielded: true, nativeLexical: true, binding: true });
+  assert.ok(!graph.broken);
+  assert.ok(!graph.indexError);
+  assert.deepEqual(graph.files.map(({ path }) => path).sort(), ['a.mjs', 'b.mjs']);
 });

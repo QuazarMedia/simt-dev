@@ -94,9 +94,13 @@ export async function loadLiveGraph(root, options = {}) {
   let changesets;
   let stampMatched = false;
 
-  if (useStampFast) {
-    const stamp = await gitIndexStamp(root);
-    const fastStamp = stamp?.safe ? stamp.stamp : null;
+  // A stamp git wrote within the last second can be a torn read, so it cannot vouch for the
+  // tree; the snapshot's tree comparison then needs a real digest, and binding undefined
+  // crashes node:sqlite. Unsafe (or absent) stamps take the slow path that computes one.
+  const stamp = useStampFast ? await gitIndexStamp(root) : null;
+  const fastStamp = stamp?.safe ? stamp.stamp : null;
+
+  if (fastStamp !== null) {
     [snapshot, changes, embeddings, changesets] = await Promise.all([
       readLiveSnapshot(root, {
         text, fielded: false, binding, indexStat: fastStamp,

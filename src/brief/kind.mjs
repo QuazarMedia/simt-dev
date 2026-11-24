@@ -102,29 +102,39 @@ export function isConfigPath(path) {
   return dot > 0 && CONFIG_EXT.has(name.slice(dot + 1).toLowerCase());
 }
 
+const META_DOC_PATH = /(?:^|\/)(?:decisions|adrs?|plans|research|reviews|archive|backlog|roadmap)\//i;
+
+export function isMetaDocPath(path) {
+  return isDocPath(path) && META_DOC_PATH.test(String(path ?? ''));
+}
+
 const KIND_PRIORS = Object.freeze({
-  default: Object.freeze({ code: 1.18, config: 0.95, docs: 0.78, test: 0.0 }),
-  docs: Object.freeze({ docs: 1.25, code: 0.88, config: 0.85, test: 0.0 }),
-  config: Object.freeze({ config: 1.30, code: 1.00, docs: 0.75, test: 0.0 }),
-  tests: Object.freeze({ test: 1.30, code: 1.05, docs: 0.70, config: 0.85 }),
+  default: Object.freeze({ code: 1.18, config: 0.95, docs: 0.90, metaDocs: 0.35, test: 0.0 }),
+  docs: Object.freeze({ docs: 1.25, metaDocs: 1.25, code: 0.88, config: 0.85, test: 0.0 }),
+  config: Object.freeze({ config: 1.30, code: 1.00, docs: 0.75, metaDocs: 0.35, test: 0.0 }),
+  tests: Object.freeze({ test: 1.30, code: 1.05, docs: 0.70, metaDocs: 0.35, config: 0.85 }),
 });
 
 export function inferRetrievalIntent(task, { includeTests = false } = {}) {
   const text = String(task ?? '');
-  if (includeTests || /\b(?:tests?|testing|regression|spec|specs|assert(?:ion|ions)?|coverage)\b/i.test(text)) {
+  if (
+    includeTests
+    || /\b(?:add|write|create|update|fix|run)\s+(?:a\s+|the\s+)?(?:regression\s+|unit\s+|integration\s+|smoke\s+)?tests?\b|\btest\s+the\b|\bregression\s+tests?\b|\bunit\s+tests?\b|\btest\s+coverage\b/i.test(text)
+  ) {
     return 'tests';
   }
   if (/\b(?:config|configuration|settings?|json|yaml|toml)\b/i.test(text)) {
     return 'config';
   }
   const { kind } = classifyTask(text);
-  if (kind === 'docs' || /\b(?:guide|readme|changelog)\b/i.test(text)) return 'docs';
+  if (kind === 'docs' || /\b(?:guide|readme|changelog|adr|decision|ruling)\b|\bplan\s+\d+\b/i.test(text)) return 'docs';
   return 'default';
 }
 
 export function kindPriorFor(path, intent = 'default', isTest = false) {
   const table = KIND_PRIORS[intent] ?? KIND_PRIORS.default;
   if (isTest) return table.test;
+  if (isMetaDocPath(path)) return table.metaDocs;
   if (isDocPath(path)) return table.docs;
   if (isConfigPath(path)) return table.config;
   return table.code;

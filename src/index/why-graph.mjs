@@ -10,7 +10,7 @@ import { sortHits } from './govern.mjs';
 import { governanceBasis, readGovernance } from './governance-store.mjs';
 import { readStagedImports } from './graph-read.mjs';
 import { loadLiveGraph } from './live.mjs';
-import { readSqliteBatch } from './persist.mjs';
+import { readHeadShaFast, readSqliteBatch } from './persist.mjs';
 
 const LIMIT = 64;
 const MODULE_EXTENSIONS = ['mjs', 'js', 'ts', 'cjs', 'mts', 'cts'];
@@ -57,7 +57,7 @@ function entrypoints(command, ctx) {
 
 async function citationsFor(root, paths) {
   const [head, cached] = await Promise.all([
-    gitText(root, ['rev-parse', '--verify', '-q', 'HEAD'], { allowFailure: true }),
+    readHeadShaFast(root).then((sha) => sha ?? gitText(root, ['rev-parse', '--verify', '-q', 'HEAD'], { allowFailure: true })),
     readSqliteBatch(root, [[CITATIONS_BASIS_SQL], [CITATIONS_PATH_SQL, [JSON.stringify(paths)]]]),
   ]);
   const [meta, rows] = cached.results ?? [[], []];
@@ -82,10 +82,11 @@ function addWitness(witnesses, record, path, witness) {
   if (!witnesses.has(key)) witnesses.set(key, { kind: record.kind, id: record.id, detail: record.detail, path, witness });
 }
 
-export async function explainGovernance(root, paths, ctx, { tree, graph, inputState } = {}) {
+export async function explainGovernance(root, paths, ctx, { tree, graph, inputState, staged: preloadedStaged = undefined, commits: preloadedCommits = undefined, preloadedGov = null } = {}) {
   const requested = [...new Set(paths)].sort(cmp);
   const [staged, commits, observedBasis] = await Promise.all([
-    tree === undefined ? null : readStagedImports(root, tree, requested), citationsFor(root, requested),
+    preloadedStaged !== undefined ? preloadedStaged : (tree === undefined ? null : readStagedImports(root, tree, requested)),
+    preloadedCommits !== undefined ? preloadedCommits : citationsFor(root, requested),
     governanceBasis(root, ctx, inputState),
   ]);
   const imports = staged ?? (graph ?? await loadLiveGraph(root, { retainTargets: requested })).edges;
@@ -97,7 +98,7 @@ export async function explainGovernance(root, paths, ctx, { tree, graph, inputSt
     for (const file of entrypoints(command, ctx)) if (!routes.has(file)) routes.set(file, command);
   }
   const governors = new Set([...requested, ...dependencies.map(({ dst }) => dst), ...routes.keys()]);
-  const snapshot = await readGovernance(root, ctx, governors, { includeCommands: true, observedBasis });
+  const snapshot = await readGovernance(root, ctx, governors, { includeCommands: true, observedBasis, preloaded: preloadedGov });
   const pathsToEntrypoints = walkReverseImports(edges, requested);
   const byPath = recordsByPath(snapshot);
   const byCommand = new Map();

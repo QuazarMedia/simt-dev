@@ -3,7 +3,7 @@ import { decisionRecords, lessonScopes } from '../commands/why.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { decisionPaths, scopeHits, sourceRoots } from '../index/govern.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
-import { prepareMapStructure, rankMapV2 } from '../index/map-v2.mjs';
+import { rankMapV2 } from '../index/map-v2.mjs';
 import { testEdges, testsFor } from '../index/tests.mjs';
 import { isTestPath } from '../testing/paths.mjs';
 import { commandCard } from '../kernel/card.mjs';
@@ -79,6 +79,55 @@ function stemOf(path) {
   return base.replace(/(?:\.(?:test|spec))?\.[^.]+$/u, '').replace(/(?:_test|_spec)$/u, '');
 }
 
+function transitiveTestsFor(anchor, tests, edges, root, sortedFiles = null) {
+  const anchorStem = stemOf(anchor);
+  const direct = testsFor(anchor, tests);
+  const found = new Map(direct.map((path) => [path, 1]));
+  const reverse = new Map();
+  for (const { src, dst, kind } of edges) {
+    if (kind && kind !== 'import') continue;
+    if (src === dst) continue;
+    const list = reverse.get(dst) ?? [];
+    list.push(src);
+    reverse.set(dst, list);
+  }
+  let frontier = [anchor];
+  const visited = new Set(frontier);
+  for (let hop = 1; hop <= 3; hop += 1) {
+    const next = [];
+    for (const node of frontier) {
+      for (const src of reverse.get(node) ?? []) {
+        if (isTestPath(src, root)) {
+          if (!found.has(src)) found.set(src, hop);
+          continue;
+        }
+        if (visited.has(src)) continue;
+        visited.add(src);
+        next.push(src);
+        for (const testPath of testsFor(src, tests)) {
+          if (!found.has(testPath)) found.set(testPath, hop + 1);
+        }
+      }
+    }
+    frontier = next;
+    if (!frontier.length) break;
+  }
+  if (anchorStem && sortedFiles) {
+    for (const path of sortedFiles) {
+      if (isTestPath(path, root) && stemOf(path) === anchorStem && !found.has(path)) {
+        found.set(path, 2);
+      }
+    }
+  }
+  return [...found.entries()]
+    .sort(([a, hopA], [b, hopB]) => {
+      const exactA = anchorStem && stemOf(a) === anchorStem ? 0 : 1;
+      const exactB = anchorStem && stemOf(b) === anchorStem ? 0 : 1;
+      return exactA - exactB || hopA - hopB || cmp(a, b);
+    })
+    .map(([path]) => path);
+}
+
 function projectByRole(role, anchors, rankedPaths, { graph, tests, include, root }) {
   const seen = new Set();
   const projected = [];
@@ -89,14 +138,13 @@ function projectByRole(role, anchors, rankedPaths, { graph, tests, include, root
     }
   };
   const anchorStems = new Set(anchors.map(stemOf).filter(Boolean));
-  const sortedFiles = [...graph.files].map(({ path }) => path).sort(cmp);
+  const sortedFiles = graph.sortedPaths ?? (graph.sortedPaths = graph.files.map(({ path }) => path));
 
   if (role === 'tests') {
     for (const anchor of anchors) {
-      for (const testPath of testsFor(anchor, tests)) push(testPath);
+      for (const testPath of transitiveTestsFor(anchor, tests, graph.edges, root, sortedFiles)) push(testPath);
     }
     for (const path of rankedPaths) if (isTestPath(path, root)) push(path);
-    for (const path of sortedFiles) if (isTestPath(path, root) && anchorStems.has(stemOf(path))) push(path);
   } else if (role === 'config') {
     const anchorSet = new Set(anchors);
     const cochange = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')]
@@ -137,26 +185,32 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
     const eligibleFiles = graph.files.filter(include);
     const eligible = new Set(eligibleFiles.map(({ path }) => path));
     const anchored = [...new Set(task.anchors.map(({ path }) => path))].filter((path) => eligible.has(path));
+    const local = allowed === null ? graph : {
+      ...graph,
+      files: eligibleFiles,
+      symbols: graph.symbols.filter(({ path }) => eligible.has(path)),
+      fieldedRows: graph.fieldedRows.filter(({ ref }) => eligible.has(ref)),
+    };
     if (!queries.has(key)) {
-      const local = {
-        ...graph,
-        files: eligibleFiles,
-        symbols: graph.symbols.filter(({ path }) => eligible.has(path)),
-        fieldedRows: graph.fieldedRows.filter(({ ref }) => eligible.has(ref)),
-      };
-      structure ??= prepareMapStructure(graph);
       queries.set(key, rankMapV2(root, local, task.query, {
         explain: true,
         coupling: true,
-        structure,
-        includeTests: role === 'tests',
+        includeTests: false,
       }));
     }
     const rank = await queries.get(key);
     const byPath = new Map(rank.ranked.map((row) => [row.path, row]));
     const rankedPaths = [...new Set([...anchored, ...rank.ranked.map(({ path }) => path)])];
     const seedAnchors = rankedPaths.slice(0, TOP_FILES);
-    const projected = projectByRole(role, seedAnchors, rankedPaths, { graph, tests, include, root });
+    let projected = projectByRole(role, seedAnchors, rankedPaths, { graph, tests, include, root });
+    if (role === 'tests' && !projected.some((path) => isTestPath(path, root))) {
+      const withTests = await rankMapV2(root, local, task.query, {
+        explain: true,
+        coupling: true,
+        includeTests: true,
+      });
+      projected = projectByRole(role, seedAnchors, withTests.ranked.map(({ path }) => path), { graph, tests, include, root });
+    }
     const candidates = projected.slice(0, TOP_FILES).map((path) =>
       byPath.get(path) ?? { path, rank: 0, resolver: Number(anchored.includes(path)) });
     const selected = new Set(candidates.map(({ path }) => path));
@@ -216,6 +270,7 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
   const governed = decisionPaths(records, decisionContext);
   const byId = new Map(tasks.map((row) => [row.id, row]));
 
+  const sortedFilePaths = [...filePaths].sort(cmp);
   for (const subject of tasks) {
     const id = subject.id;
     const likely = subject.files.map(({ path }) => path);
@@ -225,7 +280,7 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
         const query = ids.length ? ids.map((value) => byId.get(value).query).join(' ') : subject.query;
         return compactFileLine(path, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids });
       }, id, weight);
-      const reachable = isTestPath(path, root) ? [path] : testsFor(path, tests);
+      const reachable = isTestPath(path, root) ? [path] : transitiveTestsFor(path, tests, graph.edges, root, sortedFilePaths);
       if (reachable.length) add('TESTS', path, (ids) => compactTestLine(path, reachable, { subtasks: ids }), id, weight);
       else if (index === 0) add('CAUTIONS', 'test:' + path, 'No direct test recorded for ' + path, id, 0.5);
 
@@ -241,8 +296,9 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
     }
     for (const caution of subject.cautions) add('CAUTIONS', caution, caution, id, 1, true);
     if (!likely.length && subject.query) add('CAUTIONS', 'no-match:' + id, 'No eligible files resolved for this subtask.', id, 1);
-    if (registry?.ok) {
-      const evidence = rankSkills(registry.registry.skills, {
+    const registrySkills = Array.isArray(registry?.registry?.skills) ? registry.registry.skills : [];
+    if (registrySkills.length) {
+      const evidence = rankSkills(registrySkills, {
         repoStack: repo.signals, taskTokens: tokenize(subject.query), paths: likely, tree: [...filePaths],
       });
       for (const row of evidence.selected.filter(({ skill }) => !skill.deferred).slice(0, 2)) {

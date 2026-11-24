@@ -4,7 +4,7 @@
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
-import { searchFtsBm25 } from '../index/store.mjs';
+import { searchFtsBm25, searchFtsBm25FBundle } from '../index/store.mjs';
 import {
   DEFAULT_BUDGET,
   formatRecall,
@@ -37,14 +37,19 @@ export async function mapCommand(args, flags) {
   const experimental = retrieval === 'v2';
   const searching = task.trim().length > 0;
   let loaded;
+  let preloadedBundle = null;
   try {
-    loaded = await loadLiveGraph(root, {
-      text: !experimental && searching,
-      fielded: experimental && searching,
-      binding: experimental && searching,
-      cochange: experimental && searching,
-      embed: flags.embed === true,
-    });
+    [loaded, preloadedBundle] = await Promise.all([
+      loadLiveGraph(root, {
+        text: !experimental && searching,
+        fielded: experimental && searching,
+        nativeLexical: experimental && searching,
+        binding: experimental && searching,
+        cochange: experimental && searching,
+        embed: flags.embed === true,
+      }),
+      experimental && searching ? searchFtsBm25FBundle(root, task, {}).catch(() => null) : null,
+    ]);
     if (loaded.broken) throw new Error(loaded.indexError?.message ?? 'the index cannot be read');
   } catch (error) {
     return fail(`could not map this repository (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
@@ -58,7 +63,11 @@ export async function mapCommand(args, flags) {
         })
       : null;
   const result = experimental
-    ? await (await import('../index/map-v2.mjs')).rankMapV2(root, loaded, task, { explain: flags.explain === true, queryVector })
+    ? await (await import('../index/map-v2.mjs')).rankMapV2(root, loaded, task, {
+      explain: flags.explain === true,
+      queryVector,
+      preloadedBundle: loaded.nativeLexical && preloadedBundle && !preloadedBundle.error ? preloadedBundle : null,
+    })
     : null;
   const ranked = result?.ranked ?? rankFiles({ ...loaded, bm25, queryVector, task });
   const rendered = renderMap(ranked, loaded.symbols, { level, budget });

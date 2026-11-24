@@ -32,7 +32,9 @@ import { listPromotedLessons } from '../memory/lessons.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { candidatePaths, livePaths } from '../index/live.mjs';
 import { lsFiles } from '../index/store.mjs';
-import { treeDigest } from '../index/persist.mjs';
+import { gitIndexStamp, readHeadShaFast, readSqliteBatch, signalsStat, treeDigest } from '../index/persist.mjs';
+import { STAGED_IMPORTS_SQL } from '../index/graph-read.mjs';
+import { CITATIONS_BASIS_SQL, CITATIONS_PATH_SQL } from '../index/commit-citations.mjs';
 import { reportSubjects, resolvePathSubject, witnessLines } from './why-subjects.mjs';
 
 export const RULE_DIRS = ['rules', 'rules/stacks', 'rules/mdc', '.simt/profiles'];
@@ -175,7 +177,48 @@ export async function whyCommand(args, flags, commands = []) {
   if (target && shapedSubject(target)) return answer(await classify(target, { root, files: new Set() }), flags);
 
   if (target && flags.retrieval !== 'v1') {
-    const input = candidatePaths([{ path: target }]).length && existsSync(join(root, target))
+    const canFastPath = candidatePaths([{ path: target }]).length > 0 && existsSync(join(root, target));
+    if (canFastPath) {
+      const govStore = await import('../index/governance-store.mjs');
+      const [stamp, sigStat, head, batch] = await Promise.all([
+        gitIndexStamp(root),
+        signalsStat(root),
+        readHeadShaFast(root),
+        readSqliteBatch(root, [
+          ["select key, value from meta where key in ('git_index_stat', 'tree', 'signals_stat', 'governance_signals')"],
+          ["select group_concat(path, char(10)) as paths from (select path from sources where kind = 'blob' order by path)"],
+          [STAGED_IMPORTS_SQL, [JSON.stringify([target])]],
+          [CITATIONS_BASIS_SQL],
+          [CITATIONS_PATH_SQL, [JSON.stringify([target])]],
+          [govStore.BASIS_SQL],
+          [govStore.RELATION_SQL, [JSON.stringify([target]), 1]],
+        ]),
+      ]);
+      const [metaRows, pathRows, stagedRows, citMeta, citRows, govMeta, govRows] = batch.results ?? [[], [], [], [], [], [], []];
+      const meta = Object.fromEntries(metaRows.map(({ key, value }) => [key, value]));
+      if (!batch.error && stamp?.safe && meta.git_index_stat === stamp.stamp && meta.tree) {
+        const pathList = pathRows[0]?.paths ? pathRows[0].paths.split('\n') : [];
+        const files = new Set(pathList);
+        const path = resolvePathSubject(target, root, files)?.path ?? target;
+        if (files.has(path) && existsSync(join(root, path))) {
+          const cachedSignals = meta.signals_stat === sigStat && meta.governance_signals
+            ? JSON.parse(meta.governance_signals)
+            : null;
+          const inputState = await govStore.governanceInputState(root, { trackedPaths: cachedSignals ? null : pathList, cachedSignals });
+          const preloadedCommits = head && citMeta[0]?.value === head ? citRows : undefined;
+          const preloadedGov = path === target && govMeta[0]?.value
+            ? { basis: govMeta[0].value, targets: new Set([target]), includeCommands: true, rows: govRows }
+            : null;
+          return reportPath(path, flags, {
+            root, files, filesList: pathList, filesSorted: true, commands, tree: meta.tree, inputState,
+            staged: path === target ? stagedRows : undefined,
+            commits: path === target ? preloadedCommits : undefined,
+            preloadedGov,
+          });
+        }
+      }
+    }
+    const input = canFastPath
       ? import('../index/governance-store.mjs').then(({ governanceInputState }) => governanceInputState(root))
       : null;
     const [staged, inputState] = await Promise.all([lsFiles(root).catch(() => []), input]);
@@ -219,15 +262,25 @@ async function answer(subject, flags, context = null) {
   return reportPath(subject.value, flags, context);
 }
 
-async function reportPath(target, flags, { root, files, commands, tree, inputState }) {
-  const ctx = { files, commands: new Set(commands ?? []), roots: sourceRoots(files) };
+async function reportPath(target, flags, { root, files, filesList = null, filesSorted = false, commands, tree, inputState, staged, commits, preloadedGov = null }) {
+  let cachedRoots = null;
+  const ctx = {
+    files,
+    filesList,
+    filesSorted,
+    commands: new Set(commands ?? []),
+    get roots() {
+      cachedRoots ??= sourceRoots(files);
+      return cachedRoots;
+    },
+  };
   const payload = { ok: true, command: 'why', root, path: target };
   if (flags.retrieval === 'v1') {
     const [records, corpus] = await Promise.all([decisionRecords(root), loadCorpus(root)]);
     payload.items = governs(target, { records, ...corpus, ctx });
   } else {
     const { explainGovernance } = await import('../index/why-graph.mjs');
-    const facts = await explainGovernance(root, [target], ctx, { tree, inputState });
+    const facts = await explainGovernance(root, [target], ctx, { tree, inputState, staged, commits, preloadedGov });
     const { basis, graphBasis, witnesses, truncated } = facts;
     Object.assign(payload, { items: facts.current.get(target), historical: facts.historical.get(target),
       basis, graphBasis, witnesses, truncated });

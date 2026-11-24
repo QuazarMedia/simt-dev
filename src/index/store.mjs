@@ -23,8 +23,7 @@ import { CITATIONS_BASIS_SQL, prepareCitations } from './commit-citations.mjs';
 import { readCochangeBasis, readFts, withReadError } from './graph-read.mjs';
 export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols } from './graph-read.mjs';
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
-import { cmp } from '../util/sort.mjs';
-import { sparseTfIdfCosine } from './lexical.mjs';
+export { nativeConceptualPartners, readFileSignatures, readLexicalStats } from './lexical-store.mjs';
 import {
   BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldCandidateStatement, fieldQueryTerms,
   fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F,
@@ -43,10 +42,12 @@ import {
   digestOfParts,
   digestOfText,
   encodeVectorBlob,
+  gitIndexStamp,
   readBuildMeta,
   readSchema,
   readSqliteBatch,
   readSqliteRows,
+  signalsStat,
   treeDigest,
   writeSqlite,
 } from './persist.mjs';
@@ -263,7 +264,7 @@ export function ftsQueryTerms(task) {
 export async function reindex(root, opts = {}) {
   const started = Date.now();
   await ensureIndexSupport();
-  const listed = await lsFiles(root);
+  const [indexStamp, sigStat, listed] = await Promise.all([gitIndexStamp(root), signalsStat(root), lsFiles(root)]);
   const version = await readSchema(root);
   // A cache written before symbols existed has the right blobs and the wrong
   // tables. Re-extract once, then an unchanged blob stays untouched.
@@ -381,8 +382,11 @@ export async function reindex(root, opts = {}) {
     fielded,
     fieldedRows,
     cochange,
-    governance,
+    governance: governance?.snapshot ?? null,
     citations,
+    gitIndexStat: indexStamp?.stamp ?? null,
+    signalsStat: sigStat ?? null,
+    governanceSignals: governance?.signals ?? null,
     embedBasis: embedBuild.basis ?? null,
   });
   const counts = await countSqlite(root);
@@ -559,99 +563,58 @@ export async function readFieldedFts(root) {
   return withReadError(rows, error);
 }
 
-export async function searchFtsBm25F(root, task, { fts, fields = BM25F_FIELDS } = {}) {
+export async function searchFtsBm25FBundle(root, task, { fts, fields = BM25F_FIELDS, stats = null, limit = 160 } = {}) {
   if (!fields.length || fields.some((name) => !BM25F_FIELDS.includes(name))) throw new Error('unknown BM25F field');
-  if (fts !== undefined) return withReadError(scoreFtsBm25F(fts, task, { fields }), fts.error);
+  if (fts !== undefined) {
+    return {
+      hits: withReadError(scoreFtsBm25F(fts, task, { fields, stats }), fts.error),
+      rows: fts,
+      stats,
+      error: fts.error ?? null,
+    };
+  }
   const terms = fieldQueryTerms(task);
-  if (!terms.length) return [];
-  const metaCheck = await readSqliteBatch(root, [
-    ["select key, value from meta where key in ('fts_fields', 'fts_field_stats')"],
-  ], { legacySql: null });
-  if (metaCheck.error) return withReadError([], metaCheck.error);
-  const metaMap = new Map((metaCheck.results?.[0] ?? []).map(({ key, value }) => [key, value]));
-  if (metaMap.get('fts_fields') !== '1') return [];
+  if (!terms.length) return { hits: [], rows: [], stats: null, error: null };
   const prefix = fields === BM25F_FIELDS ? '' : `{${fields.join(' ')}} : `;
   const dfQueries = terms.map((term) => [
-    "select count(*) as df from fts where fts match ?",
+    'select count(*) as df from fts where fts match ?',
     [`${prefix}${ftsQuote(term)}`],
   ]);
   const { results, error } = await readSqliteBatch(root, [
-    fieldCandidateStatement(terms, fields),
+    ["select key, value from meta where key in ('fts_fields', 'fts_field_stats')"],
+    fieldCandidateStatement(terms, fields, limit),
     ...dfQueries,
   ], { legacySql: null });
-  if (error) return withReadError([], error);
-  const candidateRows = results?.[0] ?? [];
-  if (!candidateRows.length) return [];
+  if (error) {
+    if (String(error.message ?? error).includes('no such column')) {
+      return { hits: [], rows: [], stats: null, error: null };
+    }
+    return { hits: withReadError([], error), rows: [], stats: null, error };
+  }
+  const metaMap = new Map((results?.[0] ?? []).map(({ key, value }) => [key, value]));
+  if (metaMap.get('fts_fields') !== '1') return { hits: [], rows: [], stats: null, error: null };
+  const candidateRows = results?.[1] ?? [];
+  if (!candidateRows.length) return { hits: [], rows: [], stats: null, error: null };
   const rawStats = metaMap.get('fts_field_stats');
   const parsedStats = rawStats ? JSON.parse(rawStats) : null;
   if (!parsedStats) {
     const [sql, params] = fieldSearchStatement(terms, fields);
     const fallback = await readSqliteRows(root, sql, params, { legacySql: null });
-    return withReadError(bestFieldHits(fallback.rows), fallback.error);
+    return { hits: withReadError(bestFieldHits(fallback.rows), fallback.error), rows: candidateRows, stats: null, error: fallback.error ?? null };
   }
-  const df = terms.map((_, index) => results?.[1 + index]?.[0]?.df ?? 0);
-  return scoreFtsBm25F(candidateRows, task, {
-    fields,
-    stats: { N: parsedStats.N, avgdl: parsedStats.avgdl, df },
-  });
-}
-
-export async function readLexicalStats(root) {
-  const { results, error } = await readSqliteBatch(root, [
-    ['select count(*) as documents from lexical_files'],
-    ['select term, df, cf from term_stats order by term'],
-  ]);
-  const [counts, terms] = results ?? [[], []];
+  const df = terms.map((_, index) => results?.[2 + index]?.[0]?.df ?? 0);
+  const fullStats = { N: parsedStats.N, avgdl: parsedStats.avgdl, df };
   return {
-    documents: counts[0]?.documents ?? 0,
-    terms: new Map(terms.map(({ term, df, cf }) => [term, { df, cf }])),
-    error,
+    hits: scoreFtsBm25F(candidateRows, task, { fields, stats: fullStats }),
+    rows: candidateRows,
+    stats: fullStats,
+    error: null,
   };
 }
 
-export async function nativeConceptualPartners(root, sources, { limit = 60 } = {}) {
-  const list = [...sources].sort(cmp);
-  if (!list.length) return [];
-  const { signatures: anchorSigs, error: anchorError } = await readFileSignatures(root, list);
-  if (anchorError || !anchorSigs?.size) return [];
-  const terms = [...new Set([...anchorSigs.values()].flatMap((sig) => sig.map(({ term }) => term)))];
-  if (!terms.length) return [];
-  const { rows: candidates, error } = await readSqliteRows(root,
-    `select s.path, count(*) as overlap
-     from file_terms ft
-     join sources s on s.id = ft.source_id
-     where ft.term in (select value from json_each(?))
-       and s.path not in (select value from json_each(?))
-     group by s.id
-     order by overlap desc, s.path asc
-     limit 48`,
-    [JSON.stringify(terms), JSON.stringify(list)],
-    { legacySql: null });
-  if (error || !candidates.length) return [];
-  const { signatures: candSigs, error: candError } = await readFileSignatures(root, candidates.map(({ path }) => path));
-  if (candError || !candSigs?.size) return [];
-  const out = [];
-  for (const [path, signature] of candSigs) {
-    for (const [source, anchor] of anchorSigs) {
-      const score = sparseTfIdfCosine(anchor, signature);
-      if (score > 0) out.push({ path, source, score });
-    }
-  }
-  return out.sort((a, b) => b.score - a.score || cmp(a.path, b.path)).slice(0, limit);
-}
-
-export async function readFileSignatures(root, paths) {
-  const { rows, error } = await readSqliteRows(root,
-    `select path, term, weight from file_signatures
-      where path in (select value from json_each(?)) order by path, position`,
-    [JSON.stringify(paths)]);
-  const signatures = new Map();
-  for (const { path, term, weight } of rows) {
-    const signature = signatures.get(path) ?? [];
-    signature.push({ term, weight });
-    signatures.set(path, signature);
-  }
-  return { signatures, error };
+export async function searchFtsBm25F(root, task, { fts, fields = BM25F_FIELDS, stats = null } = {}) {
+  const { hits } = await searchFtsBm25FBundle(root, task, { fts, fields, stats });
+  return hits;
 }
 
 /** Stored vector embeddings, decoded as Float32Array per path. */

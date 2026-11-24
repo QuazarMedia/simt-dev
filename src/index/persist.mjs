@@ -5,8 +5,8 @@
 // and the format together crossed the review trigger.
 
 import { createHash } from 'node:crypto';
-import { mkdir, rename, stat } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readFile, rename, stat } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 
 import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
@@ -276,6 +276,77 @@ function tmpFor(file) {
  * build including the no-change one, so a build that changed nothing still
  * vouches for the tree it saw.
  */
+async function resolveGitDir(root) {
+  const dotGit = join(root, '.git');
+  try {
+    const info = await stat(dotGit);
+    if (info.isDirectory()) return dotGit;
+    if (info.isFile()) {
+      const text = await readFile(dotGit, 'utf8');
+      const match = /^gitdir:\s*(.+)$/m.exec(text);
+      if (match) return resolve(root, match[1].trim());
+    }
+  } catch { /* not a git root */ }
+  return null;
+}
+
+/** Fast nanosecond stat stamp for `.git/index`, with a 1s racy-git safety check. */
+export async function gitIndexStamp(root) {
+  const gitDir = await resolveGitDir(root);
+  if (!gitDir) return null;
+  try {
+    const info = await stat(join(gitDir, 'index'), { bigint: true });
+    const mtimeMs = Number(info.mtimeNs / 1000000n);
+    return {
+      stamp: `${info.ino}:${info.size}:${info.mtimeNs}:${info.ctimeNs}`,
+      safe: Date.now() - mtimeMs >= 1000,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Fast nanosecond stat stamp for root directory + manifests affecting repo signals. */
+export async function signalsStat(root) {
+  const targets = ['', 'package.json', 'simt.json', 'simt-dev.json'];
+  const parts = await Promise.all(targets.map(async (rel) => {
+    try {
+      const info = await stat(rel ? join(root, rel) : root, { bigint: true });
+      return `${rel}:${info.ino}:${info.size}:${info.mtimeNs}`;
+    } catch {
+      return `${rel}:-`;
+    }
+  }));
+  return parts.join('|');
+}
+
+/** Read HEAD commit SHA directly from `.git/HEAD` without spawning git. */
+export async function readHeadShaFast(root) {
+  const gitDir = await resolveGitDir(root);
+  if (!gitDir) return null;
+  try {
+    const head = (await readFile(join(gitDir, 'HEAD'), 'utf8')).trim();
+    if (/^[0-9a-f]{40,}$/i.test(head)) return head;
+    if (head.startsWith('ref: ')) {
+      const ref = head.slice(5).trim();
+      const loose = await readFile(join(gitDir, ref), 'utf8').catch(() => null);
+      if (loose) {
+        const sha = loose.trim();
+        if (/^[0-9a-f]{40,}$/i.test(sha)) return sha;
+      }
+      const packed = await readFile(join(gitDir, 'packed-refs'), 'utf8').catch(() => null);
+      if (packed) {
+        for (const line of packed.split('\n')) {
+          if (!line || line.startsWith('#') || line.startsWith('^')) continue;
+          const [sha, name] = line.trim().split(' ');
+          if (name === ref && /^[0-9a-f]{40,}$/i.test(sha)) return sha;
+        }
+      }
+    }
+  } catch { /* fall back to git */ }
+  return null;
+}
+
 export function treeDigest(listed) {
   const rows = [...(listed ?? [])]
     .map((entry) => `${entry.blob ?? ''} ${entry.path ?? ''}`)
@@ -508,6 +579,9 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       }
     }
     upsertMeta.run('tree', tree);
+    if (meta.gitIndexStat) upsertMeta.run('git_index_stat', meta.gitIndexStat);
+    if (meta.signalsStat) upsertMeta.run('signals_stat', meta.signalsStat);
+    if (meta.governanceSignals) upsertMeta.run('governance_signals', JSON.stringify(meta.governanceSignals));
     // What the build read, beside the tree it saw. A reader compares digests
     // instead of guessing from a blob: an unchanged blob under a new parser,
     // package root or tracked path set is a rebuild, and an absent stamp is one

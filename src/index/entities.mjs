@@ -84,25 +84,41 @@ function filteredDirectory(files, symbols, terms) {
   const names = new Map();
   if (!terms.length) return { paths, names };
   const wanted = new Set(terms.map(({ raw }) => entityKey(raw)));
+  const wantedBasenames = new Set([...wanted].map((target) => {
+    const slash = target.lastIndexOf('/');
+    return slash < 0 ? target : target.slice(slash + 1);
+  }));
   const wantedSymbols = new Set([...wanted].map((k) => k.replaceAll('::', '.')));
+  const asciiOnly = /^[\x00-\x7f]+$/;
   for (const entry of files) {
     const path = typeof entry === 'string' ? entry : entry.path;
-    const key = entityKey(path);
+    const slash = path.lastIndexOf('/');
+    const base = slash < 0 ? path : path.slice(slash + 1);
+    const baseKey = asciiOnly.test(base) ? base.toLowerCase() : entityKey(base);
+    if (!wantedBasenames.has(baseKey)) continue;
+    const key = asciiOnly.test(path) ? path.toLowerCase() : entityKey(path);
     for (const target of wanted) {
       if (key === target || key.endsWith('/' + target)) add(paths, target, path);
     }
   }
+  const wantedLengths = new Set();
+  for (const sym of wantedSymbols) wantedLengths.add(sym.length);
   for (const symbol of symbols) {
-    if (!symbol.name || !symbol.path) continue;
-    const exported = symbol.exported === 1 || symbol.exported === true;
-    const symKey = entityKey(symbol.name);
-    if (wantedSymbols.has(symKey)) {
-      add(names, symKey, { path: symbol.path, name: symbol.name, qualified: false, exported });
+    const name = symbol.name;
+    if (!name || !symbol.path) continue;
+    let exported = null;
+    if (wantedLengths.has(name.length)) {
+      const symKey = asciiOnly.test(name) ? name.toLowerCase() : entityKey(name);
+      if (wantedSymbols.has(symKey)) {
+        exported = symbol.exported === 1 || symbol.exported === true;
+        add(names, symKey, { path: symbol.path, name, qualified: false, exported });
+      }
     }
     const qualified = symbol.qualname ?? symbol.qualifiedName;
-    if (qualified && qualified !== symbol.name) {
-      const qualKey = entityKey(qualified).replaceAll('::', '.');
+    if (qualified && qualified !== name && (wantedLengths.has(qualified.length) || qualified.includes('::'))) {
+      const qualKey = (asciiOnly.test(qualified) ? qualified.toLowerCase() : entityKey(qualified)).replaceAll('::', '.');
       if (wantedSymbols.has(qualKey)) {
+        exported ??= symbol.exported === 1 || symbol.exported === true;
         add(names, qualKey, { path: symbol.path, name: qualified, qualified: true, exported });
       }
     }
@@ -209,12 +225,12 @@ export function exactEntityCandidates(task, graph) {
 }
 
 /** Rank from an already-built index, or from explicit fielded rows for live overlays. */
-export async function searchEntityCandidates(root, task, { files, symbols, fts } = {}) {
+export async function searchEntityCandidates(root, task, { files, symbols, fts, stats = null } = {}) {
   const pairs = queryPairs(task);
   const [graph, metadata, body, proximity] = await Promise.all([
     files && symbols ? { files, symbols } : readGraph(root),
-    searchFtsBm25F(root, task, { fts, fields: METADATA }),
-    searchFtsBm25F(root, task, { fts, fields: BODY }),
+    searchFtsBm25F(root, task, { fts, fields: METADATA, stats }),
+    searchFtsBm25F(root, task, { fts, fields: BODY, stats }),
     fts === undefined ? nativeProximity(root, pairs) : { hits: fieldProximity(fts, pairs), error: fts.error },
   ]);
   const anchors = resolveEntityAnchors(task, graph);

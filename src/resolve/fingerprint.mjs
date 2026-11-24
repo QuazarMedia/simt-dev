@@ -208,7 +208,7 @@ const PKG_FACTS = [
  * @returns {Promise<{stack: string[], facts: string[], factEvidence: Record<string,string>,
  *   evidence: string[], manifest: object|null, error?: string}>}
  */
-export async function fingerprint(root) {
+export async function fingerprint(root, { trackedPaths = null } = {}) {
   const stack = new Set();
   const facts = new Set();
   const factEvidence = {};
@@ -297,7 +297,7 @@ export async function fingerprint(root) {
 
   // Extensions. The bound, and why it is a count of paths rather than a depth, is
   // on sampleExtensions.
-  const sampled = await sampleExtensions(root);
+  const sampled = trackedPaths ? extensionsFromPaths(trackedPaths) : await sampleExtensions(root);
   for (const ext of sampled) {
     const tag = EXTENSION_TAGS.get(ext);
     if (tag) {
@@ -395,6 +395,23 @@ async function isDir(path) {
  * are skipped for the reason the extension sample skips them: detection is not a
  * scan of vendored output.
  */
+const GLOB_TARGETS = (() => {
+  const names = new Set();
+  const exts = new Set();
+  let unrestricted = false;
+  for (const fact of FACTS) {
+    if (fact.kind !== 'glob') continue;
+    for (const pattern of fact.paths) {
+      const tail = pattern.split('/').pop() ?? '';
+      if (!tail || tail.includes('?') || tail.includes('[')) { unrestricted = true; continue; }
+      if (!tail.includes('*')) names.add(tail);
+      else if (tail.startsWith('*.') && !tail.slice(2).includes('*')) exts.add(tail.slice(1).toLowerCase());
+      else unrestricted = true;
+    }
+  }
+  return { names, exts, unrestricted };
+})();
+
 async function listNested(root) {
   const found = [];
   const walk = async (dir, prefix, depth) => {
@@ -406,16 +423,35 @@ async function listNested(root) {
     }
     for (const item of items) {
       if (item.name.startsWith('.') || item.name === 'node_modules') continue;
-      const rel = prefix ? `${prefix}/${item.name}` : item.name;
       if (item.isDirectory()) {
-        if (depth < GLOB_DEPTH) await walk(join(dir, item.name), rel, depth + 1);
-      } else {
-        found.push(rel);
+        if (depth < GLOB_DEPTH) {
+          const rel = prefix ? `${prefix}/${item.name}` : item.name;
+          await walk(join(dir, item.name), rel, depth + 1);
+        }
+      } else if (
+        GLOB_TARGETS.unrestricted
+        || GLOB_TARGETS.names.has(item.name)
+        || GLOB_TARGETS.exts.has(extensionOf(item.name))
+      ) {
+        found.push(prefix ? `${prefix}/${item.name}` : item.name);
       }
     }
   };
   await walk(root, '', 0);
   return found.sort();
+}
+
+function extensionsFromPaths(paths) {
+  const found = new Set();
+  let seen = 0;
+  for (const path of paths) {
+    if (!path) continue;
+    const ext = extensionOf(path);
+    if (ext) found.add(ext);
+    seen += 1;
+    if (seen >= SAMPLE_BOUND) break;
+  }
+  return [...found].sort();
 }
 
 /** The paths in the one walk that match a shape. */

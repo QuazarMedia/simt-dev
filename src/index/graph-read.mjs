@@ -27,7 +27,7 @@ const SYMBOLS_SQL = `select s.path as path, n.name as name, json_extract(n.props
 // key (`file:<path>`) and the stable `dst_key`: node ids are regenerated when a
 // file changes, so a path is the only key that survives a reindex of one
 // endpoint.
-const EDGES_SQL = `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
+const EDGES_SQL = `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight, 'committed' as provenance
   from edges e join nodes ns on ns.id = e.src_id where coalesce(e.props, '') = '' order by src, dst, kind`;
 
 export async function readSourceLineFacts(root) {
@@ -77,22 +77,24 @@ export async function readGraph(root) {
   };
 }
 
+export const STAGED_IMPORTS_SQL = `with recursive upstream(path, depth) as (
+  select value, 0 from json_each(?)
+  union
+  select substr(n.key, 6), upstream.depth + 1
+  from upstream join edges e on e.kind = 'import' and e.dst_key = upstream.path
+  join nodes n on n.id = e.src_id where upstream.depth < 2
+)
+select substr(n.key, 6) as src, e.dst_key as dst, e.kind
+from edges e join nodes n on n.id = e.src_id
+where e.kind = 'import' and (
+  e.dst_key in (select path from upstream where depth < 2)
+  or n.key in (select 'file:' || path from upstream where depth = 0)
+)`;
+
 export async function readStagedImports(root, tree, paths) {
   const { results, error } = await readSqliteBatch(root, [
     ["select value from meta where key = 'tree'"],
-    [`with recursive upstream(path, depth) as (
-      select value, 0 from json_each(?)
-      union
-      select substr(n.key, 6), upstream.depth + 1
-      from upstream join edges e on e.kind = 'import' and e.dst_key = upstream.path
-      join nodes n on n.id = e.src_id where upstream.depth < 2
-    )
-    select substr(n.key, 6) as src, e.dst_key as dst, e.kind
-    from edges e join nodes n on n.id = e.src_id
-    where e.kind = 'import' and (
-      e.dst_key in (select path from upstream where depth < 2)
-      or n.key in (select 'file:' || path from upstream where depth = 0)
-    )`, [JSON.stringify(paths)]],
+    [STAGED_IMPORTS_SQL, [JSON.stringify(paths)]],
   ]);
   const [metadata, edges] = results ?? [[], []];
   return error || metadata[0]?.value !== tree ? null : edges;
@@ -107,7 +109,10 @@ export async function readSymbolGraph(root) {
 function decodeSymbolGraph(edges, metadata, error) {
   const values = new Map(metadata.map(({ key, value }) => [key, JSON.parse(value)]));
   return {
-    edges: edges.map(({ src, kind, dst, path, props }) => ({ src, kind, dst, path, ...(props === null ? { viaBarrels: [], lines: [] } : JSON.parse(props)) })),
+    edges: edges.map(({ src, kind, dst, path, props }) => ({
+      src, kind, dst, path, provenance: 'committed',
+      ...(props === null ? { viaBarrels: [], lines: [] } : JSON.parse(props)),
+    })),
     bindingCoverage: values.get('binding_coverage') ?? null,
     version: values.get('binding_version') ?? null,
     unresolved: values.get('binding_unresolved') ?? [],
@@ -125,30 +130,79 @@ export async function readFts(root) {
   return withReadError(rows, error);
 }
 
-export async function readLiveSnapshot(root, { text, fielded, binding, tree, bindingEdits, lightweight, rangePaths = [] }) {
-  const chunks = binding ? `, case when ? or (select value from meta where key = 'tree') is not ?
+export async function readNarrowBindings(root, paths) {
+  if (!paths.length) return new Map();
+  const { rows } = await readSqliteRows(root, `select s.path, json_extract(s.props, '$.imports') as imports,
+    json_extract(s.props, '$.bindings') as bindings
+    from sources s where s.kind = 'blob' and s.path in (select value from json_each(?))`, [JSON.stringify(paths)]);
+  return new Map(rows.map(({ path, imports, bindings }) => [path, {
+    imports: JSON.parse(imports ?? '[]'),
+    ...(bindings ? JSON.parse(bindings) : {}),
+  }]));
+}
+
+export async function readLiveSnapshot(root, {
+  text, fielded, binding, tree, indexStat = null, bindingEdits = false, dirtyPaths = [], lightweight, rangePaths = [],
+}) {
+  const narrowBinding = Boolean(binding && lightweight && bindingEdits && dirtyPaths.length > 0 && dirtyPaths.length <= 16);
+  const stampCheck = indexStat !== null;
+  const chunks = !binding ? '' : narrowBinding
+    ? `, case when (select value from meta where key = 'tree') is not ?
     or (select value from meta where key = 'binding_version') is not ?
     or s.path in (select value from json_each(?))
-    then json_extract(s.props, '$.bindings') end as bindings` : '';
+    or s.path in (select value from json_each(?))
+    or s.path in (
+      select substr(n.key, 6) from edges e join nodes n on n.id = e.src_id
+      where e.kind = 'import' and e.dst_key in (select value from json_each(?))
+    )
+    or s.path in (
+      select e.dst_key from edges e join nodes n on n.id = e.src_id
+      where e.kind = 'import' and substr(n.key, 6) in (select value from json_each(?))
+    )
+    then json_extract(s.props, '$.bindings') end as bindings`
+    : stampCheck
+      ? `, case when (select value from meta where key = 'git_index_stat') is not ?
+      or (select value from meta where key = 'binding_version') is not ?
+      or s.path in (select value from json_each(?))
+      then json_extract(s.props, '$.bindings') end as bindings`
+      : `, case when ? or (select value from meta where key = 'tree') is not ?
+      or (select value from meta where key = 'binding_version') is not ?
+      or s.path in (select value from json_each(?))
+      then json_extract(s.props, '$.bindings') end as bindings`;
+  const dirtyJson = JSON.stringify(dirtyPaths);
+  const lazyMetaCols = Boolean(stampCheck && lightweight);
+  const metaColsSql = lazyMetaCols
+    ? `case when (select value from meta where key = 'git_index_stat') is not ? then json_extract(s.props, '$.imports') end as imports,
+      case when (select value from meta where key = 'git_index_stat') is not ? then json_extract(s.props, '$.resolution') end as resolution`
+    : `json_extract(s.props, '$.imports') as imports,
+      json_extract(s.props, '$.resolution') as resolution`;
+  const metaParams = lazyMetaCols ? [indexStat, indexStat] : [];
+  const fileParams = [
+    ...metaParams,
+    ...(!binding ? [] : narrowBinding
+      ? [tree, String(BINDING_VERSION), JSON.stringify(rangePaths), dirtyJson, dirtyJson, dirtyJson]
+      : stampCheck
+        ? [indexStat, String(BINDING_VERSION), JSON.stringify(rangePaths)]
+        : [Number(bindingEdits), tree, String(BINDING_VERSION), JSON.stringify(rangePaths)]),
+  ];
   const queries = [
-    [`select ${FILE_COLUMNS}, json_extract(s.props, '$.imports') as imports,
-      json_extract(s.props, '$.resolution') as resolution
-      ${chunks} ${FILE_SOURCE}`, binding ? [Number(bindingEdits), tree, String(BINDING_VERSION), JSON.stringify(rangePaths)] : []],
+    [`select ${FILE_COLUMNS}, ${metaColsSql}
+      ${chunks} ${FILE_SOURCE}`, fileParams],
     [SYMBOLS_SQL],
     [EDGES_SQL],
-    ["select key, value from meta where key in ('tree', 'build', 'fts_fields')"],
+    ["select key, value from meta where key in ('tree', 'build', 'fts_fields', 'git_index_stat')"],
   ];
   if (text) queries.push([legacyFtsSql('fts_legacy')]);
   if (fielded) queries.push([`select f.kind, substr(n.key, 6) as ref, ${BM25F_FIELDS.map((field) => `f.${field}`).join(', ')}
     from fts f join nodes n on n.id = f.node_id where (select value from meta where key = 'fts_fields') = '1'
     order by ref, f.rowid`]);
-  if (binding) queries.push(...symbolGraphQueries({ lightweight: lightweight && !bindingEdits }));
+  if (binding) queries.push(...symbolGraphQueries({ lightweight: lightweight && (!bindingEdits || narrowBinding) }));
   const { results, error } = await readSqliteBatch(root, queries);
   const [files, symbols, edges, meta, ...extra] = results ?? [[], [], [], []];
   const fts = text ? extra.shift() ?? [] : [];
   const fieldedRows = fielded ? extra.shift() ?? [] : [];
   return {
-    files: files.map(({ imports, ...file }) => ({ ...file, imports: JSON.parse(imports ?? '[]') })),
+    files: lightweight ? files : files.map(({ imports, ...file }) => ({ ...file, imports: JSON.parse(imports ?? '[]') })),
     symbols, edges, fts, fieldedRows, meta: Object.fromEntries(meta.map(({ key, value }) => [key, value])),
     binding: binding ? decodeSymbolGraph(extra[0] ?? [], extra[1] ?? [], error) : null,
     error,

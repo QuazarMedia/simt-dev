@@ -546,7 +546,7 @@ export async function help(argv, dispatched) {
   if (flags.all === true) {
     emit(
       [
-        'simt-dev - shared agent rules, skills and gates for a repo ecosystem',
+        'simt-dev - rules, skills and gates for AI coding agents, with local retrieval, task briefs and repo memory',
         '',
         `usage: ${CLI} <command> [args] [flags]`,
         ...bannerLines,
@@ -575,7 +575,7 @@ export async function help(argv, dispatched) {
   }
   emit(
     [
-      'simt-dev - shared agent rules, skills and gates for a repo ecosystem',
+      'simt-dev - rules, skills and gates for AI coding agents, with local retrieval, task briefs and repo memory',
       '',
       `usage: ${CLI} <command> [args] [flags]`,
       ...bannerLines,

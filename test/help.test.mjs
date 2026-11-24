@@ -191,7 +191,7 @@ test('help: a bare group lists its own subcommands, not the whole surface', asyn
     for (const row of SPEC.filter((r) => r.path.startsWith(`${group} `))) {
       assert.ok(out.includes(row.path.slice(group.length + 1)), `${group} omits ${row.path}`);
     }
-    assert.doesNotMatch(out, /shared agent rules, skills and gates/, `${group} printed the top-level page`);
+    assert.doesNotMatch(out, /rules, skills and gates for AI coding agents/, `${group} printed the top-level page`);
     assert.ok(Buffer.byteLength(out) <= 2048, `${group}: ${Buffer.byteLength(out)} bytes`);
   }
 });

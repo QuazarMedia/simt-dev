@@ -219,7 +219,7 @@ export async function assembleBrief({
   commands = [],
   proof = false,
   workScope = null,
-  retrieval = 'v1',
+  retrieval = 'v2',
   only = null,
   subtask = null,
 } = {}) {
@@ -228,14 +228,19 @@ export async function assembleBrief({
   // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
   const section = only === null ? null : String(only).toUpperCase();
   if (retrieval === 'v2' || subtask !== null) {
-    const { decomposePrompt } = await import('./decompose.mjs');
+    const [{ decomposePrompt }, { extractConstraints }] = await Promise.all([
+      import('./decompose.mjs'),
+      import('./constraints.mjs'),
+    ]);
     const parts = decomposePrompt(task);
     const selected = subtask === null ? null : parts.find(({ id }) => id === subtask);
     if (subtask !== null && !selected) {
       return { error: { message: 'subtask ' + subtask + ' is outside 1–' + parts.length,
-        remedy: 'run simt brief --retrieval v2 with the same prompt to list its subtasks', exitCode: 2 } };
+        remedy: 'run simt brief with the same prompt to list its subtasks', exitCode: 2 } };
     }
-    if (selected || parts.length > 1 || /\b(?:without|except|never|unless|only when|do not|leave|keep|if)\b/iu.test(task)) {
+    const parsedConstraints = selected || parts.length > 1 ? null : extractConstraints(task);
+    const constrained = parsedConstraints !== null && (parsedConstraints.constraints.length > 0 || parsedConstraints.cautions.length > 0);
+    if (selected || parts.length > 1 || constrained) {
       const { assembleCompositeBrief } = await import('./multi.mjs');
       const result = await assembleCompositeBrief({ root, task, parts: selected ? [selected] : parts,
         paths, budget, flags, build, commands, section, subtask });

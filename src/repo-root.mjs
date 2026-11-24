@@ -15,7 +15,7 @@
 // definition.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 import { MANIFEST_FILE, STATE_DIR } from './name.mjs';
@@ -33,6 +33,9 @@ import { MANIFEST_FILE, STATE_DIR } from './name.mjs';
  */
 export function repoRoot(cwd) {
   const start = resolve(String(cwd ?? ''));
+  if (existsSync(join(start, '.git'))) {
+    try { return realpathSync(start); } catch { return start; }
+  }
   const result = spawnSync('git', ['-C', start, 'rev-parse', '--show-toplevel'], {
     encoding: 'utf8',
     timeout: 2000,

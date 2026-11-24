@@ -2,7 +2,7 @@ import { foldIdentifierText } from '../text/identifiers.mjs';
 import { STOPWORDS } from '../text/tokens.mjs';
 import { cmp } from '../util/sort.mjs';
 import {
-  BM25F_FIELDS, fieldProximity, fieldQueryTerms, ftsQuote, PHRASE_WINDOW, queryPairs,
+  BM25F_FIELDS, fieldCandidateStatement, fieldProximity, fieldQueryTerms, queryPairs,
 } from './bm25f.mjs';
 import { readSqliteBatch } from './persist.mjs';
 import { readGraph, searchFtsBm25F } from './store.mjs';
@@ -11,9 +11,29 @@ const TERM = /\x60([^\x60\r\n]+)\x60|"([^"\r\n]+)"|(?:\.\/|\.{2}\/|\/)?[\p{L}\p{
 const METADATA = BM25F_FIELDS.filter((name) => name !== 'body');
 const BODY = ['body'];
 
+const COMMON_SYMBOL_WORDS = new Set([
+  'check', 'open', 'plan', 'run', 'map', 'test', 'status', 'error',
+  'read', 'write', 'format', 'parse', 'score', 'rank', 'limit', 'index',
+]);
+
 function queryEntities(task) {
-  return [...new Set([...String(task ?? '').normalize('NFKC').matchAll(TERM)].map(([match, code, quoted]) =>
-    (code ?? quoted ?? match).trim().replace(/^\.\//, '')))];
+  const seen = new Map();
+  for (const [match, code, quoted] of String(task ?? '').normalize('NFKC').matchAll(TERM)) {
+    const raw = (code ?? quoted ?? match).trim().replace(/^\.\//, '');
+    if (!raw) continue;
+    const isQuoted = Boolean(code ?? quoted);
+    const prev = seen.get(raw);
+    if (!prev || (isQuoted && !prev.quoted)) seen.set(raw, { raw, quoted: isQuoted });
+  }
+  return [...seen.values()];
+}
+
+const isDistinctiveIdentifier = (name) => /[a-z][A-Z]/.test(name) || /[_-]/.test(name) || /\d/.test(name);
+
+function isCalibratedSymbol(name, symbol, df) {
+  if (df > 3) return false;
+  if (COMMON_SYMBOL_WORDS.has(name.toLowerCase())) return false;
+  return symbol.exported === 1 || symbol.exported === true || isDistinctiveIdentifier(name);
 }
 
 const entityKey = (value) => foldIdentifierText(value).toLowerCase();
@@ -34,9 +54,10 @@ function entityDirectory(files, symbols) {
   for (const symbol of symbols) {
     if (!symbol.name || !symbol.path) continue;
     const qualified = symbol.qualname ?? symbol.qualifiedName;
-    add(names, entityKey(symbol.name), { path: symbol.path, name: symbol.name, qualified: false });
+    const exported = symbol.exported === 1 || symbol.exported === true;
+    add(names, entityKey(symbol.name), { path: symbol.path, name: symbol.name, qualified: false, exported });
     if (qualified && qualified !== symbol.name) {
-      add(names, entityKey(qualified).replaceAll('::', '.'), { path: symbol.path, name: qualified, qualified: true });
+      add(names, entityKey(qualified).replaceAll('::', '.'), { path: symbol.path, name: qualified, qualified: true, exported });
     }
   }
   return { paths, names };
@@ -58,19 +79,67 @@ export function createEntityResolver({ files = [], symbols = [] } = {}) {
   return (task, { context = '' } = {}) => resolveAnchors(task, directory, context);
 }
 
-export function resolveEntityAnchors(task, graph) {
-  return createEntityResolver(graph)(task);
+function filteredDirectory(files, symbols, terms) {
+  const paths = new Map();
+  const names = new Map();
+  if (!terms.length) return { paths, names };
+  const wanted = new Set(terms.map(({ raw }) => entityKey(raw)));
+  const wantedBasenames = new Set([...wanted].map((target) => {
+    const slash = target.lastIndexOf('/');
+    return slash < 0 ? target : target.slice(slash + 1);
+  }));
+  const wantedSymbols = new Set([...wanted].map((k) => k.replaceAll('::', '.')));
+  const asciiOnly = /^[\x00-\x7f]+$/;
+  for (const entry of files) {
+    const path = typeof entry === 'string' ? entry : entry.path;
+    const slash = path.lastIndexOf('/');
+    const base = slash < 0 ? path : path.slice(slash + 1);
+    const baseKey = asciiOnly.test(base) ? base.toLowerCase() : entityKey(base);
+    if (!wantedBasenames.has(baseKey)) continue;
+    const key = asciiOnly.test(path) ? path.toLowerCase() : entityKey(path);
+    for (const target of wanted) {
+      if (key === target || key.endsWith('/' + target)) add(paths, target, path);
+    }
+  }
+  const wantedLengths = new Set();
+  for (const sym of wantedSymbols) wantedLengths.add(sym.length);
+  for (const symbol of symbols) {
+    const name = symbol.name;
+    if (!name || !symbol.path) continue;
+    let exported = null;
+    if (wantedLengths.has(name.length)) {
+      const symKey = asciiOnly.test(name) ? name.toLowerCase() : entityKey(name);
+      if (wantedSymbols.has(symKey)) {
+        exported = symbol.exported === 1 || symbol.exported === true;
+        add(names, symKey, { path: symbol.path, name, qualified: false, exported });
+      }
+    }
+    const qualified = symbol.qualname ?? symbol.qualifiedName;
+    if (qualified && qualified !== name && (wantedLengths.has(qualified.length) || qualified.includes('::'))) {
+      const qualKey = (asciiOnly.test(qualified) ? qualified.toLowerCase() : entityKey(qualified)).replaceAll('::', '.');
+      if (wantedSymbols.has(qualKey)) {
+        exported ??= symbol.exported === 1 || symbol.exported === true;
+        add(names, qualKey, { path: symbol.path, name: qualified, qualified: true, exported });
+      }
+    }
+  }
+  return { paths, names };
 }
 
-function resolveAnchors(task, { paths, names }, shared) {
+export function resolveEntityAnchors(task, { files = [], symbols = [] } = {}) {
   const terms = queryEntities(task);
-  const contexts = terms.map((term) => new Set(fieldQueryTerms(term)));
+  return resolveAnchors(task, filteredDirectory(files, symbols, terms), '', terms);
+}
+
+function resolveAnchors(task, { paths, names }, shared, precomputedTerms = null) {
+  const terms = precomputedTerms ?? queryEntities(task);
+  const contexts = terms.map(({ raw }) => new Set(fieldQueryTerms(raw)));
   const context = new Map(fieldQueryTerms(shared).map((word) => [word, 1]));
   for (const words of contexts) {
     for (const word of words) context.set(word, (context.get(word) ?? 0) + 1);
   }
   const results = new Map();
-  for (const [index, raw] of terms.entries()) {
+  for (const [index, { raw, quoted }] of terms.entries()) {
     const key = entityKey(raw);
     const matching = paths.get(key) ?? [];
     const exact = matching.find((path) => path === raw);
@@ -83,16 +152,21 @@ function resolveAnchors(task, { paths, names }, shared) {
     }
 
     if (STOPWORDS.has(key)) continue;
-    const symbols = names.get(key.replaceAll('::', '.')) ?? [];
-    const caseMatches = symbols.filter(({ name }) => name.replaceAll('::', '.') === raw.replaceAll('::', '.'));
-    const candidates = caseMatches.length ? caseMatches : symbols;
+    const allSymbols = names.get(key.replaceAll('::', '.')) ?? [];
+    const df = new Set(allSymbols.map(({ path: symbolPath }) => symbolPath)).size;
+    const calibrated = quoted
+      ? allSymbols
+      : allSymbols.filter((symbol) => symbol.qualified || isCalibratedSymbol(symbol.name, symbol, df));
+    if (!calibrated.length) continue;
+    const caseMatches = calibrated.filter(({ name }) => name.replaceAll('::', '.') === raw.replaceAll('::', '.'));
+    const candidates = caseMatches.length ? caseMatches : calibrated;
     const target = selectByDirectory(candidates.map(({ path }) => path), context, contexts[index]);
     if (!target) continue;
     const hits = results.get(target) ?? [];
     for (const symbol of candidates.filter(({ path }) => path === target)) {
       const kind = symbol.qualified ? 'qualified-symbol' : 'symbol';
       if (!hits.some((hit) => hit.kind === kind && hit.query === raw && hit.matched === symbol.name)) {
-        hits.push({ kind, query: raw, matched: symbol.name });
+        hits.push(quoted ? { kind, query: raw, matched: symbol.name, quoted: true } : { kind, query: raw, matched: symbol.name });
       }
     }
     results.set(target, hits);
@@ -127,7 +201,9 @@ function fuseEntitySignals(anchors, metadata, body, proximity, pairs) {
       proximity: round(pairs.length ? 0.75 * phrase.length / pairs.length : 0),
       section: round((bodyByPath.get(path) ?? 0) * 0.5),
     };
-    const tier = pathScore ? 1 : symbolScore ? 2 : components.bm25f || components.proximity ? 3 : 4;
+    const tier1 = matches.some(({ kind, quoted }) =>
+      kind === 'path' || kind === 'suffix' || kind === 'qualified-symbol' || quoted === true);
+    const tier = tier1 ? 1 : symbolScore ? 2 : components.bm25f || components.proximity ? 3 : 4;
     const score = Object.values(components).reduce((total, value) => total + value, 0);
     return { path, tier, score, components, matches, phrase };
   }).sort((a, b) => a.tier - b.tier || b.score - a.score || cmp(a.path, b.path));
@@ -135,21 +211,11 @@ function fuseEntitySignals(anchors, metadata, body, proximity, pairs) {
 
 async function nativeProximity(root, pairs) {
   if (!pairs.length) return { hits: new Map(), error: null };
-  const queries = pairs.map(([left, right]) => [
-    `select distinct substr(n.key, 6) as path from fts f join nodes n on n.id = f.node_id
-      where fts match ? and (select value from meta where key = 'fts_fields') = '1'`,
-    [`NEAR(${ftsQuote(left)} ${ftsQuote(right)}, ${PHRASE_WINDOW})`],
-  ]);
-  const { results, error } = await readSqliteBatch(root, queries);
-  const hits = new Map();
-  for (const [index, rows] of (results ?? []).entries()) {
-    for (const { path } of rows) {
-      const matches = hits.get(path) ?? new Set();
-      matches.add(index);
-      hits.set(path, matches);
-    }
-  }
-  return { hits, error };
+  const pairTerms = [...new Set(pairs.flat())];
+  const [sql, params] = fieldCandidateStatement(pairTerms, BM25F_FIELDS, 96);
+  const { results, error } = await readSqliteBatch(root, [[sql, params]], { legacySql: null });
+  const rows = results?.[0] ?? [];
+  return { hits: fieldProximity(rows, pairs), error };
 }
 
 export function exactEntityCandidates(task, graph) {
@@ -159,12 +225,12 @@ export function exactEntityCandidates(task, graph) {
 }
 
 /** Rank from an already-built index, or from explicit fielded rows for live overlays. */
-export async function searchEntityCandidates(root, task, { files, symbols, fts } = {}) {
+export async function searchEntityCandidates(root, task, { files, symbols, fts, stats = null } = {}) {
   const pairs = queryPairs(task);
   const [graph, metadata, body, proximity] = await Promise.all([
     files && symbols ? { files, symbols } : readGraph(root),
-    searchFtsBm25F(root, task, { fts, fields: METADATA }),
-    searchFtsBm25F(root, task, { fts, fields: BODY }),
+    searchFtsBm25F(root, task, { fts, fields: METADATA, stats }),
+    searchFtsBm25F(root, task, { fts, fields: BODY, stats }),
     fts === undefined ? nativeProximity(root, pairs) : { hits: fieldProximity(fts, pairs), error: fts.error },
   ]);
   const anchors = resolveEntityAnchors(task, graph);

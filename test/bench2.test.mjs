@@ -140,7 +140,8 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
     prompt: 'validate slice commit and run focused tests',
   });
   keepTemp(briefWs.slotDir);
-  assert.match(briefWs.promptPrefix, /validate slice commit and run focused tests/);
+  assert.match(briefWs.promptPrefix, /validate slice commit/);
+  assert.match(briefWs.promptPrefix, /run focused tests/);
   assert.equal(existsSync(join(briefWs.workDir, '.simt', 'local', 'brief.md')), false);
 
   // 4. Custom arm file (--arm name=path/to/arm.json) writes/removes files and sets env.

@@ -58,10 +58,10 @@ test('retrieval v1 records four failure classes and six CLI envelopes in an isol
     return { code, payload };
   }
 
-  const mixed = await probe(['brief', scenario.mixedPrompt]);
-  const composite = await probe(['brief', scenario.compositePrompt, '--explain']);
-  const map = await probe(['map', '--task', scenario.mixedPrompt]);
-  const impact = await probe(['impact', 'rankRecords']);
+  const mixed = await probe(['brief', scenario.mixedPrompt, '--retrieval', 'v1']);
+  const composite = await probe(['brief', scenario.compositePrompt, '--explain', '--retrieval', 'v1']);
+  const map = await probe(['map', '--task', scenario.mixedPrompt, '--retrieval', 'v1']);
+  const impact = await probe(['impact', 'rankRecords', '--retrieval', 'v1']);
   const why = await probe(['why', 'src/rank.mjs', '--retrieval', 'v1']);
   const gate = await probe(['gate', 'src/inventory.mjs']);
   const check = await probe(['check']);

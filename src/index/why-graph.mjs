@@ -9,21 +9,36 @@ import { scriptSpecifiers } from './extract.mjs';
 import { sortHits } from './govern.mjs';
 import { governanceBasis, readGovernance } from './governance-store.mjs';
 import { readStagedImports } from './graph-read.mjs';
-import { withImportDatabase } from './import-database.mjs';
 import { loadLiveGraph } from './live.mjs';
-import { readSqliteBatch } from './persist.mjs';
+import { readHeadShaFast, readSqliteBatch } from './persist.mjs';
 
 const LIMIT = 64;
 const MODULE_EXTENSIONS = ['mjs', 'js', 'ts', 'cjs', 'mts', 'cts'];
 
-const COMMAND_WALK = `with recursive walk(target, path, depth, visited) as (
-  select value, value, 0, json_array(value) from json_each(?)
-  union all
-  select walk.target, i.src, walk.depth + 1, json_insert(walk.visited, '$[#]', i.src)
-  from walk join imports i on i.dst = walk.path
-  where walk.depth < 2 and not exists(select 1 from json_each(walk.visited) where value = i.src)
-)
-select target, path, depth, visited from walk order by depth, visited`;
+export function walkReverseImports(edges, requested) {
+  const reverse = new Map();
+  for (const { src, dst, kind } of edges) {
+    if ((kind && kind !== 'import') || src === dst) continue;
+    let sources = reverse.get(dst);
+    if (!sources) {
+      sources = new Set();
+      reverse.set(dst, sources);
+    }
+    sources.add(src);
+  }
+  const rows = [];
+  for (const target of requested) {
+    rows.push({ target, path: target, depth: 0, visited: JSON.stringify([target]) });
+    for (const src1 of reverse.get(target) ?? []) {
+      rows.push({ target, path: src1, depth: 1, visited: JSON.stringify([target, src1]) });
+      for (const src2 of reverse.get(src1) ?? []) {
+        if (src2 === target || src2 === src1) continue;
+        rows.push({ target, path: src2, depth: 2, visited: JSON.stringify([target, src1, src2]) });
+      }
+    }
+  }
+  return rows.sort((a, b) => a.depth - b.depth || cmp(a.visited, b.visited));
+}
 
 function entrypoints(command, ctx) {
   const exact = command.replaceAll(' ', '-');
@@ -42,7 +57,7 @@ function entrypoints(command, ctx) {
 
 async function citationsFor(root, paths) {
   const [head, cached] = await Promise.all([
-    gitText(root, ['rev-parse', '--verify', '-q', 'HEAD'], { allowFailure: true }),
+    readHeadShaFast(root).then((sha) => sha ?? gitText(root, ['rev-parse', '--verify', '-q', 'HEAD'], { allowFailure: true })),
     readSqliteBatch(root, [[CITATIONS_BASIS_SQL], [CITATIONS_PATH_SQL, [JSON.stringify(paths)]]]),
   ]);
   const [meta, rows] = cached.results ?? [[], []];
@@ -67,10 +82,11 @@ function addWitness(witnesses, record, path, witness) {
   if (!witnesses.has(key)) witnesses.set(key, { kind: record.kind, id: record.id, detail: record.detail, path, witness });
 }
 
-export async function explainGovernance(root, paths, ctx, { tree, graph, inputState } = {}) {
+export async function explainGovernance(root, paths, ctx, { tree, graph, inputState, staged: preloadedStaged = undefined, commits: preloadedCommits = undefined, preloadedGov = null } = {}) {
   const requested = [...new Set(paths)].sort(cmp);
   const [staged, commits, observedBasis] = await Promise.all([
-    tree === undefined ? null : readStagedImports(root, tree, requested), citationsFor(root, requested),
+    preloadedStaged !== undefined ? preloadedStaged : (tree === undefined ? null : readStagedImports(root, tree, requested)),
+    preloadedCommits !== undefined ? preloadedCommits : citationsFor(root, requested),
     governanceBasis(root, ctx, inputState),
   ]);
   const imports = staged ?? (graph ?? await loadLiveGraph(root, { retainTargets: requested })).edges;
@@ -82,10 +98,8 @@ export async function explainGovernance(root, paths, ctx, { tree, graph, inputSt
     for (const file of entrypoints(command, ctx)) if (!routes.has(file)) routes.set(file, command);
   }
   const governors = new Set([...requested, ...dependencies.map(({ dst }) => dst), ...routes.keys()]);
-  const [snapshot, pathsToEntrypoints] = await Promise.all([
-    readGovernance(root, ctx, governors, { includeCommands: true, observedBasis }),
-    withImportDatabase(edges, (db) => db.prepare(COMMAND_WALK).all(JSON.stringify(requested))),
-  ]);
+  const snapshot = await readGovernance(root, ctx, governors, { includeCommands: true, observedBasis, preloaded: preloadedGov });
+  const pathsToEntrypoints = walkReverseImports(edges, requested);
   const byPath = recordsByPath(snapshot);
   const byCommand = new Map();
   for (const [file, command] of routes) {

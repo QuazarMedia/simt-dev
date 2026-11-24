@@ -51,7 +51,7 @@ test('W19: an applicable authority outranks an obsolete hub, and a held permissi
 
   const denied = file(dir, 'restricted.json', { units, permissionsHeld: ['public'] });
   const filtered = run(['knowledge', 'rank', '--input', denied, '--query', 'VAT rate services']);
-  assert.deepEqual(filtered.payload.excluded.filter((entry) => entry.reason === 'permission').map((entry) => entry.id).sort(), ['c']);
+  assert.deepEqual(filtered.payload.excluded.filter((entry) => entry.reason === 'permission'), [{ id: null, reason: 'permission' }]);
   assert.ok(!filtered.payload.ranked.some((hit) => hit.id === 'c'));
 });
 
@@ -68,7 +68,7 @@ test('W19: a unit whose scope is unknown is reported beside the answer, not drop
   const ranked = run(['knowledge', 'rank', '--input', doc, '--query', 'VAT rate']);
   assert.deepEqual(ranked.payload.ranked.map((hit) => hit.id), ['known']);
   assert.ok(ranked.payload.unknownScope.some((entry) => entry.id === 'unplaced'));
-  assert.ok(ranked.payload.excluded.some((entry) => entry.id === 'elsewhere'));
+  assert.ok(ranked.payload.excluded.some((entry) => entry.reason === 'scope-mismatch'));
 });
 
 test('W17: a changed input selects its output and a receipt-less output is not a minimal safe set', () => {

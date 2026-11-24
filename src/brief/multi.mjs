@@ -3,17 +3,17 @@ import { decisionRecords, lessonScopes } from '../commands/why.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { decisionPaths, scopeHits, sourceRoots } from '../index/govern.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
-import { prepareMapStructure, rankMapV2 } from '../index/map-v2.mjs';
+import { rankMapV2 } from '../index/map-v2.mjs';
 import { testEdges, testsFor } from '../index/tests.mjs';
 import { isTestPath } from '../testing/paths.mjs';
 import { commandCard } from '../kernel/card.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rankSkills } from '../resolve/resolve.mjs';
-import { INDEX_STOP, STOPWORDS, tokenize } from '../text/tokens.mjs';
+import { tokenize } from '../text/tokens.mjs';
 import { cmp } from '../util/sort.mjs';
 import { bindSubtaskAnchors } from './anchors.mjs';
 import { detailCommands, drillFooter, subtaskCoverage } from './drilldown.mjs';
-import { classifySubtaskIntents, subtaskCommands } from './kind.mjs';
+import { classifySubtaskIntents, isConfigPath, isDocPath, subtaskCommands } from './kind.mjs';
 import { keptSections } from './packet.mjs';
 import { clusterSubtasks, orderSubtasks, subtaskLanes } from './plan-graph.mjs';
 import { buildCompactPacket, compactFileLine, compactTestLine, symbolEntrypoints, taggedLine } from './render.mjs';
@@ -60,70 +60,159 @@ function candidatePool(section, tagged) {
   };
 }
 
-function targetedPaths(query, files) {
-  const suffixes = new Set([...query.matchAll(/(?:[\w@-]+\/)*[\w@-]+\.[\w.-]+/gu)]
-    .map(([name]) => name.replace(/[.]+$/u, '')));
-  const words = new Set(tokenize(query).filter((word) => word.length > 3 && !STOPWORDS.has(word) && !INDEX_STOP.has(word)
-    && word !== 'tests' && word !== 'test'));
-  const explicit = files.filter(({ path }) => [...suffixes].some((name) => path === name || path.endsWith('/' + name)));
-  const topic = new Map();
-  for (const { path } of files) {
-    const parts = path.split('/');
-    const base = parts.pop().split('.')[0].toLowerCase();
-    const score = Number(words.has(base)) * 2 + Number(parts.some((part) => words.has(part.toLowerCase())));
-    if (score) topic.set(path, score);
+function classifyArtifactRole(query) {
+  const text = String(query ?? '');
+  if (/\b(?:add|write|update|fix)?\s*(?:regression\s+|unit\s+|integration\s+)?tests?\b|\btest\s+coverage\b|\bspec\b/iu.test(text)) {
+    return 'tests';
   }
-  return { explicit, topic };
+  if (/\b(?:config|configuration|settings?|json|yaml|toml)\b/iu.test(text)) {
+    return 'config';
+  }
+  if (/\b(?:doc|docs|document|documentation|guide|readme|changelog)\b/iu.test(text)) {
+    return 'docs';
+  }
+  return 'code';
 }
 
-async function retrieveSubtasks(root, graph, tasks, allowed) {
+function stemOf(path) {
+  const base = (path.split('/').pop() ?? '').toLowerCase();
+  return base.replace(/(?:\.(?:test|spec))?\.[^.]+$/u, '').replace(/(?:_test|_spec)$/u, '');
+}
+
+function transitiveTestsFor(anchor, tests, edges, root, sortedFiles = null) {
+  const anchorStem = stemOf(anchor);
+  const direct = testsFor(anchor, tests);
+  const found = new Map(direct.map((path) => [path, 1]));
+  const reverse = new Map();
+  for (const { src, dst, kind } of edges) {
+    if (kind && kind !== 'import') continue;
+    if (src === dst) continue;
+    const list = reverse.get(dst) ?? [];
+    list.push(src);
+    reverse.set(dst, list);
+  }
+  let frontier = [anchor];
+  const visited = new Set(frontier);
+  for (let hop = 1; hop <= 3; hop += 1) {
+    const next = [];
+    for (const node of frontier) {
+      for (const src of reverse.get(node) ?? []) {
+        if (isTestPath(src, root)) {
+          if (!found.has(src)) found.set(src, hop);
+          continue;
+        }
+        if (visited.has(src)) continue;
+        visited.add(src);
+        next.push(src);
+        for (const testPath of testsFor(src, tests)) {
+          if (!found.has(testPath)) found.set(testPath, hop + 1);
+        }
+      }
+    }
+    frontier = next;
+    if (!frontier.length) break;
+  }
+  if (anchorStem && sortedFiles) {
+    for (const path of sortedFiles) {
+      if (isTestPath(path, root) && stemOf(path) === anchorStem && !found.has(path)) {
+        found.set(path, 2);
+      }
+    }
+  }
+  return [...found.entries()]
+    .sort(([a, hopA], [b, hopB]) => {
+      const exactA = anchorStem && stemOf(a) === anchorStem ? 0 : 1;
+      const exactB = anchorStem && stemOf(b) === anchorStem ? 0 : 1;
+      return exactA - exactB || hopA - hopB || cmp(a, b);
+    })
+    .map(([path]) => path);
+}
+
+function projectByRole(role, anchors, rankedPaths, { graph, tests, include, root }) {
+  const seen = new Set();
+  const projected = [];
+  const push = (path) => {
+    if (path && include({ path }) && !seen.has(path)) {
+      seen.add(path);
+      projected.push(path);
+    }
+  };
+  const anchorStems = new Set(anchors.map(stemOf).filter(Boolean));
+  const sortedFiles = graph.sortedPaths ?? (graph.sortedPaths = graph.files.map(({ path }) => path));
+
+  if (role === 'tests') {
+    for (const anchor of anchors) {
+      for (const testPath of transitiveTestsFor(anchor, tests, graph.edges, root, sortedFiles)) push(testPath);
+    }
+    for (const path of rankedPaths) if (isTestPath(path, root)) push(path);
+  } else if (role === 'config') {
+    const anchorSet = new Set(anchors);
+    const cochange = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')]
+      .flatMap(({ src, dst, weight = 0 }) => {
+        if (anchorSet.has(src)) return [{ path: dst, weight }];
+        if (anchorSet.has(dst)) return [{ path: src, weight }];
+        return [];
+      })
+      .sort((a, b) => b.weight - a.weight || cmp(a.path, b.path));
+    for (const { path } of cochange) if (isConfigPath(path)) push(path);
+    for (const path of rankedPaths) if (isConfigPath(path)) push(path);
+    for (const path of sortedFiles) if (isConfigPath(path) && anchorStems.has(stemOf(path))) push(path);
+  } else if (role === 'docs') {
+    for (const path of rankedPaths) if (isDocPath(path)) push(path);
+    for (const path of sortedFiles) if (isDocPath(path) && anchorStems.has(stemOf(path))) push(path);
+  }
+  for (const path of rankedPaths) push(path);
+  return projected;
+}
+
+async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
   const queries = new Map();
   let structure;
   return Promise.all(tasks.map(async (task) => {
     if (!task.query) return { ...task, files: [], feedback: null, evidence: [] };
     const excluded = new Set(task.excludedPaths);
-    const key = JSON.stringify([task.query, task.excludedPaths]);
     const include = ({ path }) => !excluded.has(path) && (allowed === null || allowed.has(path));
     const explicit = task.anchors.filter(({ kind }) => kind === 'path' || kind === 'suffix');
     if (explicit.length) {
-      const paths = [...new Set(explicit.map(({ path }) => path))].slice(0, TOP_FILES);
+      const paths = [...new Set(explicit.map(({ path }) => path))].filter((path) => include({ path })).slice(0, TOP_FILES);
       return { ...task, files: paths.map((path) => ({ path, rank: 1, resolver: 1 })),
         feedback: { reason: 'exact-anchor', expansion: [] },
         evidence: paths.map((path) => ({ path, channels: { entity: { matches: explicit.filter((row) => row.path === path) } } })),
       };
     }
-    const testIntent = /\btests?\b/iu.test(task.query);
-    const files = graph.files.filter((file) => include(file) && (testIntent || !isTestPath(file.path, root) || task.anchors.some(({ path }) => path === file.path)));
-    const target = targetedPaths(task.query, files);
-    const codeTopics = files.filter(({ path, lang }) => target.topic.has(path) && lang);
-    const family = codeTopics.length && codeTopics.length <= TOP_FILES * 6
-      ? codeTopics
-      : target.topic.size && target.topic.size <= TOP_FILES * 6
-        ? files.filter(({ path }) => target.topic.has(path)) : files;
-    const restricted = target.explicit.length ? target.explicit : family;
-    const eligible = new Set(restricted.map(({ path }) => path));
-    const anchored = [...new Set(task.anchors.map(({ path }) => path))];
-    if (target.explicit.length && target.explicit.length <= TOP_FILES) {
-      const paths = [...eligible].sort(cmp);
-      return { ...task, files: paths.map((path) => ({ path, rank: 0, resolver: 0 })),
-        feedback: { reason: 'ambiguous-path', expansion: [] },
-        evidence: paths.map((path) => ({ path, channels: { entity: { ambiguous: true } } })),
-      };
-    }
+    const role = classifyArtifactRole(task.query);
+    const key = JSON.stringify([task.query, task.excludedPaths, role]);
+    const eligibleFiles = graph.files.filter(include);
+    const eligible = new Set(eligibleFiles.map(({ path }) => path));
+    const anchored = [...new Set(task.anchors.map(({ path }) => path))].filter((path) => eligible.has(path));
+    const local = allowed === null ? graph : {
+      ...graph,
+      files: eligibleFiles,
+      symbols: graph.symbols.filter(({ path }) => eligible.has(path)),
+      fieldedRows: graph.fieldedRows.filter(({ ref }) => eligible.has(ref)),
+    };
     if (!queries.has(key)) {
-      const local = {
-        ...graph, files: restricted, symbols: graph.symbols.filter(({ path }) => eligible.has(path)),
-        fieldedRows: graph.fieldedRows.filter(({ ref }) => eligible.has(ref)),
-      };
-      structure ??= prepareMapStructure(graph);
-      queries.set(key, rankMapV2(root, local, task.query, { explain: true, coupling: false, structure, exactOnly: graph.nativeLexical }));
+      queries.set(key, rankMapV2(root, local, task.query, {
+        explain: true,
+        coupling: true,
+        includeTests: false,
+      }));
     }
     const rank = await queries.get(key);
     const byPath = new Map(rank.ranked.map((row) => [row.path, row]));
-    const topics = rank.ranked.filter(({ path }) => target.topic.has(path)).sort((a, b) =>
-      target.topic.get(b.path) - target.topic.get(a.path) || b.rank - a.rank || cmp(a.path, b.path));
-    const ranked = [...new Set([...anchored, ...topics.map(({ path }) => path), ...rank.ranked.map(({ path }) => path), ...eligible])];
-    const candidates = ranked.slice(0, TOP_FILES).map((path) => byPath.get(path) ?? { path, rank: 0, resolver: Number(anchored.includes(path)) });
+    const rankedPaths = [...new Set([...anchored, ...rank.ranked.map(({ path }) => path)])];
+    const seedAnchors = rankedPaths.slice(0, TOP_FILES);
+    let projected = projectByRole(role, seedAnchors, rankedPaths, { graph, tests, include, root });
+    if (role === 'tests' && !projected.some((path) => isTestPath(path, root))) {
+      const withTests = await rankMapV2(root, local, task.query, {
+        explain: true,
+        coupling: true,
+        includeTests: true,
+      });
+      projected = projectByRole(role, seedAnchors, withTests.ranked.map(({ path }) => path), { graph, tests, include, root });
+    }
+    const candidates = projected.slice(0, TOP_FILES).map((path) =>
+      byPath.get(path) ?? { path, rank: 0, resolver: Number(anchored.includes(path)) });
     const selected = new Set(candidates.map(({ path }) => path));
     return { ...task, files: candidates, feedback: rank.feedback, evidence: rank.evidence.filter(({ path }) => selected.has(path)) };
   }));
@@ -132,7 +221,7 @@ async function retrieveSubtasks(root, graph, tasks, allowed) {
 export async function assembleCompositeBrief({ root, task, parts, paths, budget, flags, build, commands, section, subtask = null }) {
   const need = (facets) => section === null || facets.includes(section);
   const [graph, repo, registry, records, lessons] = await Promise.all([
-    loadLiveGraph(root, { build, fielded: true, nativeLexical: true, binding: true }),
+    loadLiveGraph(root, { build, fielded: true, nativeLexical: true, binding: true, cochange: true }),
     fingerprint(root),
     need(['SKILLS', 'CAUTIONS']) ? loadRegistry(null, { ...flags, root }) : null,
     need(['DECISIONS']) ? decisionRecords(root) : [],
@@ -141,8 +230,9 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
   if (graph.cold) return graph;
   const named = paths === null ? null : parsePathList(paths);
   const allowed = named === null ? null : new Set(named);
+  const tests = testEdges({ files: graph.files, imports: graph.edges }, { root });
   const bound = bindSubtaskAnchors(parts, graph, { paths: named, scopes: repo.manifest?.work?.scopes });
-  const ranked = await retrieveSubtasks(root, graph, bound, allowed);
+  const ranked = await retrieveSubtasks(root, graph, bound, allowed, tests);
   const { kind, tasks, obligations } = classifySubtaskIntents(clusterSubtasks(ranked));
   const basis = tasks.length > 1 ? 'the widest kind across ' + tasks.length + ' subtasks' : tasks[0]?.intent?.basis ?? 'no positive action';
   const plan = orderSubtasks(tasks, graph);
@@ -158,9 +248,12 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
     for (const id of row.subtasks) add('COMMANDS', row.command, row.label + '  ' + row.command, id, 1, ['test', 'focused'].includes(row.verb));
   }
   if (tasks.length > 1) {
+    if (tasks.length > 2) {
+      add('SUBTASKS', 'summary', 'T1..T' + tasks.length + ' (' + tasks.length + ' tasks; --subtask N for details)', 0, 1, true);
+    }
     for (const line of lines) add('SUBTASKS', line, compact(line, 170), 0, 0.3);
     for (const subject of tasks) {
-      add('SUBTASKS', String(subject.id), (ids) => taggedLine(compact(subject.text, 78), ids), subject.id, 1, true);
+      add('SUBTASKS', String(subject.id), (ids) => taggedLine(compact(subject.text, 78), ids), subject.id, 1, tasks.length <= 2);
     }
   }
 
@@ -171,13 +264,13 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
     symbols.set(symbol.path, bucket);
   }
   const entrypoints = symbolEntrypoints(graph.symbolGraph?.edges ?? []);
-  const tests = need(['TESTS', 'CAUTIONS']) ? testEdges({ files: graph.files, imports: graph.edges }, { root }) : [];
   const likelyPaths = new Set(tasks.flatMap(({ files }) => files.map(({ path }) => path)));
   const decisionContext = { files: likelyPaths, commands: new Set(commands), roots: sourceRoots(filePaths) };
   const recordById = new Map(records.map((record) => [record.id, record]));
   const governed = decisionPaths(records, decisionContext);
   const byId = new Map(tasks.map((row) => [row.id, row]));
 
+  const sortedFilePaths = [...filePaths].sort(cmp);
   for (const subject of tasks) {
     const id = subject.id;
     const likely = subject.files.map(({ path }) => path);
@@ -187,7 +280,7 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
         const query = ids.length ? ids.map((value) => byId.get(value).query).join(' ') : subject.query;
         return compactFileLine(path, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids });
       }, id, weight);
-      const reachable = isTestPath(path, root) ? [path] : testsFor(path, tests);
+      const reachable = isTestPath(path, root) ? [path] : transitiveTestsFor(path, tests, graph.edges, root, sortedFilePaths);
       if (reachable.length) add('TESTS', path, (ids) => compactTestLine(path, reachable, { subtasks: ids }), id, weight);
       else if (index === 0) add('CAUTIONS', 'test:' + path, 'No direct test recorded for ' + path, id, 0.5);
 
@@ -203,8 +296,9 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
     }
     for (const caution of subject.cautions) add('CAUTIONS', caution, caution, id, 1, true);
     if (!likely.length && subject.query) add('CAUTIONS', 'no-match:' + id, 'No eligible files resolved for this subtask.', id, 1);
-    if (registry?.ok) {
-      const evidence = rankSkills(registry.registry.skills, {
+    const registrySkills = Array.isArray(registry?.registry?.skills) ? registry.registry.skills : [];
+    if (registrySkills.length) {
+      const evidence = rankSkills(registrySkills, {
         repoStack: repo.signals, taskTokens: tokenize(subject.query), paths: likely, tree: [...filePaths],
       });
       for (const row of evidence.selected.filter(({ skill }) => !skill.deferred).slice(0, 2)) {
@@ -217,12 +311,12 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
       }
     }
   }
-  if (graph.stale) add('CAUTIONS', 'stale', 'The live index has incomplete source evidence. Run simt index --retrieval v2.', 0, 1, true);
+  if (graph.stale) add('CAUTIONS', 'stale', 'The live index has incomplete source evidence. Run simt index.', 0, 1, true);
 
   const items = candidates.items();
   const drillDown = detailCommands(task, tasks, { paths: named, selected: subtask });
   const footerBytes = Math.min(350, Math.floor(budget / 4));
-  const packed = buildCompactPacket(items, { budget, footer: drillFooter(tasks, drillDown, footerBytes), footerBytes });
+  const packed = buildCompactPacket(items, { budget, footer: drillFooter(tasks, drillDown, footerBytes) });
   const constraints = tasks.flatMap(({ id, constraints: rows }) => rows.map((row) => ({ subtaskId: id, ...row })));
   return {
     root, kind, basis, task, scope, budget, items, packed,

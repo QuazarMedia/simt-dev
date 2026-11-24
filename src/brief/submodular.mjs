@@ -90,8 +90,9 @@ function prepare(items, { facetWeights = {}, taskWeights = {}, saturation = {}, 
       effects.push(effect(JSON.stringify(['floor', section]), 'first', 1, floor, 1));
     }
     return {
-      id, bytes, effects, order: sectionOrder.get(section) ?? SECTIONS.length, subject, hard: priority === 'hard',
+      id, bytes, section, effects, order: sectionOrder.get(section) ?? SECTIONS.length, subject, hard: priority === 'hard',
       covers: item.covers ?? null, densityWeight: item.densityWeight ?? 1,
+      subtasks: [...relevance.values()].filter(({ subtask }) => Number.isFinite(subtask) && subtask > 0),
     };
   }).sort(candidateOrder);
   return { rows, dimensions: dimensions.size, groups: groups.size };
@@ -115,8 +116,8 @@ function objective(model) {
   };
 }
 
-function density(gain, bytes) {
-  return bytes === 0 ? (gain > 0 ? Infinity : 0) : gain / bytes;
+function density(gain, bytes, power = 0.75) {
+  return bytes === 0 ? (gain > 0 ? Infinity : 0) : gain / (bytes ** power);
 }
 
 function record(row, gain) {
@@ -130,21 +131,51 @@ function better(candidate, best) {
       && cmp(candidate.trace.map(({ id }) => id).join('\0'), best.trace.map(({ id }) => id).join('\0')) < 0)));
 }
 
-function greedy(model, hard, soft, budget, { regularizer = 0, augment = false } = {}) {
+function greedy(model, hard, soft, budget, { regularizer = 0, augment = false, power = 0.75 } = {}) {
   const delta = objective(model);
   const trace = hard.map((row) => record(row, delta(row, true)));
   let bytes = trace.reduce((sum, row) => sum + row.bytes, 0);
   let utility = trace.reduce((sum, row) => sum + row.gain, 0);
-  let best = { trace: [...trace], bytes, utility };
   const used = new Set();
   const coverage = new Set(hard.flatMap(({ covers }) => covers ?? []));
   const eligible = ({ covers }) => covers === null || covers.some((claim) => !coverage.has(claim));
-  const weightedDensity = (gain, row) => density(gain, row.bytes + regularizer) * row.densityWeight;
+
+  // Phase 1: round-robin subtask floor for multi-task packets so every subtask
+  // receives its strongest fitting FILES item before Phase 2 fills remaining budget.
+  const allSubtasks = [...new Set(soft.flatMap(({ subtasks }) => subtasks.map(({ subtask }) => subtask)))].sort((a, b) => a - b);
+  if (allSubtasks.length > 1) {
+    const coveredFiles = new Set(hard.filter(({ section }) => section === 'FILES')
+      .flatMap(({ subtasks }) => subtasks.map(({ subtask }) => subtask)));
+    for (const subtask of allSubtasks) {
+      if (coveredFiles.has(subtask)) continue;
+      const candidates = soft
+        .filter((row) => !used.has(row.id) && row.section === 'FILES' && row.bytes <= budget - bytes && eligible(row)
+          && row.subtasks.some((entry) => entry.subtask === subtask))
+        .sort((a, b) => {
+          const sa = a.subtasks.find((entry) => entry.subtask === subtask)?.score ?? 0;
+          const sb = b.subtasks.find((entry) => entry.subtask === subtask)?.score ?? 0;
+          return sb - sa || candidateOrder(a, b);
+        });
+      const pick = candidates[0];
+      if (!pick) continue;
+      const gain = delta(pick, true);
+      if (gain <= 0) continue;
+      used.add(pick.id);
+      for (const claim of pick.covers ?? []) coverage.add(claim);
+      for (const entry of pick.subtasks) coveredFiles.add(entry.subtask);
+      utility += gain;
+      bytes += pick.bytes;
+      trace.push(record(pick, gain));
+    }
+  }
+
+  let best = { trace: [...trace], bytes, utility };
+  const weightedDensity = (gain, row) => density(gain, row.bytes + regularizer, power) * row.densityWeight;
   const compare = (a, b) => a.priority === b.priority ? candidateOrder(a.row, b.row) : b.priority - a.priority;
   const byDensity = heap(compare);
   const byGain = augment ? heap(compare) : null;
   for (const row of soft) {
-    if (row.bytes > budget - bytes || !eligible(row)) continue;
+    if (used.has(row.id) || row.bytes > budget - bytes || !eligible(row)) continue;
     const gain = delta(row);
     if (gain <= 0) continue;
     byDensity.push({ row, gain, epoch: 0, priority: weightedDensity(gain, row) });
@@ -214,13 +245,13 @@ export function packSubmodular(items, { budget = DEFAULT_BRIEF_BYTES, algorithm 
     };
     method = budget === 0 ? 'unlimited' : 'floor';
   } else {
-    const densityOnly = greedy(model, hard, soft, budget);
+    const densityOnly = greedy(model, hard, soft, budget, { power: 1 });
     if (algorithm === 'density') {
       result = densityOnly;
       method = 'density';
     } else {
       const regularized = greedy(model, hard, soft, budget, {
-        regularizer: Math.max(1, (budget - floor) / Math.max(1, soft.length)), augment: true,
+        regularizer: Math.max(1, (budget - floor) / Math.max(1, soft.length)), augment: true, power: 0.75,
       });
       const preferRegularized = better(regularized, densityOnly);
       result = preferRegularized ? regularized : densityOnly;

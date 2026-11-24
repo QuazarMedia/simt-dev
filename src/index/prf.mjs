@@ -1,6 +1,9 @@
+import { isDocPath } from '../brief/kind.mjs';
 import { isTestPath } from '../testing/paths.mjs';
 import { cmp } from '../util/sort.mjs';
-import { FIELD_RESULT_LIMIT, fieldQueryTerms, fieldSearchStatement, scoreFtsBm25F } from './bm25f.mjs';
+import {
+  FIELD_RESULT_LIMIT, fieldCandidateStatement, fieldQueryTerms, ftsQuote, scoreFtsBm25F,
+} from './bm25f.mjs';
 import { resolveEntityAnchors } from './entities.mjs';
 import { collectFileTerms } from './lexical.mjs';
 import { readSqliteBatch } from './persist.mjs';
@@ -21,8 +24,10 @@ function feedbackSources(ranking, edges, documents) {
     incoming.set(dst, callers);
   }
   const hub = Math.max(8, Math.ceil(Math.sqrt(documents)));
-  return ranking.filter(({ path, score }) =>
-    score > 0 && !isTestPath(path) && (incoming.get(path)?.size ?? 0) < hub).slice(0, LIMITS.sources);
+  const eligible = ranking.filter(({ path, score }) =>
+    score > 0 && !isTestPath(path) && (incoming.get(path)?.size ?? 0) < hub);
+  const nonDoc = eligible.filter(({ path }) => !isDocPath(path));
+  return (nonDoc.length ? nonDoc : eligible).slice(0, LIMITS.sources);
 }
 
 function bo1(tf, collectionFrequency, documents) {
@@ -113,6 +118,15 @@ function overlayFeedback(fts, paths) {
   return { documents: all.size, files, terms, error: fts.error ?? null };
 }
 
+function hasTier1Anchor(anchors) {
+  for (const hits of anchors.values()) {
+    if (hits.some(({ kind, quoted }) => kind === 'path' || kind === 'suffix' || kind === 'qualified-symbol' || quoted === true)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Execute only after the caller has built or supplied a fielded index. */
 export async function searchWithFeedback(root, task, {
   ranking, graph, anchors, fts, method = 'bo1',
@@ -128,7 +142,9 @@ export async function searchWithFeedback(root, task, {
   const index = graph ?? await readGraph(root);
   const graphError = index.files.error ?? index.symbols.error ?? index.edges.error;
   if (graphError) return unchanged('index-unavailable', graphError);
-  if ((anchors ?? resolveEntityAnchors(task, index)).size > 0) return unchanged('exact-anchor');
+  const resolvedAnchors = anchors ?? resolveEntityAnchors(task, index);
+  const bareSymbolQuery = resolvedAnchors.size > 0 && String(task ?? '').trim().split(/\s+/).length === 1;
+  if (hasTier1Anchor(resolvedAnchors) || bareSymbolQuery) return unchanged('exact-anchor');
   const sources = feedbackSources(original, index.edges, index.files.length);
   if (!sources.length) return unchanged('no-feedback-sources');
   const paths = sources.map(({ path }) => path);
@@ -137,9 +153,28 @@ export async function searchWithFeedback(root, task, {
   const expansion = scoreTerms(task, sources, evidence, method);
   if (!expansion.length) return unchanged('no-feedback-terms');
 
-  const { results, error } = fts === undefined
-    ? await readSqliteBatch(root, expansion.map(({ term }) => fieldSearchStatement([term])))
-    : { results: expansion.map(({ term }) => scoreFtsBm25F(fts, term)), error: null };
+  let results;
+  let error = null;
+  if (fts === undefined) {
+    const batch = await readSqliteBatch(root, [
+      ["select value from meta where key = 'fts_field_stats'"],
+      ...expansion.map(({ term }) => fieldCandidateStatement([term], undefined, FIELD_RESULT_LIMIT)),
+      ...expansion.map(({ term }) => ['select count(*) as df from fts where fts match ?', [ftsQuote(term)]]),
+    ], { legacySql: null });
+    error = batch.error;
+    if (!error && batch.results) {
+      const rawStats = batch.results[0]?.[0]?.value;
+      const parsedStats = rawStats ? JSON.parse(rawStats) : null;
+      results = expansion.map(({ term }, index) => {
+        const rows = batch.results[1 + index] ?? [];
+        const df = batch.results[1 + expansion.length + index]?.[0]?.df ?? 0;
+        const stats = parsedStats ? { N: parsedStats.N, avgdl: parsedStats.avgdl, df: [df] } : null;
+        return scoreFtsBm25F(rows, term, { stats });
+      });
+    }
+  } else {
+    results = expansion.map(({ term }) => scoreFtsBm25F(fts, term));
+  }
   if (!results || error) return unchanged('index-unavailable', error);
   return { ranking: interpolate(original, expansion, results), expansion, reason: null, error: null };
 }

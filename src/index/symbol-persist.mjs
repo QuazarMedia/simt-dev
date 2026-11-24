@@ -1,10 +1,10 @@
 import { bindSymbols, BINDING_VERSION } from './bind.mjs';
 import { canonicalJson } from '../util/canonical.mjs';
 
-const edgeSql = (props = 'e.props') => `select e.src_id as srcId, src.key as src, e.kind, e.dst_key as dst,
+const edgeSql = (props = 'e.props', excludeContains = false) => `select e.src_id as srcId, src.key as src, e.kind, e.dst_key as dst,
   e.dst_id as dstId, ${props}, s.path
   from edges e join nodes src on src.id = e.src_id join sources s on s.id = e.owner_source_id
-  where e.props is not null and e.props != ''`;
+  where e.props is not null and e.props != ''${excludeContains ? " and e.kind != 'contains'" : ''}`;
 
 function edgeIdentity({ src, kind, dst }) {
   return JSON.stringify([src, kind, dst]);
@@ -70,7 +70,7 @@ export function persistSymbolGraph(db) {
 
 export function symbolGraphQueries({ lightweight = false } = {}) {
   return [
-    [`${edgeSql(lightweight ? 'null as props' : undefined)} order by src, e.kind, dst`],
+    [`${edgeSql(lightweight ? 'null as props' : undefined, lightweight)} order by src, e.kind, dst`],
     [lightweight ? "select key, value from meta where key in ('binding_coverage', 'binding_version')"
       : "select key, value from meta where key in ('binding_coverage', 'binding_version', 'binding_unresolved', 'binding_star_exports')"],
   ];

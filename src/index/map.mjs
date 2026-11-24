@@ -165,6 +165,129 @@ export function rankFiles({
 }
 
 /**
+ * Prefiltered symbol+path resolver and bounded 1-hop personalized file-import PageRank.
+ * Shares the v1 resolver and PageRank mechanics while staying sub-millisecond at 10k files.
+ */
+export function rankByFileGraph({ files, edges, symbols, task, allowPath = null, limit = 60 } = {}) {
+  const { text, terms } = termsOf(task);
+  const scopeMatch = String(task ?? '').trim().match(/^[a-z]+\(([^)]+)\):/i);
+  const scopeTokens = new Set(
+    scopeMatch ? scopeMatch[1].toLowerCase().split(/[,/.\s_-]+/).filter((t) => t.length >= 2) : [],
+  );
+  for (const token of scopeTokens) terms.add(token);
+  if (terms.size === 0) return { resolver: [], pagerank: [] };
+  const n = files.length;
+  if (n === 0) return { resolver: [], pagerank: [] };
+  const cap = Math.max(3, Math.floor(n * 0.15));
+  const common = (freq) => freq > cap || (n > 1 && freq === n);
+  const singular = (word) => (word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word);
+  const forms = new Set([...terms].flatMap((term) => [term, singular(term)]));
+  const longTerms = [...terms].filter((term) => term.length >= 5);
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const preParts = [...new Set([...forms].map((t) => escapeRe(t.length > 3 && t.endsWith('s') ? t.slice(0, -1) : t)))];
+  const prefilter = preParts.length ? new RegExp(preParts.join('|'), 'i') : null;
+
+  // Spelled paths take precedence, matching v1.
+  const spelled = [];
+  for (const { path } of files) {
+    if (allowPath && !allowPath(path)) continue;
+    if (text.includes(path.toLowerCase())) spelled.push(path);
+  }
+  const scores = new Map();
+  if (spelled.length > 0) {
+    for (const path of spelled) scores.set(path, 8);
+  } else {
+    const segFreq = new Map();
+    const termFreq = new Map();
+    const matchedFiles = [];
+    for (const { path } of files) {
+      if (prefilter && !prefilter.test(path)) continue;
+      if (allowPath && !allowPath(path)) continue;
+      const lower = path.toLowerCase();
+      const segs = segments(lower);
+      const rawSegs = scopeTokens.size ? lower.split(/[^a-z0-9]+/).filter((s) => s.length >= 2) : [];
+      for (const seg of segs) segFreq.set(seg, (segFreq.get(seg) ?? 0) + 1);
+      for (const term of terms) {
+        if (term.length >= 6 && lower.includes(term)) termFreq.set(term, (termFreq.get(term) ?? 0) + 1);
+      }
+      matchedFiles.push({ path, lower, segs, rawSegs });
+    }
+    const symFreq = new Map();
+    const fileSymHits = new Map();
+    for (const symbol of symbols) {
+      const name = String(symbol.name ?? '');
+      if (name.length < 3 || (prefilter && !prefilter.test(name))) continue;
+      if (allowPath && !allowPath(symbol.path)) continue;
+      const lower = name.toLowerCase();
+      const isHit = terms.has(lower) || longTerms.some((term) => lower.includes(term));
+      if (!isHit) continue;
+      let perFile = fileSymHits.get(symbol.path);
+      if (!perFile) { perFile = new Set(); fileSymHits.set(symbol.path, perFile); }
+      if (!perFile.has(lower)) {
+        perFile.add(lower);
+        symFreq.set(lower, (symFreq.get(lower) ?? 0) + 1);
+      }
+    }
+    for (const { path, lower, segs, rawSegs } of matchedFiles) {
+      let score = 0;
+      const stem = stemOf(lower);
+      if (stem.length >= 3 && terms.has(stem) && !common(segFreq.get(stem) ?? 0)) score += 4;
+      const seenScope = new Set();
+      for (const seg of rawSegs) {
+        const word = scopeTokens.has(seg) ? seg : singular(seg);
+        if (scopeTokens.has(word) && !seenScope.has(word)) {
+          seenScope.add(word);
+          score += 5;
+        }
+      }
+      for (const seg of segs) {
+        const word = forms.has(seg) ? seg : singular(seg);
+        if (seenScope.has(word)) continue;
+        if (forms.has(word) && !common(segFreq.get(seg) ?? 0)) score += 2;
+      }
+      for (const term of terms) {
+        const freq = termFreq.get(term) ?? 0;
+        if (term.length < 6 || freq === 0 || !lower.includes(term) || common(freq)) continue;
+        score += 3;
+        if (freq === 1 && /\d/.test(term)) score += 8 * Math.min(mentions(text, term), 3);
+      }
+      if (score > 0) scores.set(path, score);
+    }
+    for (const [path, names] of fileSymHits) {
+      let hits = 0;
+      for (const name of names) {
+        const freq = symFreq.get(name) ?? 0;
+        if (terms.has(name) && freq <= 5) hits += 1;
+        else if (freq <= 2 && longTerms.some((term) => name.includes(term))) hits += 1;
+      }
+      if (hits > 0) scores.set(path, (scores.get(path) ?? 0) + Math.min(hits, 8));
+    }
+  }
+  if (scores.size === 0) return { resolver: [], pagerank: [] };
+
+  const resolver = [...scores.entries()]
+    .map(([path, score]) => ({ path, score }))
+    .sort((a, b) => (a.score !== b.score ? (a.score < b.score ? 1 : -1) : cmp(a.path, b.path)))
+    .slice(0, limit);
+  const seeds = new Set(resolver.slice(0, 40).map(({ path }) => path));
+  const keep = new Set(seeds);
+  for (const edge of edges) {
+    if (edge.kind !== 'import' && edge.kind !== 'call') continue;
+    if (seeds.has(edge.src) && (!allowPath || allowPath(edge.dst))) keep.add(edge.dst);
+    if (seeds.has(edge.dst) && (!allowPath || allowPath(edge.src))) keep.add(edge.src);
+  }
+  const kept = [...keep].sort(cmp);
+  const index = new Map(kept.map((path, i) => [path, i]));
+  const links = buildLinks(kept, edges, index);
+  const pr = pageRank(kept, links, scores);
+  const pagerank = kept
+    .map((path, i) => ({ path, score: pr[i] }))
+    .sort((a, b) => (a.score !== b.score ? (a.score < b.score ? 1 : -1) : cmp(a.path, b.path)))
+    .slice(0, limit);
+  return { resolver, pagerank };
+}
+
+/**
  * Render the ranking within a byte budget.
  * `outline` is paths, `names` adds exported symbols, `signatures` adds the line.
  * A budget of 0 does not truncate. The first file is kept even when it alone

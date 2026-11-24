@@ -21,8 +21,8 @@ import { GOVERNANCE_BASIS_KEY } from './governance-persist.mjs';
 const DECISION_FILE = /^ADR-\d{3,}-.*\.md$/iu;
 const MARKDOWN = /\.mdc?$/u;
 
-const BASIS_SQL = `select value from meta where key = '${GOVERNANCE_BASIS_KEY}'`;
-const RELATION_SQL = `select e.src, e.kind as relation, e.dst, n.kind, n.id, n.detail, n.superseded_by as supersededBy
+export const BASIS_SQL = `select value from meta where key = '${GOVERNANCE_BASIS_KEY}'`;
+export const RELATION_SQL = `select e.src, e.kind as relation, e.dst, n.kind, n.id, n.detail, n.superseded_by as supersededBy
   from governance_edges e join governance_nodes n on n.key = e.src
   where (e.kind = 'governs_path' and e.dst in (select value from json_each(?)))
      or (e.kind = 'governs_command' and ?)`;
@@ -42,9 +42,13 @@ async function metadata(path) {
   }
 }
 
-export async function governanceInputState(root) {
+export async function governanceInputState(root, { trackedPaths = null, cachedSignals = null } = {}) {
   root = await realpath(root);
-  const [dir, registry, { signals }] = await Promise.all([decisionsDir(root), registryLocation({ root }), fingerprint(root)]);
+  const [dir, registry, signals] = await Promise.all([
+    decisionsDir(root),
+    registryLocation({ root }),
+    Array.isArray(cachedSignals) ? cachedSignals : fingerprint(root, { trackedPaths }).then((fp) => fp.signals),
+  ]);
   const sources = [
     ...[MANIFEST_FILE, MANIFEST_LEGACY, ...CODEOWNERS_PATHS].map((path) => join(root, path)),
     ...(registry.where ? [registry.where] : []),
@@ -62,8 +66,9 @@ export async function governanceInputState(root) {
 
 export async function governanceBasis(root, ctx, inputState) {
   const { dir, revisions, signals } = inputState ?? await governanceInputState(root);
+  const files = ctx.filesList ?? (ctx.filesSorted ? [...ctx.files] : [...ctx.files].sort(cmp));
   const basis = digestOf(JSON.stringify([1, packageVersion(), new Date().toISOString().slice(0, 10), dir,
-    revisions, [...ctx.files].sort(cmp), [...ctx.commands].sort(cmp), [...signals].sort(cmp)]));
+    revisions, files, [...ctx.commands].sort(cmp), [...signals].sort(cmp)]));
   return { basis, dir, signals };
 }
 
@@ -123,13 +128,22 @@ export async function prepareGovernance(root, listed) {
   const files = new Set(candidatePaths(listed).map(({ path }) => path));
   const ctx = { files, commands: new Set(SPEC_PATHS), roots: sourceRoots(files) };
   const [basis, cached] = await Promise.all([governanceBasis(root, ctx), readSqliteRows(root, BASIS_SQL)]);
-  return cached.rows[0]?.value === basis.basis ? null : governanceSnapshot(root, ctx, { basis });
+  const snapshot = cached.rows[0]?.value === basis.basis ? null : await governanceSnapshot(root, ctx, { basis });
+  return { snapshot, signals: basis.signals };
 }
 
-export async function readGovernance(root, ctx, targets, { includeCommands = false, observedBasis } = {}) {
-  const [basis, cached] = await Promise.all([
-    observedBasis ?? governanceBasis(root, ctx), readSqliteBatch(root, [[BASIS_SQL], [RELATION_SQL, [JSON.stringify([...targets]), Number(includeCommands)]]]),
-  ]);
+export async function readGovernance(root, ctx, targets, { includeCommands = false, observedBasis, preloaded = null } = {}) {
+  const basis = observedBasis ?? await governanceBasis(root, ctx);
+  if (preloaded && preloaded.basis === basis.basis && [...targets].every((t) => preloaded.targets.has(t)) && (!includeCommands || preloaded.includeCommands)) {
+    const rows = preloaded.rows.filter(({ relation, dst }) =>
+      (relation === 'governs_path' && targets.has(dst)) || (relation === 'governs_command' && includeCommands));
+    return {
+      basis: 'sqlite',
+      nodes: new Map(rows.map(({ src, kind, id, detail, supersededBy }) => [src, { kind, id, detail, supersededBy }])),
+      edges: rows.map(({ src, relation, dst }) => ({ src, kind: relation, dst })),
+    };
+  }
+  const cached = await readSqliteBatch(root, [[BASIS_SQL], [RELATION_SQL, [JSON.stringify([...targets]), Number(includeCommands)]]]);
   const [metadata, rows] = cached.results ?? [[], []];
   if (!cached.error && metadata[0]?.value === basis.basis) return {
     basis: 'sqlite',

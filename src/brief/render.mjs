@@ -87,30 +87,28 @@ export function buildCompactPacket(items, { budget = DEFAULT_BRIEF_BYTES, footer
     return { before, after: bytes(text), text, cut: selection.cut, trace: selection.trace, utility: selection.utility };
   }
 
-  const footEstimate = footerBytes ?? bytes(simpleFooter(ordered, ordered, budget));
-  const reserved = headerBytes(candidates) + footEstimate;
-  const capacity = Math.max(1, budget - reserved);
+  const hardHeaders = headerBytes(candidates.filter(({ priority }) => priority === 'hard'));
+  const footSeed = footerBytes ?? bytes(footer(ordered, ordered, budget));
+  let capacity = Math.max(1, budget - hardHeaders - footSeed);
   const choose = (value) => packSubmodular(candidates, { budget: Math.max(1, value), facetFloors: FACET_FLOORS });
   let selection = choose(capacity);
   let result = render(selection);
-  const extra = budget - result.after;
-  if (extra > 0 && selection.cut.length) {
-    const trial = choose(capacity + extra);
+  for (let pass = 0; pass < 3; pass += 1) {
+    const exactCapacity = Math.max(1, budget - (result.after - selection.bytes));
+    if (result.after <= budget && (exactCapacity <= capacity || !selection.cut.length)) break;
+    const trial = choose(exactCapacity);
     const packed = render(trial);
-    if (packed.after <= budget && packed.utility > result.utility) {
+    if (result.after > budget || (packed.after <= budget && packed.utility > result.utility)) {
       selection = trial;
       result = packed;
+      capacity = exactCapacity;
+    } else {
+      break;
     }
   }
   if (result.after > budget) {
-    // A longer custom footer must fit in the same ceiling as the chosen evidence.
-    const trial = choose(capacity - (result.after - budget));
-    const packed = render(trial);
-    if (packed.after <= budget) result = packed;
-    else {
-      selection = choose(1);
-      result = render(selection, false);
-    }
+    selection = choose(1);
+    result = render(selection, false);
   }
   const { utility, ...output } = result;
   return { ...output, floorHeld: output.after > budget };

@@ -413,6 +413,9 @@ assert.deepEqual(leaking, [
     'ADR-258',
     'ADR-259',
     'ADR-260',
+    // ADR-261 names the rule file its ruling lives in and the rendered surface it
+    // projects into; both are package paths, so it leaks like the others.
+    'ADR-261',
   ]);
 });
 

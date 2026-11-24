@@ -135,7 +135,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=6a85a11948e27ec5c8854ec14b8366614662bb23 -->
+<!-- simt:sha=7497dcce13068164496a88042e8b0a668a8e9bf1 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -197,6 +197,12 @@ rule; follow it for every commit and push.
   reaches for `--no-verify`. (ADR-017)
 - Invoke tools through the repository's own runner — `npm run`, `uv run -m`, `./gradlew` —
   never a package runner like `npx` or a bare console entrypoint. (ADR-010)
+
+### Surfaces
+
+- Where a `simt` MCP server is installed, its tools answer the same questions as the CLI
+  commands named here — one logic with two doors, not two systems. Use whichever surface
+  your harness exposes; a result from either is the same evidence. (ADR-126)
 
 ### Code and review
 

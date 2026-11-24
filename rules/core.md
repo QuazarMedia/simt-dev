@@ -63,6 +63,12 @@ rule; follow it for every commit and push.
 - Invoke tools through the repository's own runner — `npm run`, `uv run -m`, `./gradlew` —
   never a package runner like `npx` or a bare console entrypoint. (ADR-010)
 
+## Surfaces
+
+- Where a `simt` MCP server is installed, its tools answer the same questions as the CLI
+  commands named here — one logic with two doors, not two systems. Use whichever surface
+  your harness exposes; a result from either is the same evidence. (ADR-126)
+
 ## Code and review
 
 - No type-system escapes, no unawaited async work, no debug printing in application code.

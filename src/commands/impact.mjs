@@ -38,8 +38,37 @@ const READ_CAP = 256 * 1024;
 const FILE_CAP = 2000;
 const USAGE = `run: ${CLI} impact <file|symbol>...  |  --changed  |  --task "<prompt>"`;
 
+// The report is sections; `--only` answers with exactly one of them. brief's `--only
+// <section>` is the precedent, and the set is exported so the MCP schema names the same
+// choices instead of a copy that can drift.
+export const IMPACT_SECTIONS = ['importers', 'tests', 'cochange', 'conceptual', 'governs', 'owners', 'consumers'];
+
+// The keys each section answers with, including the annotations that section needs to
+// read: tiers annotate both importer and test lines, and the v2 channel breakdowns are
+// the detail view of those same two.
+const SECTION_KEYS = {
+  importers: ['importers', 'tiers', 'structural', 'testTiers', 'conservativeFallback', 'suppressedHubMediated'],
+  tests: ['tests', 'tiers', 'structural', 'testTiers'],
+  cochange: ['cochange', 'cochangeTruncated'],
+  conceptual: ['conceptual'],
+  governs: ['governs'],
+  owners: ['owners'],
+  consumers: ['consumers'],
+};
+
 function issue(message, exitCode = EXIT.USAGE, remedy = USAGE) {
   return Object.assign(new Error(message), { exitCode, remedy });
+}
+
+function sectionFromFlags(flags) {
+  const value = flags.only;
+  if (value === undefined || value === null) return null;
+  const section = String(value).toLowerCase();
+  if (!IMPACT_SECTIONS.includes(section)) {
+    throw issue(`unknown impact section ${value}`, EXIT.USAGE,
+      `run: ${CLI} impact --only <section> — one of ${IMPACT_SECTIONS.join(', ')}`);
+  }
+  return section;
 }
 
 export async function impactCommand(args, flags, commands = []) {
@@ -56,6 +85,7 @@ export async function impactCommand(args, flags, commands = []) {
 }
 
 export async function impactFacts(root, args, flags = {}, commands = []) {
+  const section = sectionFromFlags(flags);
   const changed = flags.changed === true;
   const task = typeof flags.task === 'string' ? flags.task.trim() : '';
   if (Number(args.length > 0) + Number(changed) + Number(Boolean(task)) !== 1) {
@@ -97,7 +127,7 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
   const knowledge = flags.withKnowledge === true
     ? await (await import('../index/unified-impact.mjs')).knowledgeForImpact(root, { files: [...sources], graph, gone, changed })
     : null;
-  return {
+  const payload = {
     ok: true,
     command: 'impact',
     root,
@@ -112,6 +142,22 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
     ...(knowledge ? { knowledge } : {}),
     ...(graph.basis.overlay.applied ? { provenance: graph.basis } : {}),
   };
+  if (section === null) return payload;
+  const out = { ok: payload.ok, command: 'impact', root, file: payload.file, symbol: payload.symbol };
+  for (const key of SECTION_KEYS[section]) if (payload[key] !== undefined) out[key] = payload[key];
+  // The MCP output schema requires the five sections on every answer; an unselected one
+  // is present and empty, so a filtered document still validates against it.
+  for (const key of ['importers', 'tests', 'governs', 'owners', 'consumers']) if (!(key in out)) out[key] = [];
+  // `truncated` answers for the section asked for, not for the report that was cut:
+  // a filtered view must not claim truncation a section it does not print caused.
+  out.truncated = section === 'cochange' ? (extra.cochangeTruncated ?? false)
+    : section === 'consumers' ? consumers.truncated
+      : section === 'importers' || section === 'tests' ? reach.truncated
+        : false;
+  // Identity, not content: the reader must still see which file or symbol was asked
+  // about, and `render` prints one header line per target.
+  for (const key of ['targets', 'symbols', 'provenance']) if (payload[key] !== undefined) out[key] = payload[key];
+  return out;
 }
 
 function unique(rows, key = (value) => value) {

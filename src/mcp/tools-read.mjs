@@ -2,6 +2,7 @@
 
 import { provenanceDigest } from '../projection/project.mjs';
 import { diagnose, serialisedFindings } from '../commands/doctor.mjs';
+import { IMPACT_SECTIONS } from '../commands/impact.mjs';
 import { rulesCatalogue, rulesWhyFacts } from '../commands/rules.mjs';
 import { skillsFindFacts, skillsShowFacts, skillsWhyFacts } from '../commands/skills.mjs';
 import { SPEC } from '../commands/spec.mjs';
@@ -22,6 +23,7 @@ export const TOOLS_READ = [
         task: { type: 'string' },
         changed: { type: 'boolean' },
         retrieval: { type: 'string', enum: ['v1', 'v2'] },
+        only: { type: 'string', enum: IMPACT_SECTIONS },
         all: { type: 'boolean' },
         withKnowledge: { type: 'boolean' },
       },

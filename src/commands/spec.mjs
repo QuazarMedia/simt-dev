@@ -77,7 +77,10 @@ export const SPEC = [
   { path: 'hooks run', usage: '<event>', summary: "run one git event's gates now, as git would", writes: 'repo', flags: ["yes","diff","dry-run","agent"], },
   { path: 'hooks status', summary: 'what each git event routes to; --agent reports each harness instead', defaultFor: 'hooks', flags: ["agent","diff","dry-run"], },
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
-  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>"', mcp: { name: 'impact', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace the import closure, tests and related evidence for a change', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'] }, },
+  // `--only <section>` answers with one section of the report; the set mirrors IMPACT_SECTIONS
+  // in src/commands/impact.mjs, which this file cannot import without pulling the command's
+  // whole graph into the registry (spec.test.mjs refuses that for index.mjs).
+  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>" [--only <section>]', mcp: { name: 'impact', flags: ['all', 'changed', 'only', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace the import closure, tests and related evidence for a change', flags: ['all', 'changed', 'only', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'], only: ['importers', 'tests', 'cochange', 'conceptual', 'governs', 'owners', 'consumers'] }, },
   { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v2]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2"] }, },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated

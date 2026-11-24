@@ -106,6 +106,62 @@ test('impact lists the importers, their test, and one cross-repo consumer', asyn
   }
 });
 
+test('impact --only answers with one section, filtered or refused', async () => {
+  const parent = await mkdtemp(join(tmpdir(), 'idx-impact-only-'));
+  const producer = join(parent, 'producer');
+  const consumer = join(parent, 'consumer');
+  try {
+    await mkdir(join(producer, 'src'), { recursive: true });
+    await mkdir(join(producer, 'test'), { recursive: true });
+    await mkdir(join(producer, 'api'), { recursive: true });
+    await mkdir(join(producer, 'docs', 'decisions'), { recursive: true });
+    await mkdir(join(consumer, 'src'), { recursive: true });
+    await writeFile(join(producer, 'src', 'keep.mjs'), 'export function keep() { return 1; }\n');
+    await writeFile(join(producer, 'src', 'use.mjs'), "import { keep } from './keep.mjs';\nexport function use() { return keep(); }\n");
+    await writeFile(join(producer, 'test', 'use.test.mjs'), "import { use } from '../src/use.mjs';\n");
+    await writeFile(join(producer, 'api', 'openapi.json'), '{"openapi":"3.0.0","paths":{"/keep":{"get":{"operationId":"keep"}}}}\n');
+    await writeFile(
+      join(producer, 'docs', 'decisions', 'ADR-001-keep.md'),
+      ['# ADR-001 — keep', '', 'Status: **accepted**', '', 'Affects: ' + tick + 'src/keep.mjs' + tick, ''].join('\n'),
+    );
+    await writeFile(join(consumer, 'src', 'client.mjs'), 'const spec = "api/openapi.json";\n');
+    await git(['init', '-q', producer]);
+    await git(['init', '-q', consumer]);
+    await git(['-C', producer, 'add', '-A']);
+    await git(['-C', consumer, 'add', '-A']);
+    await git(['-C', producer, 'commit', '-qm', 'producer']);
+    await git(['-C', consumer, 'commit', '-qm', 'consumer']);
+
+    const importers = await capture(() => impactCommand(['src/keep.mjs'], { root: producer, workspace: 'off', only: 'importers' }));
+    assert.equal(importers.code, 0, importers.stderr);
+    assert.match(importers.stdout, /importer\s+src\/use\.mjs/);
+    assert.doesNotMatch(importers.stdout, /test\s|decision\s|owner\s|consumer\s/);
+
+    const governs = await capture(() => impactCommand(['src/keep.mjs'], { root: producer, workspace: parent, json: true, only: 'governs' }));
+    assert.equal(governs.code, 0, governs.stderr);
+    const doc = JSON.parse(governs.stdout);
+    assert.ok(doc.governs.length >= 1, 'the selected section is present');
+    // The unselected sections answer empty, not absent: the filtered document still
+    // validates against the MCP output schema, which requires them on every answer.
+    assert.deepEqual(doc.importers, []);
+    assert.deepEqual(doc.tests, []);
+    assert.deepEqual(doc.owners, []);
+    assert.deepEqual(doc.consumers, []);
+    assert.equal(doc.truncated, false);
+
+    const tool = TOOLS.find(({ name }) => name === 'impact');
+    const mcp = await tool.run({ root: producer, targets: ['src/keep.mjs'], workspace: 'off', only: 'importers' });
+    assert.deepEqual(mcp.importers, ['src/use.mjs']);
+    assert.deepEqual(mcp.governs, []);
+
+    const refused = await capture(() => impactCommand(['src/keep.mjs'], { root: producer, workspace: 'off', only: 'everything' }));
+    assert.equal(refused.code, 2);
+    assert.match(refused.stderr, /one of importers, tests, cochange, conceptual, governs, owners, consumers/);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+  }
+});
+
 test('impact names a non-ASCII path instead of calling it missing (Q39)', async () => {
   // Without `-z`, `git ls-files` C-quotes the path and the reader's real
   // filename matches nothing, so impact reported "not a file or an export".

@@ -24,7 +24,6 @@ export async function planMcpInstall(root, scope, registry) {
   const changes = [];
   const notes = [];
   const problems = [];
-  const entries = Object.fromEntries(registry.servers.map((server) => [server.id, renderEntry(server)]));
   const table = dialects();
   for (const id of Object.keys(table)) {
     const d = table[id];
@@ -36,6 +35,7 @@ export async function planMcpInstall(root, scope, registry) {
       notes.push({ id, state: 'skipped', note: 'not selected; declare it in "surfaces" or pass --harness' });
       continue;
     }
+    const entries = Object.fromEntries(registry.servers.map((server) => [server.id, renderEntry(server, id)]));
     let text = null;
     try {
       text = await readFile(join(root, d.path), 'utf8');

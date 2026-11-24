@@ -47,7 +47,7 @@ export async function mcpStatus(root, scope, registry) {
         rows.push({ id, server: server.id, path: d.path, state: 'absent', note: null });
         continue;
       }
-      const stale = canonical(entry) !== canonical(renderEntry(server));
+      const stale = canonical(entry) !== canonical(renderEntry(server, id));
       rows.push({
         id,
         server: server.id,

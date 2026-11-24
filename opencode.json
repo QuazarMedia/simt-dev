@@ -1,0 +1,13 @@
+{
+  "mcp": {
+    "servers": {
+      "simt": {
+        "type": "local",
+        "command": [
+          "simt",
+          "mcp"
+        ]
+      }
+    }
+  }
+}

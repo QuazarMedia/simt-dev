@@ -39,14 +39,18 @@ export function dialects(root = null) {
 }
 
 /**
- * The entry a server's transport renders to, in the shape both JSON files and TOML
- * tables take: `command` + `args` for stdio, `url` for http. One shape serves the
- * status comparison and the install write, because they must agree byte for byte.
+ * The entry a server's transport renders to, in the shape the harness reads. Most
+ * harnesses take `command` + `args` for stdio, `url` for http; opencode V2 requires a
+ * `type` and a single `command` array, and ignores the pair - verified: `opencode mcp
+ * list` reported no servers against the old shape. Status and install render from this
+ * one call with the dialect row's id, so they cannot disagree about what an entry means.
  */
-export function renderEntry(server) {
+export function renderEntry(server, harness = null) {
   if (server.transport.type === 'stdio') {
+    if (harness === 'opencode') return { type: 'local', command: [server.transport.command, ...(server.transport.args ?? [])] };
     return { command: server.transport.command, args: server.transport.args ?? [] };
   }
+  if (harness === 'opencode') return { type: 'remote', url: server.transport.url };
   return { url: server.transport.url };
 }
 

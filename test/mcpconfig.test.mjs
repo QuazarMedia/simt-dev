@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { loadMcpRegistry, selectServers, validateMcpRegistry } from '../src/mcpconfig/registry.mjs';
-import { canonical, dialects } from '../src/mcpconfig/dialects.mjs';
+import { canonical, dialects, renderEntry } from '../src/mcpconfig/dialects.mjs';
 import { parseToml, replaceOwnedTables } from '../src/mcpconfig/toml.mjs';
 import { mcpStatus } from '../src/mcpconfig/status.mjs';
 import { planMcpInstall } from '../src/mcpconfig/install.mjs';
@@ -107,6 +107,15 @@ test('dialects: one row per harness, and the facet stays the source of location'
   assert.equal(table.opencode.container, 'mcp.servers');
   // A harness whose servers are a plugin row has no file this tool reads.
   assert.equal(table.deepseek.path, null);
+});
+
+test('renderEntry: opencode reads the V2 shape, every other harness the pair', () => {
+  const server = sample().servers[0];
+  assert.deepEqual(renderEntry(server), { command: 'simt', args: ['mcp'] });
+  assert.deepEqual(renderEntry(server, 'opencode'), { type: 'local', command: ['simt', 'mcp'] });
+  const http = { id: 'x', transport: { type: 'http', url: 'https://m' } };
+  assert.deepEqual(renderEntry(http), { url: 'https://m' });
+  assert.deepEqual(renderEntry(http, 'opencode'), { type: 'remote', url: 'https://m' });
 });
 
 test('canonical: key order is not drift', () => {
@@ -251,6 +260,26 @@ test('install: a fresh repo plans the registry entries into every selected harne
     // The plugin row is reported, not written; a harness out of scope is named skipped.
     assert.ok(notes.some((n) => n.id === 'deepseek' && n.state === 'not-ours'));
     assert.ok(notes.some((n) => n.id === 'gemini' && n.state === 'skipped'));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('opencode: install writes the V2 entry, and status reads that shape back', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'mcpconfig-'));
+  try {
+    const registry = sample();
+    const { changes, problems } = await planMcpInstall(dir, { ids: ['opencode'] }, registry);
+    assert.deepEqual(problems, []);
+    const change = changes.find((c) => c.path === 'opencode.json');
+    assert.deepEqual(JSON.parse(change.after).mcp.servers.simt, { type: 'local', command: ['simt', 'mcp'] });
+    // The V2 shape is what status calls present; the old command/args pair is drift.
+    await writeFile(join(dir, 'opencode.json'), change.after);
+    const fresh = await mcpStatus(dir, { ids: ['opencode'] }, registry);
+    assert.equal(fresh.rows.find((r) => r.id === 'opencode').state, 'present');
+    await writeFile(join(dir, 'opencode.json'), JSON.stringify({ mcp: { servers: { simt: { command: 'simt', args: ['mcp'] } } } }));
+    const stale = await mcpStatus(dir, { ids: ['opencode'] }, registry);
+    assert.equal(stale.rows.find((r) => r.id === 'opencode').state, 'drift');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

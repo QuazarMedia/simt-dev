@@ -107,7 +107,7 @@ test('binary: a re-run skips a version that is already staged', async () => {
 });
 
 test('binary: the fast lane gates the build and the mirror on a full release', async () => {
-  // A content-only release (ADR-256) skips the three native builds and the
+  // A content-only release (ADR-260) skips the three native builds and the
   // formula sync; the kind is classified in the version job, whose fetch-depth-0
   // checkout is what makes the previous tag reachable. The npm stage, the release
   // notes and PyPI always run. If a gate below is removed, a content-only release

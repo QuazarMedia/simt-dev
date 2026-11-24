@@ -28,7 +28,7 @@ installed package plus `simt.json`), their staleness is cosmetic remedy text, an
 | id | state | slice | evidence |
 | --- | --- | --- | --- |
 | F01 | Complete | release-kind classifier script + test | 3722738e88e21cb34bf617443dff1fe99afa5fa4 |
-| F02 | Complete | wire classifier into `publish.yml`; skill section; ADR-256 | e719eb333e750b57185b5e8e06e56cc12df5291c |
+| F02 | Complete | wire classifier into `publish.yml`; skill section; ADR-260 | e719eb333e750b57185b5e8e06e56cc12df5291c |
 | F03 | Complete | `agent-hooks status` entry-level drift detection + test | 39c3d23e7557d02529acc1960a1b0c4c3743fb33 |
 
 ## F01 — release-kind classifier (scripts/classify-release.mjs)
@@ -44,17 +44,17 @@ No previous tag (first release) is full.
 Acceptance: `node --test test/release-classify.test.mjs` green; a diff touching only
 `harnesses/cursor.json` classifies content-only; one `src/` file classifies full.
 
-## F02 — wire the classifier into publish.yml + skill + ADR-256
+## F02 — wire the classifier into publish.yml + skill + ADR-260
 
 `.github/workflows/publish.yml` gains a classify step after the version guard;
 `build-binary` (and `sync-formula`, which follows it) run only when the kind is full.
 `.agents/skills/release-process/SKILL.md` gains a "Content-only releases" section: what
 qualifies, what runs (npm stage, release notes, PyPI), what lags (binary + Homebrew
-consumers until the next full release), and how to force a full release. ADR-256 records
+consumers until the next full release), and how to force a full release. ADR-260 records
 the ruling with the lag stated.
 
 Acceptance: `simt check` clean; the skill section reads as a maintainer acting on it;
-ADR-256 present with a Status line.
+ADR-260 present with a Status line.
 
 ## F03 — agent-hooks status drift detection
 

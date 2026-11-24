@@ -2,7 +2,7 @@
 simt-affects: [".github/workflows/publish.yml", "scripts/classify-release.mjs", ".agents/skills/release-process/SKILL.md"]
 ---
 
-# ADR-256 — a content-only release skips the binary build
+# ADR-260 — a content-only release skips the binary build
 
 Status: accepted · 2026-11-23
 

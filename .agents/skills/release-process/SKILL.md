@@ -106,7 +106,7 @@ workflow step. The burned versions and their deprecation commands are recorded i
 
 A release whose diff since the previous tag touches only **served content** is
 **content-only**, and its `publish.yml` run skips the three binary builds and
-the formula sync (ADR-256). The set is closed, and the classifier is
+the formula sync (ADR-260). The set is closed, and the classifier is
 `scripts/classify-release.mjs`: `harnesses/`, `rules/`, `skills/`,
 `templates/`, `ecosystems/`, `docs/`, `packages/bench/`, `graph/skills.graph.json`,
 plus the release bookkeeping files (`package.json`, `simt.json`, `CHANGELOG.md`,

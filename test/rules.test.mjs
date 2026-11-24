@@ -361,7 +361,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // ADR-228 joined because its ruling is ABOUT the packed-install evidence, so it names
   // the release test, the two transcripts, the surface module and the generated page; a
   // record that named none of them could not be followed to the tree it qualifies.
-  // ADR-256 joined because its ruling is ABOUT the release-kind gate, so it names the
+  // ADR-260 joined because its ruling is ABOUT the release-kind gate, so it names the
   // classifier module, the script that supplies the git facts and the workflow job it
   // gates; a record that named none of them could not be followed to the build it skips.
   // ADR-257 joined because its ruling is ABOUT the MCP registry's declaration and
@@ -405,14 +405,14 @@ assert.deepEqual(leaking, [
     'ADR-211',
     'ADR-214',
     'ADR-228',
-    // ADR-256 and ADR-257 joined when plan 0009 landed: each names the package paths
-    // its ruling is about, and the count moves because the records have to name them.
-    'ADR-256',
+    // ADR-257 joined when plan 0009 landed: it names the package paths its ruling is
+    // about, and the count moves because the record has to name them.
     'ADR-257',
     // ADR-258 names the dispatcher and schema modules its ruling settles; ADR-259
     // names the gate-view modules. Both leak like the others.
     'ADR-258',
     'ADR-259',
+    'ADR-260',
   ]);
 });
 

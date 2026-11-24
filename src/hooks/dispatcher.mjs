@@ -35,22 +35,19 @@ import { recordRun } from '../ledger/index.mjs';
 import { renderFindings, scanStaged } from '../secrets.mjs';
 import { git, gitPaths, gitText } from '../sys/git.mjs';
 import { ZERO_SHA, parsePushedRefs, resolveAlreadyPassedSkip, resolveNonCodeSkip } from './push-skip.mjs';
-import { focusedGate, focusedThreshold } from './focused-push.mjs';
+import { focusedGate, focusedThreshold, rerunFailures, rerunGate } from './focused-push.mjs';
 import { focusedRunTimeoutMs } from '../testing/focused-run.mjs';
 import { parseTestReport } from '../testing/parsers.mjs';
+import { gateTimeoutMs, toolchainIdentity } from '../util/gates.mjs';
 import { tail } from '../util/text.mjs';
 
 // The classification API stays importable from this module: `hooks` is what a consumer
 // already imports, and the extraction is a file split, not a change of surface.
 export { DEFAULT_SKIP_EXTENSIONS, classifyPush, parsePushedRefs } from './push-skip.mjs';
 
-/**
- * The default bound on one gate, in seconds, and the grace a killed gate gets before
- * SIGKILL. A hook that runs on every commit needs a ceiling: a test runner waiting on
- * a socket that never closes blocks the commit with no output and no way to tell a
- * hang from slow work. `gates.timeout` raises or removes it per repository.
- */
-const DEFAULT_GATE_TIMEOUT_SECONDS = 600;
+/** The grace a killed gate gets before SIGKILL: a test runner waiting on a socket that
+ *  never closes blocks the commit with no output, and there is no way to tell a hang
+ *  from slow work. */
 const KILL_GRACE_MS = 5000;
 
 
@@ -139,28 +136,6 @@ async function runBounded(argv, { cwd, env, timeoutMs }) {
       }, timeoutMs);
     }
   });
-}
-
-/**
- * What ran the gate, recorded beside the result. Two runs of one command on one tree
- * are only the same evidence when the toolchain that produced them is the same; the
- * node runtime and the package manager are the two facts this tool selects.
- */
-function toolchainIdentity(runner) {
-  return { node: process.version, platform: process.platform, arch: process.arch, ...(runner === null ? {} : { runner }) };
-}
-
-/**
- * The bound for one gate, in milliseconds. A number applies to every gate; a map applies
- * per name, the shape `gates.cwd` already has. A value that is neither a positive whole
- * number of seconds nor 0 falls back to the default rather than removing the bound: an
- * unreadable declaration must not be the quiet way to disable the ceiling.
- */
-function gateTimeoutMs(declared, name) {
-  const value = declared !== null && typeof declared === 'object' ? declared[name] : declared;
-  if (value === 0) return 0;
-  if (Number.isInteger(value) && value > 0) return value * 1000;
-  return DEFAULT_GATE_TIMEOUT_SECONDS * 1000;
 }
 
 /** Gates that are known but not required for the event to pass. */
@@ -477,6 +452,13 @@ async function runPushTarget(root, callerManifest, target, pushed, notes) {
         commandTest: typeof declared?.commands?.test === 'string',
       });
     }
+    // A failed `test` run recorded at exactly one commit below the pushed HEAD, with a
+    // test-only commit in between, re-runs exactly the failing ids it recorded (ADR-258):
+    // a subset of whatever the threshold path would run, so it never widens the gate.
+    let rerun = null;
+    if (skipTest === null && declaration.declared.includes('test')) {
+      rerun = await rerunFailures(root, revision);
+    }
     // The tree is materialised for every pre-push, including one that skips `test`: lint and
     // format must see the commit being pushed, not the author's uncommitted edits.
     const run = await runGatesAt('pre-push', {
@@ -487,6 +469,7 @@ async function runPushTarget(root, callerManifest, target, pushed, notes) {
       key: 'prePush',
       skipTest,
       focusTest,
+      rerun,
       // Named on every ledger line: the revision whose tree this line is about.
       subjectRevision: revision,
     });
@@ -518,9 +501,12 @@ async function runPushTarget(root, callerManifest, target, pushed, notes) {
  * @param {string[]|null} [ctx.focusTest] set when a push is small enough for the focused
  *   threshold (ADR-258): the `test` gate runs the tests that import these files, recorded as
  *   `kind: 'test-focused'`, in place of the full suite
+ * @param {{files: string[], ids: string[], at: string}|null} [ctx.rerun] set when the
+ *   re-run lever fires (ADR-258): the `test` gate re-runs exactly the recorded failing ids
+ *   before the threshold path would run
  * @returns {Promise<{event: string, gates: object[], failed: boolean}>}
  */
-async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null, focusTest = null, subjectRevision = null }) {
+async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null, focusTest = null, rerun = null, subjectRevision = null }) {
   const pkg = await readPkg(root);
   // the runner is committed evidence (lockfile, then `packageManager`),
   // resolved once per hook run so every script gate spawns the same manager.
@@ -578,26 +564,23 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
       continue;
     }
 
+    // The `test` gate's two focused paths share one execution context; only the selection
+    // and the reason line differ. The re-run lever comes first - it is a subset of what
+    // the threshold path runs - and a `null` row from either falls through to the next
+    // path, ending at the full suite: more runs, never fewer.
+    const focusedCtx = { root, ledgerRoot, spec: manifest?.test?.runner ?? null, name, adr: gate.adr, subjectRevision, toolchain: toolchainIdentity(runner) };
+    if (rerun !== null && name === 'test') {
+      const ms = gateTimeoutMs(timeouts, name);
+      const row = await rerunGate({ ...focusedCtx, timeoutMs: ms === 0 ? focusedRunTimeoutMs() : ms, rerun });
+      if (row !== null) { results.push(row); continue; }
+    }
+
     // The focused threshold runs the `test` gate over the tests that import the pushed
-    // files instead of the full suite (ADR-258). A `null` row is the fall-through to the
-    // full suite below: more runs, never fewer.
+    // files instead of the full suite (ADR-258).
     if (focusTest !== null && name === 'test') {
-      const focusTimeout = gateTimeoutMs(timeouts, name);
-      const row = await focusedGate({
-        root,
-        ledgerRoot,
-        files: focusTest,
-        spec: manifest?.test?.runner ?? null,
-        timeoutMs: focusTimeout === 0 ? focusedRunTimeoutMs() : focusTimeout,
-        name,
-        adr: gate.adr,
-        subjectRevision,
-        toolchain: toolchainIdentity(runner),
-      });
-      if (row !== null) {
-        results.push(row);
-        continue;
-      }
+      const ms = gateTimeoutMs(timeouts, name);
+      const row = await focusedGate({ ...focusedCtx, files: focusTest, timeoutMs: ms === 0 ? focusedRunTimeoutMs() : ms });
+      if (row !== null) { results.push(row); continue; }
     }
 
     // Where the gate runs is part of resolving it: a `gates.cwd` entry selects a nested

@@ -67,7 +67,7 @@ silent, never a skip.
 | PT03 | Complete | dispatcher wiring + manifest validation + self-adoption + test | f3db4b35ccbabd46a4332b114c7c089e2a999f6c |
 | PT04 | Complete | ledger evidence test for `test-focused` | 419186aa8f5369b6705ef2ad3a026c58ea9ee353 |
 | PT05 | Complete | ledger records failed-test identities on a failed `test` run + test | a4799d6962bf2d46c477a676895c1e83f1e85115 |
-| PT06 | Queued | dispatcher re-run-failures lever + test | — |
+| PT06 | Complete | dispatcher re-run-failures lever + test | 69acfc1a6415ba8b3d4de27191e663d6374d5dc4 |
 
 ## PT01 — ADR-258
 

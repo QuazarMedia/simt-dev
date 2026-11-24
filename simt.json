@@ -33,6 +33,7 @@
         "simt.json"
       ]
     },
+    "prePushFocusedCommits": 1,
     "timeout": {
       "test": 0
     }

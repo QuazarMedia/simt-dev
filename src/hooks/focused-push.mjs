@@ -8,6 +8,9 @@
 // branch with no remote history, a manual run with no upstream - fails closed to the full
 // suite with the reason it runs.
 
+import { recordRun } from '../ledger/index.mjs';
+import { runFocused } from '../testing/focused-run.mjs';
+import { tail } from '../util/text.mjs';
 import { gitPaths, gitText } from '../sys/git.mjs';
 import { ZERO_SHA, parsePushedRefs } from './push-skip.mjs';
 
@@ -71,4 +74,85 @@ export async function focusedPush(root, pushed) {
     return { commits: 0, files: [], fullSuite: 'the push carries no new commits; running the full suite' };
   }
   return { commits, files: [...files].sort(), fullSuite: null };
+}
+
+/**
+ * The threshold half of ADR-258: is this push small enough to run only the tests
+ * that import its files, and which files are those?
+ *
+ * Every "no" answers the same way — `null`, and the full suite runs exactly as
+ * today. The threshold is the commit count at or below which the focused path
+ * applies; absent means 1, so a single-commit push is focused by default. A `test`
+ * gate the repository declared as a command cannot take file arguments, so it
+ * never focuses.
+ *
+ * @param {string} root the repository to ask git
+ * @param {string|undefined} pushed the raw pre-push stdin, or undefined for a manual run
+ * @param {{threshold?: number, commandTest?: boolean}} [options]
+ * @returns {Promise<string[]|null>} the pushed files to focus on, or null for the full suite
+ */
+export async function focusedThreshold(root, pushed, { threshold = 1, commandTest = false } = {}) {
+  if (commandTest) return null;
+  const { commits, files, fullSuite } = await focusedPush(root, pushed);
+  if (fullSuite !== null) return null;
+  if (commits > threshold) return null;
+  if (files.length === 0) return null;
+  return files;
+}
+
+/**
+ * Run the `test` gate over the tests that import `files`, and record the run in the
+ * ledger (ADR-258). Returns the report row, or `null` when the full suite must run
+ * instead: every way the focused path cannot be sure — a graph that will not read, a
+ * runner that will not build, a selection that comes back empty — falls through. More
+ * runs, never fewer.
+ *
+ * @param {object} ctx
+ * @param {string} ctx.root the tree the run executes in
+ * @param {string} ctx.ledgerRoot the repository the evidence is recorded in
+ * @param {string[]} ctx.files the pushed files the selection starts from
+ * @param {object|null} [ctx.spec] the manifest's `test.runner` declaration, if any
+ * @param {number} ctx.timeoutMs the bound in milliseconds (the dispatcher maps a declared
+ *   0 to the focused default before calling)
+ * @param {string} ctx.name the gate name, for the ledger line and the row
+ * @param {string|null} [ctx.adr] the gate definition's decision record
+ * @param {string|null} [ctx.subjectRevision] the revision the line is about
+ * @param {object} [ctx.toolchain] the toolchain identity recorded beside the result
+ * @returns {Promise<object|null>} the report row, or null for the full suite
+ */
+export async function focusedGate({ root, ledgerRoot, files, spec = null, timeoutMs, name, adr = null, subjectRevision = null, toolchain = {} }) {
+  const started = Date.now();
+  let focused = null;
+  try {
+    focused = await runFocused(root, { files, spec, timeoutMs });
+  } catch {
+    // The full suite runs in its place; the run below says what the gate did.
+  }
+  if (focused === null || focused.selected.length === 0) return null;
+  const passed = focused.code === 0 && focused.unproven.length === 0;
+  const exitCode = passed ? 0 : focused.code === 0 ? 1 : focused.code;
+  try {
+    await recordRun(ledgerRoot, {
+      cmd: focused.runs.map((run) => run.command).join(' | '),
+      exit: exitCode,
+      ms: Date.now() - started,
+      output: focused.output,
+      gate: name,
+      kind: 'test-focused',
+      subject: root,
+      revision: subjectRevision,
+      toolchain,
+      outcome: passed ? 'passed' : 'failed',
+    });
+  } catch {
+    // Recorded by absence: the next evidence read for this tree has no line.
+  }
+  return {
+    name,
+    status: passed ? 'passed' : 'failed',
+    detail: `focused: ${focused.selected.length} test file(s) for ${files.length} pushed file(s); the push is at or below gates.prePushFocusedCommits${focused.unproven.length > 0 ? `; the runner never ran: ${focused.unproven.join(', ')}` : ''}`,
+    output: passed ? '' : tail(focused.output),
+    adr,
+    exitCode,
+  };
 }

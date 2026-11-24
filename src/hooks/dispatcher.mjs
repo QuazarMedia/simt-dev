@@ -35,6 +35,9 @@ import { recordRun } from '../ledger/index.mjs';
 import { renderFindings, scanStaged } from '../secrets.mjs';
 import { git, gitPaths, gitText } from '../sys/git.mjs';
 import { ZERO_SHA, parsePushedRefs, resolveAlreadyPassedSkip, resolveNonCodeSkip } from './push-skip.mjs';
+import { focusedGate, focusedThreshold } from './focused-push.mjs';
+import { focusedRunTimeoutMs } from '../testing/focused-run.mjs';
+import { tail } from '../util/text.mjs';
 
 // The classification API stays importable from this module: `hooks` is what a consumer
 // already imports, and the extraction is a file split, not a change of surface.
@@ -460,6 +463,19 @@ async function runPushTarget(root, callerManifest, target, pushed, notes) {
     // the revision's own tree rather than HEAD's.
     const skipTest =
       (await resolveNonCodeSkip(root, basisManifest, pushed)) ?? (await resolveAlreadyPassedSkip(root, revision));
+    // A push at or below `gates.prePushFocusedCommits` runs only the tests that import
+    // its files; anything larger keeps the full suite (ADR-258). The declaration is the
+    // pushed revision's, like the skips above. A `test` gate the repository declared as
+    // a command cannot take file arguments, so it never focuses.
+    let focusTest = null;
+    if (skipTest === null && declaration.declared.includes('test')) {
+      const declared = basisManifest?.gates;
+      const thresholdValue = declared?.prePushFocusedCommits;
+      focusTest = await focusedThreshold(root, pushed, {
+        threshold: Number.isInteger(thresholdValue) && thresholdValue > 0 ? thresholdValue : 1,
+        commandTest: typeof declared?.commands?.test === 'string',
+      });
+    }
     // The tree is materialised for every pre-push, including one that skips `test`: lint and
     // format must see the commit being pushed, not the author's uncommitted edits.
     const run = await runGatesAt('pre-push', {
@@ -469,6 +485,7 @@ async function runPushTarget(root, callerManifest, target, pushed, notes) {
       declared: declaration.declared,
       key: 'prePush',
       skipTest,
+      focusTest,
       // Named on every ledger line: the revision whose tree this line is about.
       subjectRevision: revision,
     });
@@ -497,9 +514,12 @@ async function runPushTarget(root, callerManifest, target, pushed, notes) {
  * @param {{reason: string, adr: string} | null} [ctx.skipTest] set when a push skips the
  *   `test` gate (ADR-147 for a non-code push, ADR-120 for an already-green tree); the reason is
  *   what the report prints in its place, and the adr is the record that earned it
+ * @param {string[]|null} [ctx.focusTest] set when a push is small enough for the focused
+ *   threshold (ADR-258): the `test` gate runs the tests that import these files, recorded as
+ *   `kind: 'test-focused'`, in place of the full suite
  * @returns {Promise<{event: string, gates: object[], failed: boolean}>}
  */
-async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null, subjectRevision = null }) {
+async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null, focusTest = null, subjectRevision = null }) {
   const pkg = await readPkg(root);
   // the runner is committed evidence (lockfile, then `packageManager`),
   // resolved once per hook run so every script gate spawns the same manager.
@@ -555,6 +575,28 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     if (skipTest !== null && name === 'test') {
       results.push({ name, status: 'skipped', detail: skipTest.reason, adr: skipTest.adr, exitCode: null });
       continue;
+    }
+
+    // The focused threshold runs the `test` gate over the tests that import the pushed
+    // files instead of the full suite (ADR-258). A `null` row is the fall-through to the
+    // full suite below: more runs, never fewer.
+    if (focusTest !== null && name === 'test') {
+      const focusTimeout = gateTimeoutMs(timeouts, name);
+      const row = await focusedGate({
+        root,
+        ledgerRoot,
+        files: focusTest,
+        spec: manifest?.test?.runner ?? null,
+        timeoutMs: focusTimeout === 0 ? focusedRunTimeoutMs() : focusTimeout,
+        name,
+        adr: gate.adr,
+        subjectRevision,
+        toolchain: toolchainIdentity(runner),
+      });
+      if (row !== null) {
+        results.push(row);
+        continue;
+      }
     }
 
     // Where the gate runs is part of resolving it: a `gates.cwd` entry selects a nested
@@ -944,8 +986,3 @@ async function restage(root, files) {
   return { restaged, error: null };
 }
 
-/** Last few lines of output, for a failure a human or agent has to act on. */
-function tail(text, lines = 12) {
-  const parts = String(text).trimEnd().split('\n');
-  return parts.slice(-lines).join('\n');
-}

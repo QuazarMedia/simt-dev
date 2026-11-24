@@ -8,8 +8,9 @@
 // branch with no remote history, a manual run with no upstream - fails closed to the full
 // suite with the reason it runs.
 
-import { recordRun } from '../ledger/index.mjs';
+import { readLedger, recordRun } from '../ledger/index.mjs';
 import { runFocused } from '../testing/focused-run.mjs';
+import { isTestPath } from '../testing/paths.mjs';
 import { tail } from '../util/text.mjs';
 import { gitPaths, gitText } from '../sys/git.mjs';
 import { ZERO_SHA, parsePushedRefs } from './push-skip.mjs';
@@ -118,9 +119,10 @@ export async function focusedThreshold(root, pushed, { threshold = 1, commandTes
  * @param {string|null} [ctx.adr] the gate definition's decision record
  * @param {string|null} [ctx.subjectRevision] the revision the line is about
  * @param {object} [ctx.toolchain] the toolchain identity recorded beside the result
+ * @param {string|null} [ctx.detail] the row's reason line; the threshold text when absent
  * @returns {Promise<object|null>} the report row, or null for the full suite
  */
-export async function focusedGate({ root, ledgerRoot, files, spec = null, timeoutMs, name, adr = null, subjectRevision = null, toolchain = {} }) {
+export async function focusedGate({ root, ledgerRoot, files, spec = null, timeoutMs, name, adr = null, subjectRevision = null, toolchain = {}, detail = null }) {
   const started = Date.now();
   let focused = null;
   try {
@@ -150,9 +152,91 @@ export async function focusedGate({ root, ledgerRoot, files, spec = null, timeou
   return {
     name,
     status: passed ? 'passed' : 'failed',
-    detail: `focused: ${focused.selected.length} test file(s) for ${files.length} pushed file(s); the push is at or below gates.prePushFocusedCommits${focused.unproven.length > 0 ? `; the runner never ran: ${focused.unproven.join(', ')}` : ''}`,
+    detail:
+      detail ??
+      `focused: ${focused.selected.length} test file(s) for ${files.length} pushed file(s); the push is at or below gates.prePushFocusedCommits${focused.unproven.length > 0 ? `; the runner never ran: ${focused.unproven.join(', ')}` : ''}`,
     output: passed ? '' : tail(focused.output),
     adr,
     exitCode,
   };
+}
+
+/**
+ * The re-run lever (ADR-258, plan 0010 PT06): is there a failed `test` run in the
+ * ledger with recorded failing ids, exactly one commit below the pushed HEAD, whose
+ * single intervening commit touches only test files? When yes, re-run exactly those
+ * ids - a subset of what the threshold path would run, so the lever never widens the
+ * gate. `null` on every miss - no such run, a distance of more than one commit, a
+ * non-test file in the intervening commit, an id that reads as no test path - and the
+ * threshold path runs, which is the old behaviour.
+ *
+ * @param {string} root the repository for both git and the ledger (the caller's checkout)
+ * @param {string} revision the pushed HEAD
+ * @returns {Promise<{files: string[], ids: string[], at: string}|null>} the test files
+ *   to run, the recorded ids, and the revision the failed run happened at
+ */
+export async function rerunFailures(root, revision) {
+  const parent = await gitText(root, ['rev-parse', `${revision}^`], { allowFailure: true });
+  if (parent === null) return null; // no parent below the pushed HEAD: nothing to re-check against
+  const changed = await gitPaths(root, ['diff', '--name-only', parent, revision]).catch(() => null);
+  if (changed === null || changed.length === 0) return null;
+  // A source file in the intervening commit means the question is no longer "do the
+  // recorded failures still fail?" - that is the full suite's question, not a re-check.
+  if (changed.some((f) => !isTestPath(f))) return null;
+  const { entries } = await readLedger(root).catch(() => ({ entries: [] }));
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry.kind !== 'test' || entry.revision !== parent) continue;
+    const ids = Array.isArray(entry.failedTests) ? entry.failedTests : [];
+    if (ids.length === 0) continue; // a crash left no ids: the full suite re-checks
+    const files = filesForIds(ids);
+    if (files === null) continue;
+    return { files, ids, at: parent };
+  }
+  return null;
+}
+
+/**
+ * The test files a set of failing ids points at, deduped and sorted.
+ *
+ * A parser's id is a qualified name whose leading ancestor is the test file
+ * (`test/lib.test.mjs > add works`); an id whose leading part reads as no test path is
+ * `null` for the whole set, because re-running a subset of the recorded failures would
+ * answer a narrower question than the one asked.
+ *
+ * @param {string[]} ids
+ * @returns {string[]|null}
+ */
+function filesForIds(ids) {
+  const files = new Set();
+  for (const id of ids) {
+    const head = String(id).split(' > ')[0].trim();
+    if (!isTestPath(head)) return null;
+    files.add(head);
+  }
+  return [...files].sort();
+}
+
+/**
+ * Run the re-run lever's selection and report it (ADR-258): the same focused core as
+ * the threshold path, with a reason line that names the re-run. `null` falls through
+ * to the threshold path, then to the full suite: more runs, never fewer.
+ *
+ * @param {object} ctx same shape as {@link focusedGate}'s ctx, plus the lever's result
+ * @param {{files: string[], ids: string[], at: string}} ctx.rerun
+ * @returns {Promise<object|null>} the report row, or null for the fall-through
+ */
+export async function rerunGate({ root, ledgerRoot, spec = null, timeoutMs, name, adr = null, subjectRevision = null, toolchain = {}, rerun }) {
+  return focusedGate({
+    root,
+    ledgerRoot,
+    files: rerun.files,
+    spec,
+    timeoutMs,
+    name,
+    adr,
+    subjectRevision,
+    toolchain,
+    detail: `re-run of ${rerun.ids.length} failing test(s) recorded at ${String(rerun.at).slice(0, 12)}; the intervening commit touches test files only`,
+  });
 }

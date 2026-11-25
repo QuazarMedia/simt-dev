@@ -326,6 +326,41 @@
       ],
       "note": "Ships with simt-dev; installed by agents install alongside the agent file.",
       "vendored": true
+    },
+    {
+      "name": "harness-records",
+      "summary": "How to write a harness record for .simt/harnesses/: facet fields and their views, the invariants, and the vendor-doc process for dialect values",
+      "capabilities": [
+        "knowledge"
+      ],
+      "stack": [
+        "node"
+      ],
+      "paths": [
+        ".simt/harnesses/**",
+        "harnesses/**"
+      ],
+      "keywords": [
+        "harness",
+        "record",
+        ".simt/harnesses",
+        "mcp",
+        "hooks",
+        "surface",
+        "onboard"
+      ],
+      "bytes": 5481,
+      "sources": [
+        {
+          "repo": "simt-dev",
+          "path": "skills/harness-records",
+          "bytes": 5481,
+          "sha256": "c363823d9945c32ed235ae1824124926aa033d7089c69a0be87f8cb15293c471",
+          "role": "canonical"
+        }
+      ],
+      "note": "Ships with simt-dev; installed by agents install alongside the agent file.",
+      "vendored": true
     }
   ],
   "siblingGroups": []

@@ -48,10 +48,6 @@
       "sha": "aca41fe02bf6"
     }
   ],
-  "workspace": "..",
-  "decisions": {
-    "historicalCutoff": 96
-  },
   "profiles": [],
   "substitutions": {},
   "packs": [],
@@ -61,5 +57,9 @@
   "projection": {
     "simtDevSha": "7497dcce13068164496a88042e8b0a668a8e9bf1",
     "version": "0.13.0"
+  },
+  "workspace": "..",
+  "decisions": {
+    "historicalCutoff": 96
   }
 }

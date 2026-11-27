@@ -48,6 +48,8 @@ export async function briefPayload(args, { only = null } = {}) {
     subtask,
     build: false,
     only,
+    seen: typeof args?.seen === 'string' || Array.isArray(args?.seen) ? args.seen : null,
+    recordSeen: false,
   });
   if (result.error) {
     // An assembly failure already carries its own message and remedy. Replacing both
@@ -88,6 +90,7 @@ export async function briefPayload(args, { only = null } = {}) {
     cut: result.packed.cut,
     sections: result.sections,
     ...(result.scopes ? { scopes: result.scopes } : {}),
+    ...(result.seen ? { seen: result.seen } : {}),
     ...result.composite,
     text: result.packed.text,
   };
@@ -271,6 +274,7 @@ export const TOOLS_FACTS = [
         budget: { type: 'number', description: 'byte ceiling; 0 means the whole packet (default 2048)' },
         subtask: { type: 'integer', minimum: 1, description: 'focus the packet on this subtask number' },
         retrieval: { type: 'string', enum: ['v1', 'v2'], description: 'v2 enables experimental composite packets' },
+        seen: { type: 'string', description: 'comma-separated paths/ids or session ledger path already in context' },
         only: { type: 'string', description: `one section of the packet, e.g. files or decisions; default is the whole packet (${SECTIONS.join(', ').toLowerCase()})` },
       },
       required: [],

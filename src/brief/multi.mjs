@@ -18,6 +18,7 @@ import { keptSections } from './packet.mjs';
 import { clusterSubtasks, orderSubtasks, subtaskLanes } from './plan-graph.mjs';
 import { buildCompactPacket, compactScopedFileLine, compactTestLine, symbolEntrypoints, taggedLine } from './render.mjs';
 import { resolveLiveScopes, selectFileScopes } from './scopes.mjs';
+import { applySeenWeights, loadSeenState, saveSeenLedger } from './session.mjs';
 
 const TOP_FILES = 3;
 
@@ -40,7 +41,7 @@ function candidatePool(section, tagged) {
     add(facet, key, render, id, score = 1, hard = false, variants = null) {
       if (section !== null && section !== facet) return;
       const identity = JSON.stringify([facet, key]);
-      const row = pool.get(identity) ?? { render, variants, facet, relevance: new Map(), hard: false };
+      const row = pool.get(identity) ?? { rawKey: key, render, variants, facet, relevance: new Map(), hard: false };
       row.hard ||= hard;
       if (variants && !row.variants) row.variants = variants;
       row.relevance.set(id, Math.max(score, row.relevance.get(id) ?? 0));
@@ -52,8 +53,11 @@ function candidatePool(section, tagged) {
         const ids = tagged ? subtaskIds : [];
         const text = typeof row.render === 'function' ? row.render(ids) : taggedLine(row.render, ids);
         const variants = typeof row.variants === 'function' ? row.variants(ids) : row.variants;
+        const path = (row.facet === 'FILES' || row.facet === 'TESTS') ? row.rawKey : null;
         return {
           id, order, section: row.facet, text, subtaskIds,
+          key: `${row.facet}:${row.rawKey}`,
+          ...(path ? { path } : {}),
           ...(Array.isArray(variants) ? { variants } : {}),
           priority: row.hard ? 'hard' : 'soft',
           relevance: [...row.relevance].map(([subtask, score]) => ({ subtask, score })),
@@ -223,7 +227,7 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
 }
 
 export async function assembleCompositeBrief({
-  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, nash = false, scopeSpans = false,
+  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, nash = false, scopeSpans = false, seen = null, recordSeen = true,
 }) {
   const need = (facets) => section === null || facets.includes(section);
   const [graph, repo, registry, records, lessons] = await Promise.all([
@@ -340,7 +344,9 @@ export async function assembleCompositeBrief({
   }
   if (graph.stale) add('CAUTIONS', 'stale', 'The live index has incomplete source evidence. Run simt index.', 0, 1, true);
 
-  const items = candidates.items();
+  const rawItems = candidates.items();
+  const seenState = await loadSeenState(root, seen ?? flags?.seen ?? null, { record: recordSeen });
+  const { items, summary: seenSummary } = await applySeenWeights(rawItems, seenState);
   const drillDown = detailCommands(task, tasks, { paths: named, selected: subtask });
   const footerBytes = Math.min(350, Math.floor(budget / 4));
   const packed = buildCompactPacket(items, {
@@ -348,6 +354,8 @@ export async function assembleCompositeBrief({
     footer: drillFooter(tasks, drillDown, footerBytes),
     algorithm: nash ? 'nash' : 'auto',
   });
+  const cut = new Set(packed.cut);
+  await saveSeenLedger(seenState, items.filter((item) => !cut.has(item.id)));
   const constraints = tasks.flatMap(({ id, constraints: rows }) => rows.map((row) => ({ subtaskId: id, ...row })));
   const structuredScopes = scopeSpans && pathScopes.size
     ? [...pathScopes.entries()]
@@ -357,6 +365,7 @@ export async function assembleCompositeBrief({
   return {
     root, kind, basis, task, scope, budget, items, packed,
     sections: keptSections(items, packed.cut),
+    ...(seenSummary ? { seen: seenSummary } : {}),
     composite: {
       retrieval: 'v2', subtasks: tasks, lanes, overlaps, taskOrder: { ...plan, obligations },
       constraints, subtaskCoverage: subtaskCoverage(tasks, items, packed.cut), drillDown,

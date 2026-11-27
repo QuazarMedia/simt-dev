@@ -50,6 +50,7 @@ export async function promptOptIn(root) {
   const asked = Number.isFinite(declared) && declared > 0 ? declared : PROMPT_CAP_BYTES;
   return { optedIn: true, bytes: Math.min(Math.max(1, Math.floor(asked)), PROMPT_CAP_BYTES),
     retrieval: manifest.brief.retrieval === 'v1' ? 'v1' : 'v2',
+    seen: manifest.brief.session === true || manifest.brief.seen === true,
   };
 }
 
@@ -80,7 +81,15 @@ export async function deliverPrompt(row, payload, { root: flagRoot } = {}) {
   // Federation is off on this path and on no other: a delivery has 300 ms to answer, and
   // starting a declared server is a wait a prompt submit must not take. The task is the
   // question a federation would ask, and a person is not made to wait for it here.
-  const result = await assembleBrief({ root, task, budget: optIn.bytes, retrieval: optIn.retrieval, build: false, federate: false });
+  const result = await assembleBrief({
+    root,
+    task,
+    budget: optIn.bytes,
+    retrieval: optIn.retrieval,
+    build: false,
+    federate: false,
+    seen: optIn.seen || null,
+  });
   if (result.error) return { skipped: 'the packet could not be assembled' };
   if (result.cold) return { skipped: 'the index is empty, and a delivered packet never builds one' };
 

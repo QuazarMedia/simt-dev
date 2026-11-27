@@ -103,12 +103,21 @@ export function collect({ sections = null } = {}) {
      * packet spends saying nothing. A section the caller did not ask for is ignored here,
      * so a view never assembles items it will only filter out again.
      */
-    add(section, text, { hard = false, why = [] } = {}) {
+    add(section, text, { hard = false, why = [], key = null, path = null } = {}) {
       if (!SECTIONS.includes(section)) throw new Error(`unknown brief section ${section}`);
       if (allowed !== null && !allowed.has(section)) return this;
       if (typeof text !== 'string' || text.length === 0) return this;
       const order = items.length;
-      items.push({ id: String(order), section, text, priority: hard ? HARD : SOFT, order, why });
+      items.push({
+        id: String(order),
+        section,
+        text,
+        priority: hard ? HARD : SOFT,
+        order,
+        why,
+        ...(key ? { key } : {}),
+        ...(path ? { path } : {}),
+      });
       return this;
     },
   };
@@ -126,8 +135,9 @@ export function collect({ sections = null } = {}) {
 function cutOrder(items) {
   const ranked = [...items].sort((a, b) => {
     if (a.priority !== b.priority) return a.priority === HARD ? 1 : -1;
-    const value = SECTION_VALUE[a.section] - SECTION_VALUE[b.section];
-    if (value !== 0) return value;
+    const worthA = SECTION_VALUE[a.section] * (a.utilityWeight ?? 1);
+    const worthB = SECTION_VALUE[b.section] * (b.utilityWeight ?? 1);
+    if (worthA !== worthB) return worthA - worthB;
     return b.order - a.order;
   });
   return ranked.map(({ id, priority }) => ({ id, priority }));

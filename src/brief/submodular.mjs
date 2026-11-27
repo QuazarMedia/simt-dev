@@ -107,6 +107,7 @@ function prepare(items, { facetWeights = {}, taskWeights = {}, saturation = {}, 
     return {
       id, bytes, section, effects, order: sectionOrder.get(section) ?? SECTIONS.length, subject, hard: priority === 'hard',
       covers: item.covers ?? null, densityWeight: item.densityWeight ?? 1,
+      utilityWeight: Number.isFinite(item.utilityWeight) && item.utilityWeight > 0 ? item.utilityWeight : 1,
       subtasks: [...relevance.values()].filter(({ subtask }) => Number.isFinite(subtask) && subtask > 0),
     };
   }).sort(candidateOrder);
@@ -127,7 +128,7 @@ function objective(model) {
         best[group] = score;
       }
     }
-    return utility;
+    return utility * row.utilityWeight;
   };
 }
 
@@ -184,7 +185,7 @@ function nashObjective(model, { eps = 0.05, lambda = 0.35 } = {}) {
         else facetGroups.set(k, v);
       }
     }
-    return utility;
+    return utility * row.utilityWeight;
   };
 }
 
@@ -224,8 +225,8 @@ function greedy(model, hard, soft, budget, { regularizer = 0, augment = false, p
         .filter((row) => !used.has(row.id) && row.section === 'FILES' && row.bytes <= budget - bytes && eligible(row)
           && row.subtasks.some((entry) => entry.subtask === subtask))
         .sort((a, b) => {
-          const sa = a.subtasks.find((entry) => entry.subtask === subtask)?.score ?? 0;
-          const sb = b.subtasks.find((entry) => entry.subtask === subtask)?.score ?? 0;
+          const sa = (a.subtasks.find((entry) => entry.subtask === subtask)?.score ?? 0) * a.utilityWeight;
+          const sb = (b.subtasks.find((entry) => entry.subtask === subtask)?.score ?? 0) * b.utilityWeight;
           return sb - sa || candidateOrder(a, b);
         });
       const pick = candidates[0];

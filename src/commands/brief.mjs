@@ -69,6 +69,7 @@ export async function briefCommand(args, flags, commands = []) {
     proof: flags.proof === true,
     workScope: flags.scope ?? null,
     only: only === null ? null : only.toUpperCase(),
+    seen: flags.seen ?? null,
   });
   if (result.error) return typeof result.error === 'number' ? result.error
     : fail(result.error.message, result.error.exitCode, result.error.remedy);
@@ -110,6 +111,7 @@ export async function briefCommand(args, flags, commands = []) {
         explain: explanation,
         proof: result.proof,
         ...(result.scopes ? { scopes: result.scopes } : {}),
+        ...(result.seen ? { seen: result.seen } : {}),
         ...result.composite,
         text: packed.text,
       },

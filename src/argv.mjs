@@ -196,6 +196,7 @@ export const VALUE_FLAGS = new Set([
   'query',
   'retrieval',
   'refs',
+  'seen',
   'weights',
   // knowledge rank|why --scope: the scope dimensions the question requires, as key=value
   // pairs. A value rather than a switch, because a dimension nobody declared is a usage

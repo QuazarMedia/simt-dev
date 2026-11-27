@@ -397,6 +397,7 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --rank <task>           index: files ranked for a task, from the open cache
 --query <text>          knowledge rank: the question the units are ranked against
 --retrieval <v1|v2>     select the retrieval policy for brief, map, index, impact, why or knowledge rank
+--seen <paths|ledger>   brief: down-weight unchanged paths, ids or session ledger items already in context
 --subtask <n>           brief: open one subtask from a composite packet
 --where <k=v,...>       knowledge rank|why --scope: the scope dimensions the question
                         requires, e.g. jurisdiction=DE,product=acme

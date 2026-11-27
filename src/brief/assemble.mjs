@@ -42,6 +42,7 @@ import { parse as parseRegion } from '../projection/markers.mjs';
 import { assembleScopedBrief } from './local-work.mjs';
 import { DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES, buildPacket, collect, keptSections } from './packet.mjs';
 import { buildProofPacket } from './proof.mjs';
+import { applySeenWeights, loadSeenState, saveSeenLedger } from './session.mjs';
 import { classifyTask, cardVerbs } from './kind.mjs';
 import { briefAdvice } from '../advice/advice.mjs';
 import { commandCard } from '../kernel/card.mjs';
@@ -224,8 +225,11 @@ export async function assembleBrief({
   subtask = null,
   nash = false,
   scopeSpans = false,
+  seen = null,
+  recordSeen = true,
 } = {}) {
   if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope, retrieval });
+  const effectiveSeen = seen ?? flags?.seen ?? null;
   // A view is the same packet with the other sections never collected, so it shares the
   // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
   const section = only === null ? null : String(only).toUpperCase();
@@ -245,7 +249,7 @@ export async function assembleBrief({
     if (selected || parts.length > 1 || constrained) {
       const { assembleCompositeBrief } = await import('./multi.mjs');
       const result = await assembleCompositeBrief({ root, task, parts: selected ? [selected] : parts,
-        paths, budget, flags, build, commands, section, subtask, nash, scopeSpans });
+        paths, budget, flags, build, commands, section, subtask, nash, scopeSpans, seen: effectiveSeen, recordSeen });
       if (proof && !result.cold) result.proof = await summarizeProof(root, result.items, result.packed, budget, true);
       return result;
     }
@@ -400,16 +404,27 @@ export async function assembleBrief({
         if (picked.length) {
           for (const s of picked) collectedScopes.push({ path, ...s });
           packet.add('FILES', compactScopedFileLine(path, picked, symbolsByPath.get(path) ?? [], task, { entrypoints }), {
+            key: `FILES:${path}`,
+            path,
             why: ['ranked by the task words against the import graph'],
           });
         } else {
-          packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });
+          packet.add('FILES', line, {
+            key: `FILES:${path}`,
+            path,
+            why: ['ranked by the task words against the import graph'],
+          });
         }
       }
       if (collectedScopes.length) singleScopes = collectedScopes;
     } else {
       for (const line of rendered.text.split('\n')) {
-        packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });
+        const path = line.split(' ', 1)[0];
+        packet.add('FILES', line, {
+          key: `FILES:${path}`,
+          path,
+          why: ['ranked by the task words against the import graph'],
+        });
       }
     }
     if (rendered.truncated) {
@@ -456,7 +471,11 @@ export async function assembleBrief({
         transitive: false,
       });
       if (found.length === 0) untested.push(path);
-      else packet.add('TESTS', `${path} -> ${found.join(' ')}`, { why: ['the test imports it, or sits beside it'] });
+      else packet.add('TESTS', `${path} -> ${found.join(' ')}`, {
+        key: `TESTS:${path}`,
+        path,
+        why: ['the test imports it, or sits beside it'],
+      });
     }
   }
 
@@ -479,7 +498,10 @@ export async function assembleBrief({
     }
     for (const id of [...decisions.keys()].sort()) {
       const entry = decisions.get(id);
-      packet.add('DECISIONS', `${entry.id} — ${entry.detail}`, { why: [`names ${entry.path}`] });
+      packet.add('DECISIONS', `${entry.id} — ${entry.detail}`, {
+        key: `DECISIONS:${entry.id}`,
+        why: [`names ${entry.path}`],
+      });
     }
     if (unresolved.size > 0) {
       packet.add('CAUTIONS', `decisions name tokens nothing resolves: ${[...unresolved].sort().join(', ')}`, {
@@ -549,6 +571,7 @@ export async function assembleBrief({
       for (const entry of offered.slice(0, SKILL_NAMES)) {
         const reasons = [...entry.reasons];
         packet.add('SKILLS', `${entry.skill.name} — ${entry.skill.bytes} B, ${reasons.join(' ')}`, {
+          key: `SKILLS:${entry.skill.name}`,
           why: [`\`${CLI} skills show ${entry.skill.name}\` reads the body`],
         });
       }
@@ -606,6 +629,7 @@ export async function assembleBrief({
             ? `${lesson.detail}: ${lesson.paragraph.replace(/\s+/g, ' ').trim()}`
             : lesson.detail;
         packet.add('LESSONS', `${lesson.id} — ${body}`, {
+          key: `LESSONS:${lesson.id}`,
           why: [pathHits.length > 0 ? 'a lesson names a path this task will touch' : 'a lesson trigger matches this task'],
         });
       }
@@ -634,9 +658,11 @@ export async function assembleBrief({
     }
   }
 
-  const items = packet.items;
+  const seenState = await loadSeenState(root, effectiveSeen, { record: recordSeen });
+  const { items, summary: seenSummary } = await applySeenWeights(packet.items, seenState);
   const packed = buildPacket(items, { budget });
   const cut = new Set(packed.cut);
+  await saveSeenLedger(seenState, items.filter((item) => !cut.has(item.id)));
 
   const proofSummary = proof ? await summarizeProof(root, items, packed, budget) : undefined;
 
@@ -645,6 +671,7 @@ export async function assembleBrief({
   return {
     root, kind, basis, task, scope, budget, items, packed, sections, proof: proofSummary,
     ...(singleScopes ? { scopes: singleScopes } : {}),
+    ...(seenSummary ? { seen: seenSummary } : {}),
   };
 }
 

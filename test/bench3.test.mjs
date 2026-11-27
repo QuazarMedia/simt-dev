@@ -322,6 +322,44 @@ test('bench ablate (R04): leave-one-out section removal, 10-task canary with esc
   assert.equal(payload.ranking[0].id, 'core:truth');
 });
 
+test('bench ablation removes process rules from repo-local surfaces', async () => {
+  const workDir = await scratch('simt-ablate-local-surface-');
+  await writeFile(join(workDir, 'package.json'), JSON.stringify({ name: 'w', version: '1.0.0' }));
+  const local = join(workDir, '.simt', 'harnesses');
+  await mkdir(local, { recursive: true });
+  await writeFile(
+    join(local, 'custom.json'),
+    JSON.stringify({
+      id: 'custom',
+      surfaceOrder: 99,
+      surface: {
+        id: 'custom',
+        label: 'Custom harness',
+        readers: 'a custom agent',
+        primary: null,
+        kind: 'file',
+        rule: '.custom/rules/{name}.md',
+        foldRules: false,
+        readsPrimary: false,
+        readsAgentsMd: 'none',
+        configDirs: ['.custom'],
+        verified: 'test fixture',
+      },
+    }),
+  );
+  const customRule = join(workDir, '.custom', 'rules', 'slice-commit.md');
+  await mkdir(dirname(customRule), { recursive: true });
+  await writeFile(customRule, '# Slice commit\n');
+
+  await ablateSectionInWorkspace(workDir, {
+    kind: 'process',
+    targetId: 'slice-commit',
+    sectionId: 'process:slice-commit',
+  });
+
+  assert.equal(existsSync(customRule), false, 'a repo-local surface rule must be removed with the ablated process section');
+});
+
 test('bench probes (R05): 12 synthetic compliance probes each pass on compliance, fail on violation, and report compliance per arm', async () => {
   assert.equal(PROBES.length, 12, 'R05 requires exactly 12 compliance probes');
 

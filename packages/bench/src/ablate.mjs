@@ -17,7 +17,7 @@ import { inject, parse as parseRegion } from '../../../src/projection/markers.mj
 import { loadMdcRules, renderMdc, ruleName } from '../../../src/projection/mdc.mjs';
 import { plan } from '../../../src/projection/project.mjs';
 import { isEligible, loadRules, readDeclared, ruleValues, select } from '../../../src/projection/rules.mjs';
-import { resolveSurfaces, rulePath, SURFACES } from '../../../src/projection/surfaces.mjs';
+import { resolveSurfaces, rulePath, surfaces } from '../../../src/projection/surfaces.mjs';
 import { fingerprint } from '../../../src/resolve/fingerprint.mjs';
 import { evaluateRunRecord, loadPrices } from '../../../src/measure/metrics.mjs';
 import { loadRunRecords } from '../../../src/measure/records.mjs';
@@ -295,10 +295,10 @@ export async function ablateSectionInWorkspace(workDir, ablate) {
         if (rn) names.add(rn);
       }
     }
-    for (const s of SURFACES) {
+    for (const s of surfaces(workDir)) {
       if (!s.rule) continue;
       for (const name of names) {
-        const rel = rulePath(s.id, name);
+        const rel = rulePath(s.id, name, workDir);
         if (rel) {
           await rm(join(workDir, rel), { force: true }).catch(() => {});
         }

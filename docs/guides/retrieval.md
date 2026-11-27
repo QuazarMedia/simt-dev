@@ -1,12 +1,16 @@
 # Inspect retrieval, impact and repository policy
 
 Run these commands from the receiving repository. Use paths and export names
-from that repository. Prepare the local index before using v2 in a prompt
-hook or MCP brief.
+from that repository. Prepare the local index before using retrieval v2 or v3 in
+a prompt hook or MCP brief.
 
 ```sh
-simt index --retrieval v2
+simt index
 ```
+
+`simt index` builds the local v7 SQLite cache (`v2` is the default query mode;
+`--retrieval v1`, `--retrieval v2`, and `--retrieval v3` all run on the same
+index with no rebuild required).
 
 ## Brief a prompt with several tasks
 
@@ -15,16 +19,32 @@ know it, and state which files the change must leave alone. The following
 example uses `source_path` for a file already tracked in the repository.
 
 ```sh
-simt brief "Fix the calculation in $source_path and add a regression test for it" --retrieval v2
-simt brief "Fix the calculation in $source_path and add a regression test for it" --retrieval v2 --subtask 2
-simt map --task "Find the calculation that applies the current rate" --retrieval v2 --explain
+simt brief "Fix the calculation in $source_path and add a regression test for it"
+simt brief "Fix the calculation in $source_path and add a regression test for it" --subtask 2
+simt brief "Fix the calculation in $source_path and add a regression test for it" --retrieval v3
+simt map --task "Find the calculation that applies the current rate" --retrieval v3 --explain
 ```
 
 Use the numbered subtasks in the first packet to select a detailed brief.
-`map --explain` shows the ranking channels and any added feedback terms.
-Use `--retrieval v1` to return to legacy ranking or packet selection with the
-same index. Prompt hooks use v2 only when the repository sets
-`brief.retrieval` to `"v2"` in `simt.json`.
+`--retrieval v3` adds commit-history FTS, repository-mined concept expansion,
+post-retrieval QPP channel weighting, construct SDM (`invocations` and
+`string_literals`), HITS authority walks, and bound symbol-scope line spans
+(`path:L1-L2 sym`) on files longer than 200 lines. `map --explain` prints the
+ranking channels, feedback expansion terms, and QPP diagnostics.
+
+Optional `simt brief` flags work with either `v2` or `v3`:
+
+- `--scopes`: emit bound symbol-scope line spans (`path:L1-L2 sym`) for files
+  over 200 lines (enabled automatically under `--retrieval v3`).
+- `--nash`: enable Nash Social Welfare fair packing across subtasks and facets.
+- `--seen <paths|ledger>`: down-weight unchanged items already delivered in a
+  prior turn; edited files reset to full weight automatically.
+
+Use `--retrieval v1` or `--retrieval v2` to return to legacy or default v2
+ranking on the same index. Prompt hooks use v1, v2, or v3 when the repository
+sets `brief.retrieval` to `"v1"`, `"v2"`, or `"v3"` in `simt.json` (and may set
+`brief.seen: true` for session anti-redundancy). MCP `brief` accepts `retrieval`,
+`scopes`, `nash`, and `seen` without mutating any session ledger on disk.
 
 ## Trace a source edit and select tests
 

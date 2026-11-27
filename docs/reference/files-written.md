@@ -34,7 +34,8 @@ These are gitignored, and rebuildable. They are not repository content:
 
 | Path | What |
 | --- | --- |
-| `.simt/index.sqlite` | files, symbols, import/call/test/governs/cochange edges, FTS5 `fts` tokens across `code`, `docs`, `skills`, `decisions` and `lessons`, and optional `embeddings` vector blobs. One format: a Node too old for `node:sqlite` with FTS5 is refused by name, not given a second file to read |
+| `.simt/index.sqlite` | schema v7 SQLite cache: files, symbols, import/call/test/governs/cochange edges, `fts` and fielded `fts_bm25f` (with `invocations` and `string_literals`), `term_stats`, bounded `commit_fts`, repo-mined `concept_map`, `hits_scores`, `symbol_scopes`, and optional `embeddings` vector blobs. One format: a Node too old for `node:sqlite` with FTS5 is refused by name, not given a second file to read |
+| `.simt/session-brief.json` | optional session brief ledger written by `simt brief --seen` (MCP remains read-only) |
 | `.simt/ledger.jsonl` | one line per gate or test the dispatcher actually ran, against one git tree, plus normalised failure signatures |
 | `.simt/lessons.jsonl` | deterministic lesson candidates captured from fail-to-fix pairs, reverts, `BLOCK` reviews, and hook denials |
 | `.simt/bench/` | mined tasks (`tasks/`), test patch vault (`vault/`), and benchmark runs (`runs/`) |

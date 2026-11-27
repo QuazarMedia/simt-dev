@@ -14,7 +14,8 @@ is not, and a regeneration does not revert it.
 
 | Path | Shape |
 | --- | --- |
-| `index.sqlite` | one format: `node:sqlite` with FTS5 (`unicode61 remove_diacritics 2` for text, `trigram` for CJK), keyed by git blob sha. A Node below 22.20.0 is refused by name |
+| `index.sqlite` | schema v7 (`node:sqlite` with FTS5 `unicode61 remove_diacritics 2` for text and `trigram` for CJK), keyed by git blob sha: `files`, `symbols`, `edges`, `fts_bm25f` (including `invocations` and `string_literals`), `term_stats`, `commit_fts`, `concept_map`, `hits_scores`, `symbol_scopes`, and optional `embeddings`. A Node below 22.20.0 is refused by name |
+| `session-brief.json` | optional session anti-redundancy ledger used by `simt brief --seen` and `"brief": { "seen": true }` |
 | `ledger.jsonl` | one line per gate or test that actually ran, against one tree |
 | `lessons.jsonl` | lesson candidates from fail-to-fix pairs, reverts, `BLOCK` reviews, hook denials |
 | `events.jsonl` | agent-hook decisions and their reasons |

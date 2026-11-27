@@ -13,7 +13,10 @@ check that decides whether a value is valid.
 | `surfaces` | repo | which harnesses get per-rule files (`[]` folds everything into the region) |
 | `projection` | repo | where the region goes (`place: "top"`), and whether the install follows a source checkout (`follows: "source"`) |
 | `limits.fileLines` | repo | the `{warn, error}` pair a rule line enforces |
+| `limits.graph` | repo | optional structural checks (`cycles`, `brokenImports`, `deadExports`, `entrypoints`, `maxFanIn`, `maxFanOut`) |
 | `limits.coverage` | repo | the coverage percentage a rule line enforces, or `null` |
+| `architecture` | repo | optional `layers` and `forbid` import-direction rules enforced by `simt check` |
+| `brief` | repo | prompt-submit packet opt-in (`bytes`, `retrieval`: `"v3"` default or `"v2"`/`"v1"` rollback, `seen`: boolean) |
 | `gates` | repo | the commands the dispatcher runs at each git and agent event |
 | `budget.bytes` | repo | the ceiling the always-on projection is measured against |
 | `mode` | repo | `full`, or `kernel` to defer convention and style rules |

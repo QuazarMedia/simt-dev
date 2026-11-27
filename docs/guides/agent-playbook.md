@@ -30,8 +30,8 @@ through `simt mcp`.
      `config`) and the evidence behind it.
    - `COMMANDS`: the exact `build`, `test`, `lint`, `format`, `typecheck`, and focused
      test templates for this repository.
-   - `LIKELY FILES`: top files ranked by reciprocal-rank fusion (`RRF_K = 40`) across
-     SQLite FTS5 `bm25()`, PageRank graph proximity, and resolver signals.
+   - `FILES`: top files ranked under retrieval `v3` by QPP-weighted adaptive fusion across BM25F (including `invocations` and `string_literals` with top-32 Sequential Dependence), entity anchors, bounded `commit_fts` history, repo-mined `concept_map` expansion, HITS hub/authority directional walks, and co-change/lexical coupling. Files longer than 200 lines emit bound symbol-scope line spans (`path:L1-L2 sym`). Pass `--retrieval v2` or `--retrieval v1` to switch ranking policy on the same cache without rebuilding.
+   - `SUBTASKS`, `--subtask <n>`, `--nash`, `--scopes`, `--seen`: multi-clause prompts decompose into numbered subtasks (drill down with `--subtask <n>`). Use `--nash` for Nash Social Welfare packing under tight budgets, `--scopes` to enable symbol-scope spans in `v2`, and `--seen <paths|ledger>` to down-weight unchanged items from prior turns.
    - `TESTS`: the test files mapped to those likely files.
    - `DECISIONS`, `SKILLS`, `LESSONS`, `CAUTIONS`, and `FEDERATION`: governing ADRs,
      matched skills, promoted lessons for those paths, active worktree/hook cautions, and

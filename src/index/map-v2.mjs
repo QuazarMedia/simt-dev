@@ -10,6 +10,7 @@ import { conceptualPartners } from './lexical.mjs';
 import { rankByFileGraph } from './map.mjs';
 import { searchWithConceptMap, searchWithFeedback } from './prf.mjs';
 import { fuseQppChannels } from './qpp.mjs';
+import { rerankWithSdm } from './sdm.mjs';
 import { nativeConceptualPartners, searchFtsBm25FBundle } from './store.mjs';
 import { rankByCosine } from './vectors.mjs';
 
@@ -439,7 +440,7 @@ export async function rankMapV2(root, graph, task, {
   explain = false, queryVector = null, coupling = true, structure = null,
   exactOnly = false, feedbackEnabled = true, directional = true, includeTests = undefined,
   preloadedBundle = null, commitIr = false, commitRows = null, conceptMap = false, conceptRows = null,
-  qppFusion = false,
+  qppFusion = false, sdm = false,
 } = {}) {
   const allPaths = new Set(graph.files.map(({ path }) => path));
   if (!task.trim()) {
@@ -450,12 +451,12 @@ export async function rankMapV2(root, graph, task, {
     return { ranked, evidence, matched: 0, feedback: null };
   }
   const fts = graph.nativeLexical ? undefined : graph.fieldedRows;
-  const overlayRows = graph.nativeLexical ? graph.fieldedRows : [];
+  const overlayRows = graph.nativeLexical ? (graph.fieldedRows ?? []) : [];
   const bundle = graph.nativeLexical && preloadedBundle
     ? preloadedBundle
     : await searchFtsBm25FBundle(root, task, { fts });
   const original = bundle.hits;
-  const entityRows = graph.nativeLexical
+  const entityRows = graph.nativeLexical || fts === undefined
     ? (overlayRows.length ? [...bundle.rows, ...overlayRows] : bundle.rows)
     : fts;
   const entities = exactOnly
@@ -523,7 +524,7 @@ export async function rankMapV2(root, graph, task, {
     ...weightedRaw.map(({ weighted }) => weighted),
     1e-9,
   );
-  const lexical = weightedRaw.map(({ row, prior, weighted }) => {
+  const baseLexical = weightedRaw.map(({ row, prior, weighted }) => {
     const phraseBonus = Math.min(0.20, (phrases.get(row.path)?.score ?? 0) * (0.20 / 0.75)) * prior;
     return {
       ...row,
@@ -531,6 +532,9 @@ export async function rankMapV2(root, graph, task, {
       phrase: phrases.get(row.path)?.phrase ?? [],
     };
   }).sort(byScore).slice(0, LIMIT);
+  const lexical = sdm
+    ? rerankWithSdm(baseLexical, entityRows ?? overlayRows, task, { topK: 32 })
+    : baseLexical;
   const changes = [...(graph.cochange ?? []), ...graph.edges.filter(({ kind }) => kind === 'cochange')].sort((a, b) => cmp(a.src, b.src) || cmp(a.dst, b.dst));
   const tier1 = exact.filter(({ tier: value }) => value === 1);
   const tier2 = exact.filter(({ tier: value }) => value === 2);

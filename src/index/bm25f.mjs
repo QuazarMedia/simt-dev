@@ -2,8 +2,14 @@ import { tokenizeIdentifiers } from '../text/identifiers.mjs';
 import { STOPWORDS } from '../text/tokens.mjs';
 import { cmp } from '../util/sort.mjs';
 
-export const BM25F_FIELDS = Object.freeze(['path_tokens', 'symbol_names', 'qual_names', 'signatures', 'headings', 'body']);
-export const BM25F_WEIGHTS = Object.freeze([3, 10, 6, 3.5, 2.5, 1]);
+export const LEGACY_BM25F_FIELDS = Object.freeze([
+  'path_tokens', 'symbol_names', 'qual_names', 'signatures', 'headings', 'body',
+]);
+export const LEGACY_BM25F_WEIGHTS = Object.freeze([3, 10, 6, 3.5, 2.5, 1]);
+export const BM25F_FIELDS = Object.freeze([
+  'path_tokens', 'symbol_names', 'qual_names', 'signatures', 'headings', 'body', 'invocations', 'string_literals',
+]);
+export const BM25F_WEIGHTS = Object.freeze([3, 10, 6, 3.5, 2.5, 1, 1.8, 2.2]);
 export const BM25F_B = Object.freeze({
   path_tokens: 0.35,
   symbol_names: 0.35,
@@ -11,6 +17,8 @@ export const BM25F_B = Object.freeze({
   signatures: 0.50,
   headings: 0.50,
   body: 0.75,
+  invocations: 0.45,
+  string_literals: 0.40,
 });
 
 export function fieldTokens(text) {
@@ -159,28 +167,34 @@ export function scoreFtsBm25F(rows, task, { limit = FIELD_RESULT_LIMIT, fields =
 export const FIELD_RESULT_LIMIT = 200;
 
 /** Fetch candidate fielded rows from SQLite for per-field BM25F rescoring. */
-export function fieldCandidateStatement(terms, fields = BM25F_FIELDS, limit = 400) {
+export function fieldCandidateStatement(terms, fields = BM25F_FIELDS, limit = 400, {
+  columns = BM25F_FIELDS, weights = BM25F_WEIGHTS,
+} = {}) {
   const phrases = terms.map(ftsQuote).join(' OR ');
-  const match = fields === BM25F_FIELDS ? phrases : `{${fields.join(' ')}} : (${phrases})`;
+  const activeFields = fields.filter((name) => columns.includes(name));
+  const match = activeFields.length === columns.length ? phrases : `{${activeFields.join(' ')}} : (${phrases})`;
   return [
     `select f.kind, substr(n.key, 6) as ref,
-       f.path_tokens, f.symbol_names, f.qual_names, f.signatures, f.headings, f.body
+       ${columns.map((field) => `f.${field}`).join(', ')}
      from fts f join nodes n on n.id = f.node_id
      where fts match ? and (select value from meta where key = 'fts_fields') = '1'
-     order by -bm25(fts, ${BM25F_WEIGHTS.join(', ')}) desc, ref asc, f.rowid asc
+     order by -bm25(fts, ${weights.join(', ')}) desc, ref asc, f.rowid asc
      limit ?`,
     [match, limit],
   ];
 }
 
 /** Collapse sections in SQL before applying the path result cap. */
-export function fieldSearchStatement(terms, fields = BM25F_FIELDS) {
+export function fieldSearchStatement(terms, fields = BM25F_FIELDS, {
+  columns = BM25F_FIELDS, weights = BM25F_WEIGHTS,
+} = {}) {
   const phrases = terms.map(ftsQuote).join(' OR ');
-  const match = fields === BM25F_FIELDS ? phrases : `{${fields.join(' ')}} : (${phrases})`;
+  const activeFields = fields.filter((name) => columns.includes(name));
+  const match = activeFields.length === columns.length ? phrases : `{${activeFields.join(' ')}} : (${phrases})`;
   return [
     `with hits as materialized (
        select f.kind, substr(n.key, 6) as path, f.rowid as section,
-         -bm25(fts, ${BM25F_WEIGHTS.join(', ')}) as score
+         -bm25(fts, ${weights.join(', ')}) as score
        from fts f join nodes n on n.id = f.node_id
        where fts match ? and (select value from meta where key = 'fts_fields') = '1'
      ), ranked as (

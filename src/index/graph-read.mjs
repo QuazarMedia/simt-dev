@@ -1,5 +1,5 @@
 import { cmp } from '../util/sort.mjs';
-import { BM25F_FIELDS } from './bm25f.mjs';
+import { BM25F_FIELDS, LEGACY_BM25F_FIELDS } from './bm25f.mjs';
 import { BINDING_VERSION } from './bind.mjs';
 import {
   COMMIT_FTS_LIMIT, commitIrQuery, scoreCommitMatches, scoreCommitRows,
@@ -190,19 +190,25 @@ export async function readLiveSnapshot(root, {
         ? [indexStat, String(BINDING_VERSION), JSON.stringify(rangePaths)]
         : [Number(bindingEdits), tree, String(BINDING_VERSION), JSON.stringify(rangePaths)]),
   ];
-  const queries = [
-    [`select ${FILE_COLUMNS}, ${metaColsSql}
-      ${chunks} ${FILE_SOURCE}`, fileParams],
-    [SYMBOLS_SQL],
-    [EDGES_SQL],
-    ["select key, value from meta where key in ('tree', 'build', 'fts_fields', 'git_index_stat')"],
-  ];
-  if (text) queries.push([legacyFtsSql('fts_legacy')]);
-  if (fielded) queries.push([`select f.kind, substr(n.key, 6) as ref, ${BM25F_FIELDS.map((field) => `f.${field}`).join(', ')}
-    from fts f join nodes n on n.id = f.node_id where (select value from meta where key = 'fts_fields') = '1'
-    order by ref, f.rowid`]);
-  if (binding) queries.push(...symbolGraphQueries({ lightweight: lightweight && (!bindingEdits || narrowBinding) }));
-  const { results, error } = await readSqliteBatch(root, queries);
+  const queriesFor = (fieldCols) => {
+    const q = [
+      [`select ${FILE_COLUMNS}, ${metaColsSql}
+        ${chunks} ${FILE_SOURCE}`, fileParams],
+      [SYMBOLS_SQL],
+      [EDGES_SQL],
+      ["select key, value from meta where key in ('tree', 'build', 'fts_fields', 'git_index_stat')"],
+    ];
+    if (text) q.push([legacyFtsSql('fts_legacy')]);
+    if (fielded) q.push([`select f.kind, substr(n.key, 6) as ref, ${fieldCols.map((field) => `f.${field}`).join(', ')}
+      from fts f join nodes n on n.id = f.node_id where (select value from meta where key = 'fts_fields') = '1'
+      order by ref, f.rowid`]);
+    if (binding) q.push(...symbolGraphQueries({ lightweight: lightweight && (!bindingEdits || narrowBinding) }));
+    return q;
+  };
+  let { results, error } = await readSqliteBatch(root, queriesFor(BM25F_FIELDS));
+  if (fielded && error && String(error.message ?? error).includes('no such column')) {
+    ({ results, error } = await readSqliteBatch(root, queriesFor(LEGACY_BM25F_FIELDS)));
+  }
   const [files, symbols, edges, meta, ...extra] = results ?? [[], [], [], []];
   const fts = text ? extra.shift() ?? [] : [];
   const fieldedRows = fielded ? extra.shift() ?? [] : [];

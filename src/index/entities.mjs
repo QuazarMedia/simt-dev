@@ -8,7 +8,7 @@ import { readSqliteBatch } from './persist.mjs';
 import { readGraph, searchFtsBm25F } from './store.mjs';
 
 const TERM = /\x60([^\x60\r\n]+)\x60|"([^"\r\n]+)"|(?:\.\/|\.{2}\/|\/)?[\p{L}\p{N}_$-]+(?:(?:[./]|::)[\p{L}\p{N}_$-]+)*/gu;
-const METADATA = BM25F_FIELDS.filter((name) => name !== 'body');
+const METADATA = BM25F_FIELDS.filter((name) => name !== 'body' && name !== 'invocations' && name !== 'string_literals');
 const BODY = ['body'];
 
 const COMMON_SYMBOL_WORDS = new Set([

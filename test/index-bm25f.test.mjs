@@ -28,7 +28,7 @@ test('native weighted FTS5 and in-memory BM25F agree on ordered section scores',
   await reindex(root, { fielded: true });
   const rows = await readFieldedFts(root);
   assert.equal(rows.error, undefined);
-  assert.deepEqual(BM25F_WEIGHTS, [3, 10, 6, 3.5, 2.5, 1]);
+  assert.deepEqual(BM25F_WEIGHTS, [3, 10, 6, 3.5, 2.5, 1, 1.8, 2.2]);
   for (const query of ['refresh token rotation', 'refresh token', 'refreshTokenRotation', '検索言語', 'dos-not-exist']) {
     const native = await searchFtsBm25F(root, query);
     const local = scoreFtsBm25F(rows, query);

@@ -26,9 +26,10 @@ export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols 
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
 export { nativeConceptualPartners, readFileSignatures, readLexicalStats } from './lexical-store.mjs';
 import {
-  BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldCandidateStatement, fieldQueryTerms,
-  fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F,
+  BM25F_FIELDS, BM25F_WEIGHTS, LEGACY_BM25F_FIELDS, LEGACY_BM25F_WEIGHTS, bestFieldHits,
+  fieldCandidateStatement, fieldQueryTerms, fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F,
 } from './bm25f.mjs';
+import { extractCodeConstructs } from './sdm.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
 // names the extensions that RESOLVE to a language (JavaScript claims `.ts` for extraction
 // but not for resolution), so a record's extraction and resolution cannot desynchronize.
@@ -215,7 +216,8 @@ export function buildFtsBodies(filePath, symbolsForPath = [], text = null, root 
 /** File metadata belongs to the first section. Repeating it in every section
  * would change document frequencies based on how long a file happens to be. */
 export function buildFieldedFtsBodies(path, symbols = [], text = '', root = null) {
-  const kind = ftsKindOf(path, langOf(path, root));
+  const lang = langOf(path, root);
+  const kind = ftsKindOf(path, lang);
   const sections = splitSections(text);
   const metadata = {
     path_tokens: fieldTokens(path),
@@ -223,13 +225,18 @@ export function buildFieldedFtsBodies(path, symbols = [], text = '', root = null
     qual_names: fieldTokens(symbols.map((symbol) => symbol.qualname ?? `${path}.${symbol.name ?? ''}`).join(' ')),
     signatures: fieldTokens(symbols.map((symbol) => symbol.sig ?? '').join(' ')),
   };
-  return (sections.length ? sections : ['']).map((section, index) => ({
-    kind,
-    ref: path,
-    ...Object.fromEntries(Object.entries(metadata).map(([field, value]) => [field, index === 0 ? value : ''])),
-    headings: fieldTokens([...section.matchAll(/^ {0,3}#{1,6}[ 	]+(.+)$/gm)].map((match) => match[1]).join(' ')),
-    body: fieldTokens(section),
-  }));
+  return (sections.length ? sections : ['']).map((section, index) => {
+    const constructs = extractCodeConstructs(section, lang);
+    return {
+      kind,
+      ref: path,
+      ...Object.fromEntries(Object.entries(metadata).map(([field, value]) => [field, index === 0 ? value : ''])),
+      headings: fieldTokens([...section.matchAll(/^ {0,3}#{1,6}[ 	]+(.+)$/gm)].map((match) => match[1]).join(' ')),
+      body: fieldTokens(section),
+      invocations: constructs.invocations,
+      string_literals: constructs.string_literals,
+    };
+  });
 }
 
 export function buildFtsBody(filePath, symbolsForPath = [], text = null, root = null) {
@@ -286,7 +293,7 @@ export async function reindex(root, opts = {}) {
   // A cache with no stamp was written by a reading this one cannot describe, so
   // it is rebuilt rather than partly reused.
   const force = forceSchema
-    || (fielded && (stored.meta.lexical_terms !== '1' || stored.meta.concept_map !== '1'))
+    || (fielded && (stored.meta.lexical_terms !== '1' || stored.meta.concept_map !== '1' || stored.meta.fts_constructs !== '1'))
     || stored.error != null
     || stored.meta.inputs !== priorInputs;
   // Import resolution reads the tracked path set and the language table, not a
@@ -570,11 +577,18 @@ function parseImports(value) {
 }
 
 export async function readFieldedFts(root) {
-  const { rows, error } = await readSqliteRows(root,
+  let { rows, error } = await readSqliteRows(root,
     `select f.kind, substr(n.key, 6) as ref, ${BM25F_FIELDS.map((field) => `f.${field}`).join(', ')}
       from fts f join nodes n on n.id = f.node_id
       where (select value from meta where key = 'fts_fields') = '1'
       order by ref, f.rowid`, [], { legacySql: null });
+  if (error && String(error.message ?? error).includes('no such column')) {
+    ({ rows, error } = await readSqliteRows(root,
+      `select f.kind, substr(n.key, 6) as ref, ${LEGACY_BM25F_FIELDS.map((field) => `f.${field}`).join(', ')}
+        from fts f join nodes n on n.id = f.node_id
+        where (select value from meta where key = 'fts_fields') = '1'
+        order by ref, f.rowid`, [], { legacySql: null }));
+  }
   return withReadError(rows, error);
 }
 
@@ -590,16 +604,29 @@ export async function searchFtsBm25FBundle(root, task, { fts, fields = BM25F_FIE
   }
   const terms = fieldQueryTerms(task);
   if (!terms.length) return { hits: [], rows: [], stats: null, error: null };
-  const prefix = fields === BM25F_FIELDS ? '' : `{${fields.join(' ')}} : `;
-  const dfQueries = terms.map((term) => [
-    'select count(*) as df from fts where fts match ?',
-    [`${prefix}${ftsQuote(term)}`],
-  ]);
-  const { results, error } = await readSqliteBatch(root, [
-    ["select key, value from meta where key in ('fts_fields', 'fts_field_stats')"],
-    fieldCandidateStatement(terms, fields, limit),
-    ...dfQueries,
-  ], { legacySql: null });
+  let columns = BM25F_FIELDS;
+  let weights = BM25F_WEIGHTS;
+  let activeFields = fields;
+  const runBatch = () => {
+    const prefix = activeFields.length === columns.length ? '' : `{${activeFields.join(' ')}} : `;
+    const dfQueries = terms.map((term) => [
+      'select count(*) as df from fts where fts match ?',
+      [`${prefix}${ftsQuote(term)}`],
+    ]);
+    return readSqliteBatch(root, [
+      ["select key, value from meta where key in ('fts_fields', 'fts_field_stats')"],
+      fieldCandidateStatement(terms, activeFields, limit, { columns, weights }),
+      ...dfQueries,
+    ], { legacySql: null });
+  };
+  let { results, error } = await runBatch();
+  if (error && String(error.message ?? error).includes('no such column')) {
+    columns = LEGACY_BM25F_FIELDS;
+    weights = LEGACY_BM25F_WEIGHTS;
+    activeFields = fields.filter((name) => columns.includes(name));
+    if (!activeFields.length) return { hits: [], rows: [], stats: null, error: null };
+    ({ results, error } = await runBatch());
+  }
   if (error) {
     if (String(error.message ?? error).includes('no such column')) {
       return { hits: [], rows: [], stats: null, error: null };
@@ -613,14 +640,14 @@ export async function searchFtsBm25FBundle(root, task, { fts, fields = BM25F_FIE
   const rawStats = metaMap.get('fts_field_stats');
   const parsedStats = rawStats ? JSON.parse(rawStats) : null;
   if (!parsedStats) {
-    const [sql, params] = fieldSearchStatement(terms, fields);
+    const [sql, params] = fieldSearchStatement(terms, activeFields, { columns, weights });
     const fallback = await readSqliteRows(root, sql, params, { legacySql: null });
     return { hits: withReadError(bestFieldHits(fallback.rows), fallback.error), rows: candidateRows, stats: null, error: fallback.error ?? null };
   }
   const df = terms.map((_, index) => results?.[2 + index]?.[0]?.df ?? 0);
   const fullStats = { N: parsedStats.N, avgdl: parsedStats.avgdl, df };
   return {
-    hits: scoreFtsBm25F(candidateRows, task, { fields, stats: fullStats }),
+    hits: scoreFtsBm25F(candidateRows, task, { fields: activeFields, stats: fullStats }),
     rows: candidateRows,
     stats: fullStats,
     error: null,

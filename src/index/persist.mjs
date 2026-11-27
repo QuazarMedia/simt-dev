@@ -149,6 +149,13 @@ const MIGRATIONS = [
     from: 6,
     to: 7,
     apply: (db) => {
+      const ftsCols = db.prepare('pragma table_info(fts)').all().map((row) => row.name);
+      if (!ftsCols.includes('string_literals')) {
+        db.exec('drop table fts');
+        db.exec(FTS_SCHEMA);
+        db.prepare("insert into meta(key, value) values ('fts_fields', '0') on conflict(key) do update set value = '0'").run();
+        db.prepare("insert into meta(key, value) values ('lexical_terms', '0') on conflict(key) do update set value = '0'").run();
+      }
       db.exec(COMMIT_FTS_DDL);
       db.exec(CONCEPT_MAP_DDL);
       db.exec(CONCEPT_SOURCES_DDL);
@@ -452,6 +459,13 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       on conflict(kind, path) do update set revision = excluded.revision, lang = excluded.lang,
         bytes = excluded.bytes, props = excluded.props`);
     const sourceIdOf = db.prepare(`select id from sources where kind = 'blob' and path = ?`);
+    if (meta.fielded) {
+      const ftsCols = db.prepare('pragma table_info(fts)').all().map((row) => row.name);
+      if (!ftsCols.includes('string_literals')) {
+        db.exec('drop table fts');
+        db.exec(FTS_SCHEMA);
+      }
+    }
     // `prepare` compiles only the FIRST statement in a string : a
     // multi-statement delete prepared as one ran only its head, and the
     // surviving `file:` node collided with the next insert on `nodes.key`.
@@ -575,26 +589,14 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       upsertMeta.run('fts_fields', ready);
       upsertMeta.run('lexical_terms', ready);
       if (meta.fielded) {
-        const stats = db.prepare(
-          `select count(*) as n,
-            avg(case when path_tokens != '' then length(path_tokens) - length(replace(path_tokens, ' ', '')) + 1 else 0 end) as path_tokens,
-            avg(case when symbol_names != '' then length(symbol_names) - length(replace(symbol_names, ' ', '')) + 1 else 0 end) as symbol_names,
-            avg(case when qual_names != '' then length(qual_names) - length(replace(qual_names, ' ', '')) + 1 else 0 end) as qual_names,
-            avg(case when signatures != '' then length(signatures) - length(replace(signatures, ' ', '')) + 1 else 0 end) as signatures,
-            avg(case when headings != '' then length(headings) - length(replace(headings, ' ', '')) + 1 else 0 end) as headings,
-            avg(case when body != '' then length(body) - length(replace(body, ' ', '')) + 1 else 0 end) as body
-          from fts`,
-        ).get();
+        upsertMeta.run('fts_constructs', '1');
+        const avgClauses = BM25F_FIELDS.map((field) =>
+          `avg(case when ${field} != '' then length(${field}) - length(replace(${field}, ' ', '')) + 1 else 0 end) as ${field}`,
+        ).join(',\n            ');
+        const stats = db.prepare(`select count(*) as n, ${avgClauses} from fts`).get();
         upsertMeta.run('fts_field_stats', JSON.stringify({
           N: stats?.n ?? 0,
-          avgdl: {
-            path_tokens: stats?.path_tokens || 1,
-            symbol_names: stats?.symbol_names || 1,
-            qual_names: stats?.qual_names || 1,
-            signatures: stats?.signatures || 1,
-            headings: stats?.headings || 1,
-            body: stats?.body || 1,
-          },
+          avgdl: Object.fromEntries(BM25F_FIELDS.map((field) => [field, stats?.[field] || 1])),
         }));
       }
     }
@@ -748,7 +750,8 @@ export async function readSchema(root) {
 }
 
 const BUILD_META_KEYS = [
-  'schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis', 'fts_fields', 'lexical_terms', 'commit_fts', 'concept_map',
+  'schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis',
+  'fts_fields', 'lexical_terms', 'commit_fts', 'concept_map', 'fts_constructs',
 ];
 
 /**

@@ -138,7 +138,7 @@ const GOLD = {
   'src/bench/probes.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
   'src/bench/report.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
   'src/bench/run.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
-  'src/ci/dependabot.mjs': ['test/ci.test.mjs', 'test/naming.test.mjs', 'test/ci-dependabot.test.mjs', 'test/ecosystem-records.test.mjs'],
+  'src/ci/dependabot.mjs': ['test/ci.test.mjs', 'test/naming.test.mjs', 'test/ci-dependabot.test.mjs', 'test/ecosystem-records.test.mjs', 'test/ecosystem-language-stacks.test.mjs', 'test/ecosystem-mobile-platform.test.mjs', 'test/ecosystem-partial-stacks.test.mjs', 'test/ecosystem-probes.test.mjs'],
   'src/ci/workflow.mjs': ['test/ci.test.mjs', 'test/naming.test.mjs', 'test/binary.test.mjs', 'test/node-runner.test.mjs', 'test/ci-dependabot.test.mjs', 'test/ci-fixture.mjs'],
   'src/commands/evidence.mjs': ['test/ledger.test.mjs'],
   'src/commands/help.mjs': ['test/naming.test.mjs', 'test/help.test.mjs', 'test/spec.test.mjs'],
@@ -153,7 +153,7 @@ const GOLD = {
   'src/compare/hooksstate.mjs': ['test/compare.test.mjs', 'test/compare2.test.mjs'],
   'src/compare/row.mjs': ['test/compare.test.mjs', 'test/compare2.test.mjs'],
   'src/decisions/index.mjs': ['test/leaks.mjs', 'test/rules.test.mjs', 'test/shipped.test.mjs', 'test/decide.test.mjs', 'test/decisions.test.mjs', 'test/shipped-decisions.test.mjs'],
-  'src/graph/load.mjs': ['test/fixture.mjs', 'test/graph.test.mjs', 'test/install.test.mjs', 'test/compile.test.mjs', 'test/graph-vendored.test.mjs', 'test/graph-version.test.mjs'],
+  'src/graph/load.mjs': ['test/fixture.mjs', 'test/graph.test.mjs', 'test/install.test.mjs', 'test/compile.test.mjs', 'test/graph-vendored.test.mjs', 'test/graph-version.test.mjs', 'test/ecosystem-probes.test.mjs'],
   'src/graph/spec.mjs': ['test/graphspec.test.mjs', 'test/compile.test.mjs', 'test/graph.test.mjs'],
   'src/graph/speccheck.mjs': ['test/graphspec.test.mjs'],
   'src/hooks/capability.mjs': ['test/hooks.test.mjs', 'test/init.test.mjs', 'test/install.test.mjs', 'test/hooks-install.test.mjs', 'test/hooks2-fixture.mjs', 'test/hooks2.test.mjs', 'test/hooks3.test.mjs', 'test/init2.test.mjs'],
@@ -167,7 +167,7 @@ const GOLD = {
   'src/testing/parsers.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
   'src/testing/patches.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
   'src/testing/vault.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
-  'src/testing/paths.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs', 'test/ecosystem-records.test.mjs', 'test/mapping.test.mjs'],
+  'src/testing/paths.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs', 'test/ecosystem-records.test.mjs', 'test/mapping.test.mjs', 'test/ecosystem-language-stacks.test.mjs'],
 };
 
 const LANG = {

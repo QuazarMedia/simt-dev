@@ -42,6 +42,8 @@ export const BOOL_FLAGS = new Set([
   // brief: attach the proof packet's completeness to the JSON document, never to the
   // default packet's bytes (A39).
   'proof',
+  'scopes',
+  'nash',
   'all',
   'baselines',
   'dry-run',

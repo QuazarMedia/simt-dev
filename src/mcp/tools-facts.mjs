@@ -48,6 +48,8 @@ export async function briefPayload(args, { only = null } = {}) {
     subtask,
     build: false,
     only,
+    scopeSpans: args?.scopes === true,
+    nash: args?.nash === true,
     seen: typeof args?.seen === 'string' || Array.isArray(args?.seen) ? args.seen : null,
     recordSeen: false,
   });
@@ -274,6 +276,8 @@ export const TOOLS_FACTS = [
         budget: { type: 'number', description: 'byte ceiling; 0 means the whole packet (default 2048)' },
         subtask: { type: 'integer', minimum: 1, description: 'focus the packet on this subtask number' },
         retrieval: { type: 'string', enum: ['v1', 'v2'], description: 'v2 enables experimental composite packets' },
+        scopes: { type: 'boolean', description: 'emit bound symbol-scope line spans (`path:L1-L2 sym`) for large files' },
+        nash: { type: 'boolean', description: 'enable Nash Social Welfare fair packing across subtasks and facets' },
         seen: { type: 'string', description: 'comma-separated paths/ids or session ledger path already in context' },
         only: { type: 'string', description: `one section of the packet, e.g. files or decisions; default is the whole packet (${SECTIONS.join(', ').toLowerCase()})` },
       },

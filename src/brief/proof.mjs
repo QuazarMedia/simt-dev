@@ -56,7 +56,10 @@ function renderUnit(unit, citation) {
  * @param {{budget?: number, required?: string[], diverse?: boolean}} [options]
  * @returns {object}
  */
-export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, required = [], diverse = false } = {}) {
+export function buildProofPacket(
+  units = [],
+  { budget = DEFAULT_BRIEF_BYTES, required = [], diverse = false, nash = false } = {},
+) {
   if (!Number.isFinite(budget) || budget < 0) throw new Error(`a packet budget must be a non-negative number, not ${JSON.stringify(budget)}`);
   if (budget > PROMPT_CAP_BYTES) throw new Error(`a packet budget may not exceed the measured cap of ${PROMPT_CAP_BYTES} bytes`);
 
@@ -96,6 +99,9 @@ export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, req
   }
 
   const stable = candidates.filter(({ dynamic }) => !dynamic);
+  const obligationIndex = new Map(
+    [...new Set([...wanted, ...stable.flatMap(({ obligations }) => obligations)])].sort().map((ob, idx) => [ob, idx + 1]),
+  );
   const packed = packSubmodular(stable.map((unit) => ({
     id: unit.id, section: 'KNOWLEDGE', priority: unit.mandatory ? 'hard' : 'soft',
     // Each row carries a separator. The first separator is credited to the capacity.
@@ -103,12 +109,17 @@ export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, req
     covers: unit.obligations,
     densityWeight: 1 + Math.min(0.5, unit.authority / 10),
     relevance: [
-      ...unit.obligations.map((facet) => ({ subtask: 0, facet: 'proof:' + facet, score: 1, duplicateKey: 'covered' })),
+      ...unit.obligations.map((facet) => ({
+        subtask: nash ? (obligationIndex.get(facet) ?? 0) : 0,
+        facet: 'proof:' + facet,
+        score: 1,
+        duplicateKey: 'covered',
+      })),
       ...(diverse ? [{ subtask: 0, facet: 'lineage', score: 1, duplicateKey: unit.lineage }] : []),
     ],
   })), {
     budget: Math.floor(budget) + 1,
-    algorithm: diverse ? 'auto' : 'density',
+    algorithm: nash ? 'nash' : diverse ? 'auto' : 'density',
     facetWeights: { lineage: 0.2 },
   });
   const byId = new Map(stable.map((unit) => [unit.id, unit]));

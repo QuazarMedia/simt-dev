@@ -26,11 +26,11 @@ function questionList(task, retrieval) {
   return questions;
 }
 
-function proofSources(corpus, questions, retrieval) {
+function proofSources(corpus, questions, retrieval, { sdm = false, qppFusion = false } = {}) {
   const multi = questions.length > 1;
   const matches = new Map();
   for (const [index, question] of questions.entries()) {
-    const ranked = rankCorpus(corpus, { query: question, limit: 4, retrieval });
+    const ranked = rankCorpus(corpus, { query: question, limit: 4, retrieval, sdm, qppFusion });
     const seen = new Set();
     for (const { citation } of [...ranked.exact, ...ranked.ranked]) {
       if (!citation || seen.has(citation.path) || !/\.(?:md|markdown)$/iu.test(citation.path)) continue;
@@ -52,7 +52,7 @@ function proofSources(corpus, questions, retrieval) {
   return { matches, multi, required: multi ? questions.map((_, index) => 'question ' + (index + 1)) : [...matches.keys()] };
 }
 
-export async function assembleScopedBrief({ root, task, budget, workScope, retrieval = 'v1' }) {
+export async function assembleScopedBrief({ root, task, budget, workScope, retrieval = 'v1', nash = false, sdm = false, qppFusion = false }) {
   const work = await readWork(root);
   if (!work.ok) return { error: fail(work.problems[0].message, EXIT.CONFIG, work.problems[0].remedy) };
   const scope = work.scopes.find(({ id }) => id === workScope);
@@ -62,8 +62,18 @@ export async function assembleScopedBrief({ root, task, budget, workScope, retri
   const ceiling = Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES);
   const committed = collected.corpus.units.filter(({ provenance }) => provenance === 'committed');
   const questions = questionList(task, retrieval);
-  const { matches, multi, required } = proofSources({ ...collected.corpus, units: committed }, questions, retrieval);
-  const proof = buildProofPacket([...matches.values()], { budget: ceiling, required, diverse: multi });
+  const { matches, multi, required } = proofSources(
+    { ...collected.corpus, units: committed },
+    questions,
+    retrieval,
+    { sdm: sdm || retrieval === 'v3', qppFusion: qppFusion || retrieval === 'v3' },
+  );
+  const proof = buildProofPacket([...matches.values()], {
+    budget: ceiling,
+    required,
+    diverse: multi,
+    nash: nash || (multi && retrieval === 'v3'),
+  });
   const selection = await selectLocalVerification(root, { scopeId: workScope });
   const status = selection.error ? null : await localVerificationStatus(selection);
   const packet = collect();

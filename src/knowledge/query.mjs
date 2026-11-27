@@ -85,10 +85,13 @@ function rankableUnits(corpus, byPath) {
  * @param {{query?: string, scope?: object, permissions?: string[]|null, limit?: number, retrieval?: 'v1'|'v2'}} [options]
  * @returns {object}
  */
-export function rankCorpus(corpus, { query = '', scope = {}, permissions = null, limit = 10, retrieval = 'v1' } = {}) {
+export function rankCorpus(
+  corpus,
+  { query = '', scope = {}, permissions = null, limit = 10, retrieval = 'v1', sdm = false, qppFusion = false } = {},
+) {
   const byPath = new Map((corpus?.artifacts ?? []).map((artifact) => [artifact.path, artifact]));
   const units = rankableUnits(corpus, byPath);
-  const report = rank(units, { query, scope, permissions, limit: Infinity, retrieval });
+  const report = rank(units, { query, scope, permissions, limit: Infinity, retrieval, sdm, qppFusion });
   const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : Infinity;
 
   const byId = new Map((corpus?.units ?? []).map((unit) => [unitKey(unit), unit]));

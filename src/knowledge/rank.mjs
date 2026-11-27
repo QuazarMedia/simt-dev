@@ -21,6 +21,9 @@
 
 import { fieldProximity, fieldQueryTerms, fieldTokens, queryPairs, scoreFieldRows } from '../index/bm25f.mjs';
 import { smoothedIdf } from '../index/lexical.mjs';
+import { fuseQppChannels } from '../index/qpp.mjs';
+import { tokenizeIdentifiers } from '../text/identifiers.mjs';
+import { STOPWORDS } from '../text/tokens.mjs';
 import { cmp } from '../util/sort.mjs';
 import { extractClaims } from './claims.mjs';
 import { satisfiesScope } from './validity.mjs';
@@ -96,17 +99,144 @@ function knowledgeFields(unit, ref) {
   };
 }
 
-function fieldedKnowledgeScores(units, query, terms) {
-  if (!terms.length || !units.length) return [];
+function sdmPairs(query) {
+  const words = [];
+  for (const { token: raw } of tokenizeIdentifiers(query)) {
+    const token = raw.replaceAll('ς', 'σ');
+    if (!token || STOPWORDS.has(token)) continue;
+    if (words[words.length - 1] !== token) words.push(token);
+    if (words.length >= 24) break;
+  }
+  const pairs = [];
+  const seen = new Set();
+  for (let i = 1; i < words.length && pairs.length < 12; i += 1) {
+    const key = `${words[i - 1]}\0${words[i]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push([words[i - 1], words[i]]);
+  }
+  return pairs;
+}
+
+function hasOrderedPair(words, left, right) {
+  let lastLeft = -100;
+  for (let i = 0; i < words.length; i += 1) {
+    const w = words[i];
+    if (w === right && i - lastLeft >= 1 && i - lastLeft <= 2) return true;
+    if (w === left) lastLeft = i;
+  }
+  return false;
+}
+
+function hasUnorderedPair(words, left, right) {
+  let lastLeft = -100;
+  let lastRight = -100;
+  for (let i = 0; i < words.length; i += 1) {
+    const w = words[i];
+    if (w === left) {
+      if (i - lastRight <= 8 && i !== lastRight) return true;
+      lastLeft = i;
+    } else if (w === right) {
+      if (i - lastLeft <= 8 && i !== lastLeft) return true;
+      lastRight = i;
+    }
+  }
+  return false;
+}
+
+function exactCitationScores(units, query) {
+  const normalizedQuery = String(query ?? '').normalize('NFKC').toLowerCase().trim();
+  if (!normalizedQuery) return units.map(() => 0);
+  const rawTokens = new Set(normalizedQuery.match(/[\p{L}\p{N}_./:#-]+/gu) ?? []);
+  return units.map((unit) => {
+    const id = typeof unit.id === 'string' ? unit.id.normalize('NFKC').toLowerCase() : '';
+    const path = typeof unit.path === 'string' ? unit.path.normalize('NFKC').toLowerCase() : '';
+    const label = typeof unit.label === 'string' ? unit.label.normalize('NFKC').toLowerCase() : '';
+    const claims = Array.isArray(unit.claims) ? unit.claims : extractClaims(unit.text).claims;
+    const claimIds = claims
+      .map((claim) => (typeof claim === 'string' ? claim : claim?.id))
+      .filter((value) => typeof value === 'string' && value.length > 0)
+      .map((value) => value.normalize('NFKC').toLowerCase());
+    if ((id && (rawTokens.has(id) || normalizedQuery === id)) || claimIds.some((cid) => rawTokens.has(cid))) return 1;
+    if ((path && rawTokens.has(path)) || (label && (rawTokens.has(label) || normalizedQuery === label))) return 0.75;
+    return 0;
+  });
+}
+
+function fieldedKnowledgeScores(units, query, terms, { sdm = false, qppFusion = false } = {}) {
+  if (!units.length || (!terms.length && !String(query ?? '').trim())) return { scores: [], qpp: null };
   const rows = units.map(knowledgeFields);
-  const scores = scoreFieldRows(rows, terms, { columns: KNOWLEDGE_FIELDS, weights: KNOWLEDGE_WEIGHTS, idf: smoothedIdf });
-  const top = scores.reduce((best, score) => Math.max(best, score), 0);
-  if (top === 0) return scores;
-  const pairs = queryPairs(query);
-  const proximity = fieldProximity(rows, pairs, { fields: KNOWLEDGE_FIELDS });
-  const combined = scores.map((score, row) => score / top + (pairs.length ? 0.15 * (proximity.get(row)?.size ?? 0) / pairs.length : 0));
-  const highest = combined.reduce((best, score) => Math.max(best, score), 0);
-  return combined.map((score) => Math.round(score / highest * 1e6) / 1e6);
+  const rawScores = terms.length
+    ? scoreFieldRows(rows, terms, { columns: KNOWLEDGE_FIELDS, weights: KNOWLEDGE_WEIGHTS, idf: smoothedIdf })
+    : units.map(() => 0);
+  const top = rawScores.reduce((best, score) => Math.max(best, score), 0);
+
+  if (!sdm && !qppFusion) {
+    if (top === 0) return { scores: rawScores, qpp: null };
+    const pairs = queryPairs(query);
+    const proximity = fieldProximity(rows, pairs, { fields: KNOWLEDGE_FIELDS });
+    const combined = rawScores.map((score, row) => score / top + (pairs.length ? 0.15 * (proximity.get(row)?.size ?? 0) / pairs.length : 0));
+    const highest = combined.reduce((best, score) => Math.max(best, score), 0);
+    return { scores: combined.map((score) => Math.round(score / highest * 1e6) / 1e6), qpp: null };
+  }
+
+  const bm25Norm = top > 0 ? rawScores.map((score) => Math.round(score / top * 1e6) / 1e6) : rawScores.map(() => 0);
+  const exactScores = exactCitationScores(units, query);
+  const candidateOrder = units
+    .map((_, idx) => ({ idx, seed: bm25Norm[idx] + exactScores[idx] }))
+    .filter(({ seed }) => seed > 0)
+    .sort((a, b) => b.seed - a.seed || a.idx - b.idx)
+    .slice(0, 32)
+    .map(({ idx }) => idx);
+
+  const pairs = sdm ? sdmPairs(query) : [];
+  const sdmScores = bm25Norm.slice();
+  if (sdm && pairs.length > 0) {
+    for (const idx of candidateOrder) {
+      const row = rows[idx];
+      const orderedStreams = KNOWLEDGE_FIELDS.map((field) => row[field].split(' ').filter(Boolean));
+      const windowStreams = [row.headings, row.body].map((value) => value.split(' ').filter(Boolean));
+      let orderedHits = 0;
+      let windowHits = 0;
+      for (const [left, right] of pairs) {
+        if (orderedStreams.some((words) => hasOrderedPair(words, left, right))) orderedHits += 1;
+        if (windowStreams.some((words) => hasUnorderedPair(words, left, right))) windowHits += 1;
+      }
+      const combined = 0.78 * bm25Norm[idx] + 0.14 * (orderedHits / pairs.length) + 0.08 * (windowHits / pairs.length);
+      sdmScores[idx] = Math.round(combined * 1e6) / 1e6;
+    }
+  }
+
+  if (!qppFusion) {
+    const highest = sdmScores.reduce((best, score) => Math.max(best, score), 0);
+    return {
+      scores: highest > 0 ? sdmScores.map((score) => Math.round(score / highest * 1e6) / 1e6) : sdmScores,
+      qpp: null,
+    };
+  }
+
+  const toChannel = (id, weight, arr) => ({
+    id,
+    weight,
+    items: arr
+      .map((score, idx) => ({ path: String(idx), score }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || cmp(a.path, b.path)),
+  });
+  const channels = [
+    toChannel('bm25f', 1.0, bm25Norm),
+    ...(sdm ? [toChannel('sdm', 1.1, sdmScores)] : []),
+    toChannel('exact', 1.3, exactScores),
+  ];
+  const { ranked, qpp } = fuseQppChannels(channels);
+  const fusedByIdx = new Array(units.length).fill(0);
+  const maxRank = ranked.reduce((best, row) => Math.max(best, row.rank), 0);
+  if (maxRank > 0) {
+    for (const row of ranked) {
+      fusedByIdx[Number(row.path)] = Math.round((row.rank / maxRank) * 1e6) / 1e6;
+    }
+  }
+  return { scores: fusedByIdx, qpp };
 }
 
 function matchesFielded(unit, terms) {
@@ -201,8 +331,14 @@ const publicHit = (hit) => ({
  * @param {{query?: string, scope?: object, permissions?: string[]|null, limit?: number, retrieval?: 'v1'|'v2'}} [options]
  * @returns {object}
  */
-export function rank(units = [], { query = '', scope = {}, permissions = null, limit = 10, retrieval = 'v1' } = {}) {
-  const fielded = retrieval === 'v2';
+export function rank(
+  units = [],
+  { query = '', scope = {}, permissions = null, limit = 10, retrieval = 'v1', sdm = false, qppFusion = false } = {},
+) {
+  const isV3 = retrieval === 'v3';
+  const useSdm = sdm === true || isV3;
+  const useQpp = qppFusion === true || isV3;
+  const fielded = retrieval === 'v2' || isV3 || useSdm || useQpp;
   const terms = fielded ? fieldQueryTerms(query) : queryTerms(query);
   const compareText = fielded ? cmp : (a, b) => a.localeCompare(b);
   const classify = rankEligibility({ scope, permissions });
@@ -226,7 +362,10 @@ export function rank(units = [], { query = '', scope = {}, permissions = null, l
   }
 
   const maxAuthority = eligible.reduce((top, unit) => Math.max(top, Number(unit.authority) || 0), 1);
-  const lexical = fielded ? fieldedKnowledgeScores(eligible, query, terms) : eligible.map((unit) => lexicalCoverage(unit, terms));
+  const fieldedResult = fielded
+    ? fieldedKnowledgeScores(eligible, query, terms, { sdm: useSdm, qppFusion: useQpp })
+    : null;
+  const lexical = fieldedResult ? fieldedResult.scores : eligible.map((unit) => lexicalCoverage(unit, terms));
   const scored = eligible.map((unit, index) => scoreOf(unit, lexical[index] ?? 0, maxAuthority))
     .filter((hit) => hit.components.lexical > 0).sort((a, b) => compare(a, b, compareText));
   const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : scored.length;
@@ -244,7 +383,8 @@ export function rank(units = [], { query = '', scope = {}, permissions = null, l
     ranked: ranked.slice(0, cap).map(publicHit),
     unknownScope: unknownScope.sort((a, b) => compareText(String(a.path), String(b.path)) || (fielded ? cmp(String(a.id), String(b.id)) : 0)),
     excluded: fielded ? excluded.sort((a, b) => cmp(a.reason, b.reason)) : excluded,
-    ...(fielded ? { retrieval } : {}),
+    ...(fielded ? { retrieval: isV3 ? 'v3' : 'v2' } : {}),
+    ...(fieldedResult?.qpp ? { qpp: fieldedResult.qpp } : {}),
     embeddings: 'off',
     weights: RANK_WEIGHTS,
   };

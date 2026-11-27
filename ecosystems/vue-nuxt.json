@@ -1,0 +1,15 @@
+{
+  "id": "vue-nuxt",
+  "probes": [
+    {
+      "fact": "has-nuxt",
+      "files": ["package.json"],
+      "json": { "paths": [["dependencies", "nuxt"], ["devDependencies", "nuxt"]] }
+    },
+    {
+      "fact": "has-vue",
+      "files": ["package.json"],
+      "json": { "paths": [["dependencies", "vue"], ["devDependencies", "vue"]] }
+    }
+  ]
+}

@@ -1,6 +1,22 @@
 {
   "id": "terraform",
+  "facts": ["has-terraform-root"],
+  "probes": [
+    { "fact": "has-terraform-root", "globs": ["*.tf"] },
+    { "fact": "has-terraform", "globs": ["**/*.tf"] }
+  ],
+  "tool": "terraform",
+  "manifestOrder": 101,
+  "gates": {
+    "preCommit": ["format"],
+    "prePush": ["lint"],
+    "commands": {
+      "format": "terraform fmt -check -recursive",
+      "lint": "terraform validate"
+    }
+  },
   "dependabot": [
     { "order": 12, "fact": "has-terraform", "value": "terraform", "manifest": "*.tf" }
-  ]
+  ],
+  "languages": [{ "lang": "hcl", "exts": [".tf"] }]
 }

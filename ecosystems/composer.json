@@ -1,6 +1,21 @@
 {
   "id": "composer",
+  "facts": ["has-composer"],
+  "tool": "composer",
+  "manifestOrder": 100,
+  "gates": {
+    "preCommit": ["lint"],
+    "commands": {
+      "lint": "composer validate --strict"
+    }
+  },
+  "card": {
+    "focused": [
+      { "order": 15, "kind": "PHPUnit", "condition": { "fact": "has-composer" }, "template": "vendor/bin/phpunit {file}" }
+    ]
+  },
   "dependabot": [
     { "order": 8, "fact": "has-composer", "value": "composer", "manifest": "composer.json" }
-  ]
+  ],
+  "languages": [{ "lang": "php", "exts": [".php"] }]
 }

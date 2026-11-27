@@ -19,7 +19,7 @@ import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { MANIFEST_FILE, PACKAGE_NAME } from '../name.mjs';
-import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
+import { KNOWN_TAGS, knownTags } from '../resolve/fingerprint.mjs';
 import { matchesGlob, syntheticPathFor } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
 import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
@@ -286,7 +286,8 @@ export async function loadRegistry(path = null, flags = {}) {
 
   const errors = [];
   const warnings = [];
-  const lint = lintRegistry(registry);
+  const root = flags?.root ? resolve(process.cwd(), String(flags.root)) : implicitRoot();
+  const lint = lintRegistry(registry, knownTags(root));
 
   for (const error of lint.sync) errors.push(error);
   for (const warning of lint.warnings) warnings.push(warning);
@@ -386,7 +387,7 @@ function holdsAnyRepo(registry, root) {
 }
 
 /** Pure structural checks. No filesystem access. */
-export function lintRegistry(registry) {
+export function lintRegistry(registry, vocabulary = KNOWN_TAGS) {
   const errors = [];
   const warnings = [];
   const err = (message) => errors.push(message);
@@ -456,7 +457,7 @@ export function lintRegistry(registry) {
       err(`${at}: needs keywords, otherwise it is unreachable from a task description`);
     }
 
-    checkStack(at, skill.stack, err);
+    checkStack(at, skill.stack, err, vocabulary);
     checkGlobs(at, skill.paths, err);
     checkKeywords(at, skill.keywords, err);
 
@@ -473,7 +474,7 @@ export function lintRegistry(registry) {
 
     checkRequires(at, skill, index, err);
     checkAlias(at, skill, index, err);
-    checkVariants(at, skill, index, err);
+    checkVariants(at, skill, index, err, vocabulary);
     checkSources(at, skill, err, warn);
   }
 
@@ -565,13 +566,13 @@ function checkGlobs(at, paths, err) {
   }
 }
 
-function checkStack(at, stack, err) {
+function checkStack(at, stack, err, vocabulary) {
   for (const tag of stack ?? []) {
-    if (!KNOWN_TAGS.has(tag)) {
+    if (!vocabulary.has(tag)) {
       // A tag the detector cannot emit matches nothing, forever, with no error at
       // resolution time. This is the check that turns a silent dead entry into a
       // loud one. The vocabulary is stack tags plus emitted facts (ADR-013).
-      err(`${at}: tag "${tag}" is not emitted by fingerprint() (known: ${[...KNOWN_TAGS].sort().join(', ')})`);
+      err(`${at}: tag "${tag}" is not emitted by fingerprint() (known: ${[...vocabulary].sort().join(', ')})`);
     }
   }
   for (const duplicate of duplicates(stack)) {
@@ -618,7 +619,7 @@ function checkAlias(at, skill, index, err) {
   }
 }
 
-function checkVariants(at, skill, index, err) {
+function checkVariants(at, skill, index, err, vocabulary) {
   const variants = skill.variants ?? [];
   if (variants.length === 0) return;
 
@@ -629,7 +630,7 @@ function checkVariants(at, skill, index, err) {
     if (ids.has(variant.id)) err(`${at}: duplicate variant id "${variant.id}"`);
     ids.add(variant.id);
 
-    checkStack(`${at}#${variant.id}`, variant.stack, err);
+    checkStack(`${at}#${variant.id}`, variant.stack, err, vocabulary);
 
     // A variant the parent does not admit could still be selected, because the
     // parent stack is what gates the node.

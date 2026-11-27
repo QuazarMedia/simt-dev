@@ -29,7 +29,7 @@ Start with simt-dev if you want to:
 
 You bring your agent, repository and test commands; simt-dev connects them.
 An ecosystem without a gate profile still gets core rules. Only gates the repository
-can actually run are installed.
+can actually run are installed. [See the full ecosystem and stack support matrix →](docs/reference/ecosystems.md)
 
 ## Try it on one repository
 

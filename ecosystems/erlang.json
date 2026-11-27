@@ -1,0 +1,35 @@
+{
+  "id": "erlang",
+  "probes": [
+    { "fact": "has-rebar", "files": ["rebar.config"] },
+    { "fact": "has-erlang-mk", "files": ["erlang.mk"] }
+  ],
+  "card": {
+    "build": {
+      "order": 8,
+      "condition": { "facts": ["has-rebar", "has-erlang-mk"] },
+      "command": "if [ -f erlang.mk ]; then make; else rebar3 compile; fi"
+    },
+    "focused": [
+      {
+        "order": 16,
+        "kind": "rebar3",
+        "condition": { "fact": "has-rebar", "unless": ["has-erlang-mk"] },
+        "template": "rebar3 ct --suite={test}"
+      },
+      {
+        "order": 17,
+        "kind": "erlang.mk",
+        "condition": { "fact": "has-erlang-mk" },
+        "template": "make ct CT_OPTS=\"-suite {test}\""
+      }
+    ]
+  },
+  "languages": [
+    {
+      "lang": "erlang",
+      "exts": [".erl", ".hrl"],
+      "testConventions": { "base": ["(?:_SUITE|_tests)\\.erl$"] }
+    }
+  ]
+}

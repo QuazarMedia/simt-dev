@@ -15,8 +15,8 @@
     ]
   },
   "dependabot": [
-    { "order": 1, "stack": "node", "value": "npm", "manifest": "package.json" },
-    { "order": 2, "stack": "typescript", "value": "npm", "manifest": "package.json" }
+    { "order": 1, "stack": "node", "unless": ["has-bun-lock"], "value": "npm", "manifest": "package.json" },
+    { "order": 2, "stack": "typescript", "unless": ["has-bun-lock"], "value": "npm", "manifest": "package.json" }
   ],
   "languages": [
     { "lang": "javascript", "exts": [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx"], "canonical": [".js", ".mjs", ".cjs", ".jsx"] },

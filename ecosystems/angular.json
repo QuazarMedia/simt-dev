@@ -1,0 +1,10 @@
+{
+  "id": "angular",
+  "probes": [
+    {
+      "fact": "has-angular",
+      "files": ["package.json"],
+      "json": { "paths": [["dependencies", "@angular/core"], ["devDependencies", "@angular/core"]] }
+    }
+  ]
+}

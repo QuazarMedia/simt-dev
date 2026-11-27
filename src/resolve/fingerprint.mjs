@@ -17,11 +17,11 @@
 // because a marker set written by hand in the registry must match what readdir
 // returns on any host.
 
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { lstat, open, readdir, realpath, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { isAbsolute, join, relative } from 'node:path';
 
-import { loadEcosystems } from '../ecosystem/records.mjs';
+import { ecosystemFacts, loadEcosystems } from '../ecosystem/records.mjs';
 import { matchesGlob } from './resolve.mjs';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
@@ -100,6 +100,7 @@ const DEP_TAGS = new Map([
  * when the path is there.
  */
 const GLOB_DEPTH = 3;
+const PROBE_BYTES = 256 * 1024;
 
 /**
  * Observable properties of the working tree, named `has-*`.
@@ -180,7 +181,7 @@ const FACTS = [
   { name: 'has-uv-lock', kind: 'glob', paths: ['**/uv.lock'] },
   { name: 'has-android-manifest', kind: 'glob', paths: ['**/src/main/AndroidManifest.xml'] },
   { name: 'has-submodules', kind: 'file', paths: ['.gitmodules'] },
-  { name: 'has-nuget', kind: 'glob', paths: ['**/*.csproj', '**/*.sln'] },
+  { name: 'has-nuget', kind: 'glob', paths: ['**/*.csproj', '**/*.sln', '**/*.fsproj'] },
   { name: 'has-pubspec', kind: 'file', paths: ['pubspec.yaml'] },
   { name: 'has-swift-package', kind: 'file', paths: ['Package.swift'] },
   { name: 'has-mix', kind: 'file', paths: ['mix.exs'] },
@@ -215,6 +216,7 @@ export async function fingerprint(root, { trackedPaths = null } = {}) {
   const evidence = [];
   let entries = [];
   let pkg = null;
+  const records = loadEcosystems(root);
 
   try {
     entries = await readdir(root);
@@ -235,7 +237,7 @@ export async function fingerprint(root, { trackedPaths = null } = {}) {
   // a repository with seven globs paid for seven identical walks - the same directories,
   // in the same order, for the same answer.
   let nested = null;
-  const nestedPaths = async () => (nested ??= await listNested(root));
+  const nestedPaths = async () => (nested ??= await listNested(root, records));
 
   for (const [tag, markers] of MARKERS) {
     const hit = markers.find((m) => names.has(m));
@@ -245,17 +247,50 @@ export async function fingerprint(root, { trackedPaths = null } = {}) {
     }
   }
 
-  // A repository may declare its own facts: `markers` are paths that prove the facts a
-  // local record names, so an ecosystem nobody ships arrives as configuration rather than
-  // as a new entry in FACTS (ADR-013). Read through the validated loader, and only after
-  // the record survived it.
-  for (const record of loadEcosystems(root)) {
-    if (!Array.isArray(record.markers) || !Array.isArray(record.facts)) continue;
-    const hit = record.markers.find((marker) => names.has(marker) || entries.some((entry) => matchesGlob(entry, marker)));
-    if (!hit) continue;
-    for (const fact of record.facts) {
-      facts.add(fact);
-      factEvidence[fact] ??= hit;
+  // A repository may declare its own facts: markers prove file presence, and probes add
+  // bounded content, JSON and nested-path evidence without a product branch (ADR-262).
+  for (const record of records) {
+    if (Array.isArray(record.markers) && Array.isArray(record.facts)) {
+      const hit = record.markers
+        .map((marker) => entries.find((entry) => matchesGlob(entry, marker)))
+        .find((entry) => entry !== undefined);
+      if (hit) {
+        for (const fact of record.facts) {
+          facts.add(fact);
+          factEvidence[fact] ??= hit;
+        }
+      }
+    }
+  }
+
+  const probeCache = new Map();
+  for (const record of records) {
+    for (const probe of record.probes ?? []) {
+      if (facts.has(probe.fact)) continue;
+      let hit = null;
+      if (Array.isArray(probe.globs)) {
+        for (const glob of probe.globs) {
+          hit = findNestedIn(await nestedPaths(), glob)[0] ?? null;
+          if (hit) break;
+        }
+      } else {
+        for (const file of probe.files ?? []) {
+          if (probe.regex !== undefined || probe.json !== undefined) {
+            const loaded = await readProbe(root, file, probeCache);
+            if (loaded === null) continue;
+            const text = probe.stripComments ? stripComments(loaded.text) : loaded.text;
+            if (probe.regex !== undefined && new RegExp(probe.regex).test(text)) hit = file;
+            if (probe.json !== undefined && probe.json.paths.some((path) => hasJsonPath(loaded.json, path))) hit = file;
+          } else if (await isFile(root, file)) {
+            hit = file;
+          }
+          if (hit) break;
+        }
+      }
+      if (hit) {
+        facts.add(probe.fact);
+        factEvidence[probe.fact] ??= hit;
+      }
     }
   }
 
@@ -283,7 +318,9 @@ export async function fingerprint(root, { trackedPaths = null } = {}) {
         }
         continue;
       }
-      const present = fact.kind === 'file' ? names.has(candidate) : await isDir(join(root, candidate));
+      const present = fact.kind === 'file'
+        ? names.has(candidate) && await isFile(root, candidate)
+        : await isDir(join(root, candidate));
       if (present) {
         facts.add(fact.name);
         factEvidence[fact.name] ??= candidate;
@@ -308,8 +345,9 @@ export async function fingerprint(root, { trackedPaths = null } = {}) {
 
   // package.json dependencies are the highest-signal source for a JS/TS repo.
   if (names.has('package.json')) {
-    try {
-      pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+    const loaded = await readProbe(root, 'package.json', probeCache);
+    pkg = loaded?.json ?? null;
+    if (pkg) {
       for (const field of ['dependencies', 'devDependencies']) {
         for (const dep of Object.keys(pkg[field] ?? {})) {
           const tag = DEP_TAGS.get(dep);
@@ -319,9 +357,8 @@ export async function fingerprint(root, { trackedPaths = null } = {}) {
           }
         }
       }
-    } catch {
+    } else {
       evidence.push('package.json:unparseable');
-      pkg = null;
     }
   }
 
@@ -386,6 +423,116 @@ async function isDir(path) {
   }
 }
 
+async function isFile(root, path) {
+  try {
+    const full = join(root, path);
+    if (!(await lstat(full)).isFile()) return false;
+    const [realRoot, realFile] = await Promise.all([realpath(root), realpath(full)]);
+    const rel = relative(realRoot, realFile);
+    return rel !== '' && rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel);
+  } catch {
+    return false;
+  }
+}
+
+async function readProbe(root, path, cache) {
+  if (cache.has(path)) return cache.get(path);
+  if (!(await isFile(root, path))) {
+    cache.set(path, null);
+    return null;
+  }
+  let handle;
+  try {
+    handle = await open(join(root, path), 'r');
+    const info = await handle.stat();
+    const buffer = Buffer.alloc(Math.min(info.size, PROBE_BYTES));
+    await handle.read(buffer, 0, buffer.length, 0);
+    const text = buffer.toString('utf8');
+    let json = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+    const loaded = { text, json };
+    cache.set(path, loaded);
+    return loaded;
+  } catch {
+    cache.set(path, null);
+    return null;
+  } finally {
+    await handle?.close();
+  }
+}
+
+function stripComments(text) {
+  let out = '';
+  let quote = null;
+  let line = false;
+  let blockDepth = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+    if (line) {
+      if (char === '\n' || char === '\r') {
+        line = false;
+        out += char;
+      } else {
+        out += ' ';
+      }
+      continue;
+    }
+    if (blockDepth > 0) {
+      if (char === '/' && next === '*') {
+        out += '  ';
+        i += 1;
+        blockDepth += 1;
+      } else if (char === '*' && next === '/') {
+        out += '  ';
+        i += 1;
+        blockDepth -= 1;
+      } else {
+        out += char === '\n' || char === '\r' ? char : ' ';
+      }
+      continue;
+    }
+    if (quote !== null) {
+      out += char;
+      if (char === '\\' && next !== undefined) {
+        out += next;
+        i += 1;
+      } else if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      out += char;
+    } else if (char === '/' && next === '/') {
+      line = true;
+      out += '  ';
+      i += 1;
+    } else if (char === '/' && next === '*') {
+      blockDepth = 1;
+      out += '  ';
+      i += 1;
+    } else {
+      out += char;
+    }
+  }
+  return out;
+}
+
+function hasJsonPath(value, path) {
+  let current = value;
+  for (const key of path) {
+    if (current === null || typeof current !== 'object' || !Object.hasOwn(current, key)) return false;
+    current = current[key];
+  }
+  return true;
+}
+
 /**
  * The paths below `root` that match a shape, in sorted order, to `GLOB_DEPTH`.
  *
@@ -395,24 +542,26 @@ async function isDir(path) {
  * are skipped for the reason the extension sample skips them: detection is not a
  * scan of vendored output.
  */
-const GLOB_TARGETS = (() => {
+function globTargets(records) {
   const names = new Set();
   const exts = new Set();
   let unrestricted = false;
-  for (const fact of FACTS) {
-    if (fact.kind !== 'glob') continue;
-    for (const pattern of fact.paths) {
-      const tail = pattern.split('/').pop() ?? '';
-      if (!tail || tail.includes('?') || tail.includes('[')) { unrestricted = true; continue; }
-      if (!tail.includes('*')) names.add(tail);
-      else if (tail.startsWith('*.') && !tail.slice(2).includes('*')) exts.add(tail.slice(1).toLowerCase());
-      else unrestricted = true;
-    }
+  const patterns = FACTS.filter((fact) => fact.kind === 'glob').flatMap((fact) => fact.paths);
+  for (const record of records) {
+    for (const probe of record.probes ?? []) patterns.push(...(probe.globs ?? []));
+  }
+  for (const pattern of patterns) {
+    const tail = pattern.split('/').pop() ?? '';
+    if (!tail || tail.includes('?') || tail.includes('[')) { unrestricted = true; continue; }
+    if (!tail.includes('*')) names.add(tail);
+    else if (tail.startsWith('*.') && !tail.slice(2).includes('*')) exts.add(tail.slice(1).toLowerCase());
+    else unrestricted = true;
   }
   return { names, exts, unrestricted };
-})();
+}
 
-async function listNested(root) {
+async function listNested(root, records) {
+  const targets = globTargets(records);
   const found = [];
   const walk = async (dir, prefix, depth) => {
     let items;
@@ -429,11 +578,13 @@ async function listNested(root) {
           await walk(join(dir, item.name), rel, depth + 1);
         }
       } else if (
-        GLOB_TARGETS.unrestricted
-        || GLOB_TARGETS.names.has(item.name)
-        || GLOB_TARGETS.exts.has(extensionOf(item.name))
+        item.isFile()
+        && (targets.unrestricted
+          || targets.names.has(item.name)
+          || targets.exts.has(extensionOf(item.name)))
       ) {
-        found.push(prefix ? `${prefix}/${item.name}` : item.name);
+        const rel = prefix ? `${prefix}/${item.name}` : item.name;
+        if (await isFile(root, rel)) found.push(rel);
       }
     }
   };
@@ -628,7 +779,12 @@ export const STACK_TAGS = new Set([
  */
 export const WORK_FACTS = Object.freeze(['has-work-scopes', 'has-work-validators', 'has-work-targets']);
 
-export const FACT_TAGS = new Set([...FACTS.map((f) => f.name), ...PKG_FACTS.map((f) => f.name), ...WORK_FACTS]);
+export const FACT_TAGS = new Set([
+  ...FACTS.map((f) => f.name),
+  ...PKG_FACTS.map((f) => f.name),
+  ...WORK_FACTS,
+  ...ecosystemFacts(),
+]);
 
 /**
  * The full vocabulary a profile's `applies` may name: platform tags and facts.
@@ -637,4 +793,9 @@ export const FACT_TAGS = new Set([...FACTS.map((f) => f.name), ...PKG_FACTS.map(
  */
 export const KNOWN_TAGS = new Set([...STACK_TAGS, ...FACT_TAGS]);
 
-export const __internals = { MARKERS, EXTENSION_TAGS, DEP_TAGS, FACTS, PKG_FACTS, SAMPLE_BOUND };
+/** The shipped vocabulary plus facts from validated records in force for `root`. */
+export function knownTags(root = null) {
+  return new Set([...KNOWN_TAGS, ...ecosystemFacts(root)]);
+}
+
+export const __internals = { MARKERS, EXTENSION_TAGS, DEP_TAGS, FACTS, PKG_FACTS, SAMPLE_BOUND, PROBE_BYTES };

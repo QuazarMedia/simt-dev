@@ -1,0 +1,26 @@
+{
+  "id": "flutter",
+  "facts": ["has-flutter"],
+  "probes": [
+    {
+      "fact": "has-flutter",
+      "files": ["pubspec.yaml"],
+      "regex": "(?:^|\\n)([ \\t]*)dependencies[ \\t]*:[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n(?:[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n)*(?<=\\n)([ \\t]+)(?=[^ \\t#\\r\\n])(?:flutter[ \\t]*:[ \\t]*(?:#[^\\r\\n]*)?(?:\\r?\\n[ \\t]+sdk[ \\t]*:[ \\t]*flutter[ \\t]*(?:#[^\\r\\n]*)?(?:\\r?\\n|$)|[{][ \\t]*sdk[ \\t]*:[ \\t]*flutter[ \\t]*[}])|[^ \\t#\\r\\n][^\\r\\n]*(?:\\r?\\n|$)(?:[ \\t]*(?:#[^\\r\\n]*)?\\r?\\n|\\2[^ \\t#\\r\\n][^\\r\\n]*(?:\\r?\\n|$)|\\2[ \\t]+[^ \\t#\\r\\n][^\\r\\n]*(?:\\r?\\n|$))*?\\2flutter[ \\t]*:[ \\t]*(?:#[^\\r\\n]*)?(?:\\r?\\n[ \\t]+sdk[ \\t]*:[ \\t]*flutter[ \\t]*(?:#[^\\r\\n]*)?(?:\\r?\\n|$)|[{][ \\t]*sdk[ \\t]*:[ \\t]*flutter[ \\t]*[}]))"
+    }
+  ],
+  "tool": "flutter",
+  "manifestOrder": 10,
+  "gates": {
+    "preCommit": ["lint"],
+    "prePush": ["test"],
+    "commands": {
+      "lint": "flutter analyze",
+      "test": "flutter test"
+    }
+  },
+  "card": {
+    "focused": [
+      { "order": 18, "kind": "Flutter", "condition": { "fact": "has-flutter" }, "template": "flutter test {file}" }
+    ]
+  }
+}

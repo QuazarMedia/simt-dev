@@ -162,6 +162,7 @@ function resolveVerb(verb, { manifest, facts, stack, scripts, runner, root }) {
 
   for (const eco of ecosystemGateRows(root)) {
     if (!facts.has(eco.fact)) continue;
+    if (eco.unless?.some((fact) => facts.has(fact))) continue;
     const command = text(eco.commands?.[verb]);
     if (command) return command;
   }

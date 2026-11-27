@@ -1,0 +1,22 @@
+{
+  "id": "opentofu",
+  "facts": ["has-opentofu-root"],
+  "probes": [
+    { "fact": "has-opentofu-root", "globs": ["*.tofu"] },
+    { "fact": "has-opentofu", "globs": ["**/*.tofu"] }
+  ],
+  "tool": "tofu",
+  "manifestOrder": 102,
+  "gates": {
+    "preCommit": ["format"],
+    "prePush": ["lint"],
+    "commands": {
+      "format": "tofu fmt -check -recursive",
+      "lint": "tofu validate"
+    }
+  },
+  "dependabot": [
+    { "order": 22, "fact": "has-opentofu", "value": "terraform", "manifest": "*.tofu" }
+  ],
+  "languages": [{ "lang": "hcl", "exts": [".tofu"] }]
+}

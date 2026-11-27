@@ -1,0 +1,10 @@
+{
+  "id": "nextjs",
+  "probes": [
+    {
+      "fact": "has-next",
+      "files": ["package.json"],
+      "json": { "paths": [["dependencies", "next"], ["devDependencies", "next"]] }
+    }
+  ]
+}

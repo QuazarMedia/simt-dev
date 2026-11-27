@@ -25,7 +25,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
-import { fingerprint, KNOWN_TAGS } from '../resolve/fingerprint.mjs';
+import { fingerprint, knownTags } from '../resolve/fingerprint.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
@@ -189,7 +189,7 @@ export const KERNEL_CLASSES = new Set(['hard', 'command']);
  *  registry's skills against the same derived vocabulary (ADR-013, Consequences), and
  *  nothing checked the profiles until S28 changed six `simt-applies` lists with no
  *  guard that any of them named a tag the engine could produce. */
-function describeDefect(meta) {
+function describeDefect(meta, vocabulary) {
   if (meta['simt-id'] === undefined) return 'missing simt-id in frontmatter';
   const unknown = Object.keys(meta).find((k) => !PROFILE_KEYS.has(k));
   if (unknown !== undefined) {
@@ -200,7 +200,7 @@ function describeDefect(meta) {
   }
   const applies = meta['simt-applies'];
   if (!Array.isArray(applies)) return null;
-  const undeclared = applies.find((tag) => !KNOWN_TAGS.has(tag));
+  const undeclared = applies.find((tag) => !vocabulary.has(tag));
   if (undeclared !== undefined) {
     return `simt-applies names "${undeclared}", which fingerprint() never emits, so this profile could never be selected`;
   }
@@ -556,6 +556,7 @@ export async function loadRules(root = null) {
   }
 
   const out = [];
+  const vocabulary = knownTags(root);
   for (const item of collected) {
     const text = await readFile(join(item.dir, item.file), 'utf8');
     const meta = parseRuleMeta(text);
@@ -577,8 +578,8 @@ export async function loadRules(root = null) {
       // frontmatter defect wins, because a rule that cannot say what it applies to cannot
       // be reasoned about at all.
       error:
-        describeDefect(meta) ??
-        inferableDefect(body) ??
+        describeDefect(meta, vocabulary) ??
+        inferableDefect(body, vocabulary) ??
         checkDefect(body) ??
         variantsDefect(body, meta['simt-id'] ?? ''),
     });

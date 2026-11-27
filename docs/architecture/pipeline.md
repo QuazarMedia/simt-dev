@@ -19,8 +19,10 @@ installed.
 | project | the selected rules, the substitutions | `AGENTS.md`'s region, the per-surface rule files, the baselines, `simt.lock.json` |
 | gate | the manifest's `gates`, the dispatcher | `.simt/ledger.jsonl`, and the exit code git reads |
 
-Content is data; the engine is code. A new ecosystem arrives as a profile file and, where
-detection cannot see it, a `has-*` fact — never as a branch in the projection (ADR-013).
+Content is data; the engine is code. A new ecosystem arrives as a record and a profile file
+and, where detection cannot see it, a declarative probe that emits a `has-*` fact — never as
+a branch in the projection (ADR-013, ADR-262). The
+[ecosystem support matrix](../reference/ecosystems.md) lists the shipped combinations.
 
 ## The gates
 

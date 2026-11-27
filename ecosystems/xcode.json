@@ -1,0 +1,5 @@
+{
+  "id": "xcode",
+  "facts": ["has-xcode"],
+  "markers": ["*.xcodeproj", "*.xcworkspace"]
+}

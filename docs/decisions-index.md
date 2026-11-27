@@ -269,3 +269,4 @@ in [architecture/history.md](architecture/history.md).
 | [259](decisions/ADR-259-the-prepush-gate-runs-every-test-except-benches-and-studio.md) | the pre-push gate runs every test except benches and studio | accepted · 2026-11-24 |
 | [260](decisions/ADR-260-a-content-only-release-skips-the-binary-build.md) | a content-only release skips the binary build | accepted · 2026-11-23 |
 | [261](decisions/ADR-261-projected-rules-name-the-mcp-surface-as-a-second-door-not-a-second-system.md) | projected rules name the MCP surface as a second door, not a second system | accepted · 2026-11-24 |
+| [262](decisions/ADR-262-ecosystem-probes-and-root-aware-signal-vocabulary.md) | ecosystem probes and root-aware signal vocabulary | accepted · 2026-11-27 |

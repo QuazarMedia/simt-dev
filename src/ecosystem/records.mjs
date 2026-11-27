@@ -37,6 +37,16 @@ export function loadEcosystems(root = null) {
   return localRecords(root).records;
 }
 
+/** Every `has-*` fact declared by the records in force for a repository. */
+export function ecosystemFacts(root = null) {
+  const out = [];
+  for (const record of loadEcosystems(root)) {
+    for (const fact of record.facts ?? []) out.push(fact);
+    for (const probe of record.probes ?? []) out.push(probe.fact);
+  }
+  return [...new Set(out)];
+}
+
 /**
  * The local records in force for `root`, and everything wrong with the ones that are not.
  *
@@ -153,14 +163,14 @@ function parse(path, bytes = 0) {
 }
 
 /**
- * The gate rows, in manifest order: one per record that declares a `manifestOrder`, the
- * nine tool ecosystems a fresh adoption seeds gates from. `preCommit` is emitted only
+ * The gate rows, in manifest order: one per record that declares a `manifestOrder`.
+ * `preCommit` is emitted only
  * when present (the Maven row has none) and `file` only when set, so the rows keep the
  * exact shape the const-iterating tests pin.
  */
 export function ecosystemGateRows(root = null) {
   return loadEcosystems(root)
-    // A row is keyed by the fact that proves the ecosystem. Validation refuses a
+    // A row is keyed by the fact that proves its root entrypoint. Validation refuses a
     // `manifestOrder` without facts, and this guard is what a record that reached here
     // through a merge still cannot crash: `facts[0]` on an absent list threw out of
     // `init` before the schema existed.
@@ -173,6 +183,7 @@ export function ecosystemGateRows(root = null) {
       if (r.file === true) row.file = true;
       if (Array.isArray(r.gates?.preCommit)) row.preCommit = r.gates.preCommit;
       if (Array.isArray(r.gates?.prePush)) row.prePush = r.gates.prePush;
+      if (Array.isArray(r.gates?.unless)) row.unless = r.gates.unless;
       row.commands = r.gates?.commands ?? {};
       return row;
     });
@@ -271,9 +282,11 @@ export function testConventions(root = null) {
  *   {fact: 'has-x'}    one named fact
  *   {facts: ['a','b']} any of the listed facts
  *   {stack: 'gradle'}  one named stack tag
+ * Any condition may carry `unless: ['has-y']`, which excludes the match.
  */
 export function matches(condition, { stack = new Set(), facts = new Set() } = {}) {
   if (!condition) return false;
+  if (Array.isArray(condition.unless) && condition.unless.some((fact) => facts.has(fact))) return false;
   if (condition.fact) return facts.has(condition.fact);
   if (Array.isArray(condition.facts)) return condition.facts.some((f) => facts.has(f));
   if (condition.stack) return stack.has(condition.stack);

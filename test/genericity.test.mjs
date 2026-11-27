@@ -150,6 +150,18 @@ test('an unreadable root reports every collection empty rather than throwing', a
 
 // --- rule text: what the reader receives -------------------------------------
 
+test('the ecosystem support matrix names every shipped stack profile', async () => {
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const matrix = await readFile(join(root, 'docs', 'reference', 'ecosystems.md'), 'utf8');
+  const profiles = (await readdir(join(root, 'rules', 'stacks')))
+    .filter((name) => name.endsWith('.md'))
+    .map((name) => name.slice(0, -3));
+  assert.ok(profiles.length > 0, 'no stack profiles found');
+  for (const id of profiles) {
+    assert.ok(matrix.includes(`\`${id}\``), `the support matrix omits profile ${id}`);
+  }
+});
+
 test('rule text names no manifest file and leaks no detection vocabulary', async () => {
   const rulesDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'rules');
   const files = [];
@@ -236,10 +248,56 @@ test('each shipped ecosystem profile selects on its own fact (S40)', async () =>
     { marker: 'pubspec.yaml', fact: 'has-pubspec', profile: 'dart' },
     { marker: 'mix.exs', fact: 'has-mix', profile: 'elixir' },
     { marker: 'pom.xml', fact: 'has-maven-pom', profile: 'jvm' },
+    { files: { 'composer.json': '{}' }, fact: 'has-composer', profile: 'php' },
+    { files: { 'main.tf': '' }, fact: 'has-terraform', profile: 'terraform' },
+    { files: { 'main.tofu': '' }, fact: 'has-opentofu', profile: 'terraform' },
+    { files: { 'package.json': '{}', 'bun.lock': '' }, fact: 'has-bun-lock', profile: 'bun' },
+    { files: { 'compose.yml': 'services: {}\n' }, fact: 'has-compose', profile: 'compose' },
+    { files: { '.devcontainer/devcontainer.json': '{}' }, fact: 'has-devcontainer', profile: 'devcontainer' },
+    { files: { '.gitmodules': '' }, fact: 'has-submodules', profile: 'git-submodules' },
+    {
+      files: { 'pubspec.yaml': 'name: x\ndependencies:\n  flutter:\n    sdk: flutter\n' },
+      fact: 'has-flutter',
+      profile: 'flutter',
+    },
+    { files: { 'Example.xcodeproj/project.pbxproj': '' }, fact: 'has-xcode', profile: 'xcode' },
+    {
+      files: { 'build.gradle.kts': 'plugins { kotlin("multiplatform") }\n' },
+      fact: 'has-kotlin-multiplatform',
+      profile: 'kotlin-multiplatform',
+    },
+    {
+      files: { 'build.gradle.kts': 'plugins { id("org.jetbrains.compose") }\n' },
+      fact: 'has-compose-multiplatform',
+      profile: 'compose-multiplatform',
+    },
+    { files: { 'CMakeLists.txt': '' }, fact: 'has-cmake', profile: 'cpp' },
+    { files: { 'App.fsproj': '<Project/>\n' }, fact: 'has-fsharp', profile: 'fsharp' },
+    { files: { 'rebar.config': '' }, fact: 'has-rebar', profile: 'erlang' },
+    {
+      files: { 'package.json': JSON.stringify({ dependencies: { next: '^15' } }) },
+      fact: 'has-next',
+      profile: 'nextjs',
+    },
+    {
+      files: { 'package.json': JSON.stringify({ dependencies: { vue: '^3' } }) },
+      fact: 'has-vue',
+      profile: 'vue-nuxt',
+    },
+    {
+      files: { 'package.json': JSON.stringify({ dependencies: { svelte: '^5' } }) },
+      fact: 'has-svelte',
+      profile: 'svelte-sveltekit',
+    },
+    {
+      files: { 'package.json': JSON.stringify({ dependencies: { '@angular/core': '^19' } }) },
+      fact: 'has-angular',
+      profile: 'angular',
+    },
   ];
   const rules = await loadRules();
-  for (const { marker, fact, profile } of rows) {
-    const root = await fixture({ [marker]: 'x' });
+  for (const { marker, files, fact, profile } of rows) {
+    const root = await fixture(files ?? { [marker]: 'x' });
     const fp = await fingerprint(root);
     assert.ok(
       fp.facts.includes(fact),

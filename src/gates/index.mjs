@@ -45,6 +45,10 @@ const TAG_GATES = [
  * on is the same signal a profile's `simt-applies` names, so one marker file reaches
  * both: the region this repo reads and the gates its commits run.
  *
+ * The row keys on the fact that proves the command's root entrypoint; a broader ecosystem
+ * fact may still select guidance or Dependabot for nested projects without seeding a root
+ * command that cannot run.
+ *
  * `commands` is what a FRESH manifest declares for each proposed gate, and it is written
  * only when the probe in `readCapability` found `tool` where the record says it lives.
  * A declared gate that cannot run blocks every commit, so a command is never declared on
@@ -288,6 +292,7 @@ function ecosystemCommands(facts = [], capability = null, root = null) {
   const owner = new Map();
   for (const eco of ecosystemGateRows(root)) {
     if (!present.has(eco.fact)) continue;
+    if (eco.unless?.some((fact) => present.has(fact))) continue;
     if (!capability.tools.includes(eco.tool)) continue;
     for (const [gate, command] of Object.entries(eco.commands)) {
       if (capability.commands?.[gate]) continue;
@@ -367,7 +372,7 @@ function defaultGates(stack, facts = [], root = null) {
     }
   }
   for (const row of ecosystemGateRows(root)) {
-    if (signals.has(row.fact)) {
+    if (signals.has(row.fact) && !row.unless?.some((fact) => signals.has(fact))) {
       // A row proposes what it has: the Maven row has no preCommit gates, so a
       // missing key is "none", not a defect. Spreading undefined throws.
       //

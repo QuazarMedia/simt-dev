@@ -6,6 +6,7 @@
   "gates": {
     "preCommit": ["format", "lint"],
     "prePush": ["test"],
+    "unless": ["has-flutter"],
     "commands": {
       "format": "dart format --output=none --set-exit-if-changed .",
       "lint": "dart analyze",
@@ -14,7 +15,7 @@
   },
   "card": {
     "focused": [
-      { "order": 12, "kind": "Dart", "condition": { "fact": "has-pubspec" }, "template": "dart test {file}" }
+      { "order": 12, "kind": "Dart", "condition": { "fact": "has-pubspec", "unless": ["has-flutter"] }, "template": "dart test {file}" }
     ]
   },
   "dependabot": [

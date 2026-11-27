@@ -1,0 +1,11 @@
+{
+  "id": "kotlin-multiplatform",
+  "probes": [
+    {
+      "fact": "has-kotlin-multiplatform",
+      "files": ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"],
+      "regex": "org\\.jetbrains\\.kotlin\\.multiplatform|kotlin[ \\t]*\\([ \\t]*[\"']multiplatform[\"'][ \\t]*\\)",
+      "stripComments": true
+    }
+  ]
+}

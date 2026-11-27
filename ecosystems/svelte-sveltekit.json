@@ -1,0 +1,15 @@
+{
+  "id": "svelte-sveltekit",
+  "probes": [
+    {
+      "fact": "has-sveltekit",
+      "files": ["package.json"],
+      "json": { "paths": [["dependencies", "@sveltejs/kit"], ["devDependencies", "@sveltejs/kit"]] }
+    },
+    {
+      "fact": "has-svelte",
+      "files": ["package.json"],
+      "json": { "paths": [["dependencies", "svelte"], ["devDependencies", "svelte"]] }
+    }
+  ]
+}

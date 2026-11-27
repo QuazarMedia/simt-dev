@@ -55,7 +55,7 @@
     "opencode"
   ],
   "projection": {
-    "simtDevSha": "7497dcce13068164496a88042e8b0a668a8e9bf1",
+    "simtDevSha": "eaa389dec064a00dcac8b6d40d5e8f2ade0dfb32",
     "version": "0.13.0"
   },
   "workspace": "..",

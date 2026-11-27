@@ -1,0 +1,40 @@
+{
+  "id": "cpp",
+  "probes": [
+    { "fact": "has-cmake", "globs": ["**/CMakeLists.txt"] },
+    { "fact": "has-meson", "globs": ["**/meson.build"] }
+  ],
+  "card": {
+    "build": {
+      "order": 7,
+      "condition": { "facts": ["has-cmake", "has-meson"] },
+      "command": "if [ -f meson.build ]; then meson compile -C build; else cmake --build build; fi"
+    },
+    "focused": [
+      {
+        "order": 14,
+        "kind": "CMake",
+        "condition": { "fact": "has-cmake", "unless": ["has-meson"] },
+        "template": "ctest --test-dir build -R {test}"
+      },
+      {
+        "order": 15,
+        "kind": "Meson",
+        "condition": { "fact": "has-meson" },
+        "template": "meson test -C build {test}"
+      }
+    ]
+  },
+  "languages": [
+    {
+      "lang": "c",
+      "exts": [".c", ".h"],
+      "testConventions": { "base": ["(?:^test_.*|.*_tests?)\\.c$"] }
+    },
+    {
+      "lang": "cpp",
+      "exts": [".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"],
+      "testConventions": { "base": ["(?:^test_.*|.*_tests?)\\.(?:cc|cpp|cxx)$"] }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "compose-multiplatform",
+  "probes": [
+    {
+      "fact": "has-compose-multiplatform",
+      "files": ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"],
+      "regex": "(?:^|[^A-Za-z0-9_.-])org\\.jetbrains\\.compose(?=$|[^A-Za-z0-9_-])|(?:^|[^A-Za-z0-9_.-])compose\\.multiplatform(?=$|[^A-Za-z0-9_.-])",
+      "stripComments": true
+    }
+  ]
+}

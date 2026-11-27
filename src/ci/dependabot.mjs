@@ -82,6 +82,7 @@ export function ecosystems(facts, stack = [], root = null) {
   const seenStack = new Set(stack);
   const out = [];
   for (const row of dependabotEntries(root)) {
+    if (row.unless?.some((fact) => seenFacts.has(fact))) continue;
     const found = row.fact ? seenFacts.has(row.fact) : seenStack.has(row.stack);
     if (!found || out.some((e) => e.value === row.value)) continue;
     out.push({ value: row.value, manifest: row.manifest });

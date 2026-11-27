@@ -173,6 +173,8 @@ test('the non-npm card commands are the gate table s commands, not a second answ
     if (eco.fact === 'has-cargo-toml') files['Cargo.toml'] = '[package]\nname = "x"\n';
     if (eco.fact === 'has-gemfile') files.Gemfile = 'source "https://rubygems.org"\n';
     if (eco.fact === 'has-pubspec') files['pubspec.yaml'] = 'name: x\n';
+    if (eco.fact === 'has-flutter') files['pubspec.yaml'] = 'name: x\ndependencies:\n  flutter:\n    sdk: flutter\n';
+    if (eco.fact === 'has-composer') files['composer.json'] = '{"name":"example/php"}\n';
     if (eco.fact === 'has-swift-package') files['Package.swift'] = '// swift-tools-version:5.9\n';
     if (eco.fact === 'has-mix') files['mix.exs'] = 'defmodule X do\nend\n';
     if (eco.fact === 'has-deno-config') files['deno.json'] = '{}\n';
@@ -191,12 +193,19 @@ function markerFiles(fact) {
     'has-cargo-toml': ['Cargo.toml'],
     'has-go-mod': ['go.mod'],
     'has-nuget': ['App.csproj'],
+    'has-dotnet-root': ['App.csproj'],
     'has-swift-package': ['Package.swift'],
     'has-deno-config': ['deno.json'],
     'has-gemfile': ['Gemfile'],
     'has-pubspec': ['pubspec.yaml'],
     'has-mix': ['mix.exs'],
     'has-maven-pom': ['pom.xml'],
+    'has-flutter': ['pubspec.yaml'],
+    'has-composer': ['composer.json'],
+    'has-terraform': ['main.tf'],
+    'has-terraform-root': ['main.tf'],
+    'has-opentofu': ['main.tofu'],
+    'has-opentofu-root': ['main.tofu'],
   };
   return map[fact] ?? [];
 }

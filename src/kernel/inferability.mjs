@@ -91,17 +91,17 @@ export function parseInferable(expression) {
  * is a typo the author has to see, not a term that happens to be unproven — a marker
  * naming evidence the tool never gathered would drop the line on a claim nothing verified.
  */
-function knownTerm(term) {
+function knownTerm(term, vocabulary) {
   if (term.startsWith('card:')) return CARD_VERBS.includes(term.slice('card:'.length));
   if (term.startsWith('gate:')) return gateNames().includes(term.slice('gate:'.length));
-  return KNOWN_TAGS.has(term);
+  return vocabulary.has(term);
 }
 
 /**
  * The defect in a body's markers, or null. Reported through the same field as a
  * frontmatter defect, so `check` and `rules list` need no second path to a broken rule.
  */
-export function inferableDefect(body) {
+export function inferableDefect(body, vocabulary = KNOWN_TAGS) {
   for (const block of blocks(body)) {
     const found = markers(block);
     if (found.length === 0) continue;
@@ -113,7 +113,7 @@ export function inferableDefect(body) {
       return `${INFERABLE_MARKER} names no evidence, so nothing can decide whether the line is redundant`;
     }
     for (const term of terms) {
-      if (!knownTerm(term)) {
+      if (!knownTerm(term, vocabulary)) {
         return `${INFERABLE_MARKER} names "${term}", which is not evidence this repository can prove; use a marker-file fact, card:${CARD_VERBS.join('|card:')} or gate:<name>`;
       }
     }

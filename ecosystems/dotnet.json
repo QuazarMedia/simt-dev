@@ -1,6 +1,10 @@
 {
   "id": "dotnet",
-  "facts": ["has-nuget"],
+  "facts": ["has-dotnet-root"],
+  "probes": [
+    { "fact": "has-dotnet-root", "globs": ["*.csproj", "*.fsproj", "*.sln"] },
+    { "fact": "has-fsharp", "globs": ["**/*.fsproj"] }
+  ],
   "tool": "dotnet",
   "manifestOrder": 3,
   "gates": {
@@ -13,13 +17,21 @@
     }
   },
   "card": {
-    "build": { "order": 3, "condition": { "fact": "has-nuget" }, "command": "dotnet build" },
+    "build": { "order": 3, "condition": { "fact": "has-dotnet-root" }, "command": "dotnet build" },
     "focused": [
-      { "order": 8, "kind": ".NET", "condition": { "fact": "has-nuget" }, "template": "dotnet test --filter {test}" }
+      { "order": 8, "kind": ".NET", "condition": { "fact": "has-dotnet-root" }, "template": "dotnet test --filter {test}" }
     ]
   },
   "dependabot": [
-    { "order": 15, "fact": "has-nuget", "value": "nuget", "manifest": "*.csproj" }
+    { "order": 15, "fact": "has-nuget", "value": "nuget", "manifest": "*.csproj" },
+    { "order": 22, "fact": "has-nuget", "value": "nuget", "manifest": "*.fsproj" }
   ],
-  "languages": [{ "lang": "csharp", "exts": [".cs"] }]
+  "languages": [
+    { "lang": "csharp", "exts": [".cs"] },
+    {
+      "lang": "fsharp",
+      "exts": [".fs", ".fsx", ".fsi"],
+      "testConventions": { "base": ["(?:^Tests?|.*Tests?)\\.fs$"] }
+    }
+  ]
 }

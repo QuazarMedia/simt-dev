@@ -39,7 +39,7 @@ const BIN_DIR = join('node_modules', '.bin');
 const RUNNER_MARKERS = {
   gradle: 'gradlew',
   python: 'pyproject.toml',
-  bun: 'bun.lockb',
+  bun: ['bun.lock', 'bun.lockb'],
   cargo: 'Cargo.toml',
   go: 'go.mod',
 };
@@ -140,8 +140,9 @@ export async function readCapability(root) {
   // would make an npm repo's remedy claim a file it has.
   if (capability.runner === null) {
     capability.runner = 'none';
-    for (const [tag, marker] of Object.entries(RUNNER_MARKERS)) {
-      if (await fileExists(join(root, marker))) {
+    for (const [tag, markers] of Object.entries(RUNNER_MARKERS)) {
+      const candidates = Array.isArray(markers) ? markers : [markers];
+      if ((await Promise.all(candidates.map((marker) => fileExists(join(root, marker))))).some(Boolean)) {
         capability.runner = tag;
         break;
       }

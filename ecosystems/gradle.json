@@ -4,7 +4,7 @@
     "build": { "order": 6, "condition": { "stack": "gradle" }, "command": "./gradlew build" },
     "focused": [
       { "order": 1, "kind": "Android", "condition": { "fact": "has-android-manifest" }, "template": "./gradlew :{module}:testDebugUnitTest --tests {class}" },
-      { "order": 2, "kind": "JVM", "condition": { "stack": "gradle" }, "template": "./gradlew test --tests {class}" }
+      { "order": 2, "kind": "JVM", "condition": { "stack": "gradle", "unless": ["has-kotlin-multiplatform", "has-compose-multiplatform"] }, "template": "./gradlew test --tests {class}" }
     ]
   },
   "dependabot": [

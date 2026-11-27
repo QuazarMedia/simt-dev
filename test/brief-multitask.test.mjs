@@ -73,12 +73,17 @@ test('CLI, MCP and opted-in prompt delivery use identical rendered content', asy
   assert.deepEqual(await readFile(index), before);
 });
 
-test('the single-task fast path preserves v1 output and constrained v2 retrieval excludes forbidden files', async () => {
+test('the single-task fast path preserves v1/v2 output and constrained v2/v3 retrieval excludes forbidden files', async () => {
   const root = await fixture();
   const task = 'Fix src/rank.mjs';
   const plain = await assembleBrief({ root, task });
-  const experimental = await assembleBrief({ root, task, retrieval: 'v2' });
-  assert.deepEqual(experimental, plain);
+  const v3 = await assembleBrief({ root, task, retrieval: 'v3' });
+  assert.deepEqual(v3, plain);
+  assert.equal(plain.retrieval, 'v3');
+  assert.deepEqual(plain.sections.FILES, ['src/rank.mjs formatRecords rankRecords']);
+  const v1 = await assembleBrief({ root, task, retrieval: 'v1' });
+  const v2 = await assembleBrief({ root, task, retrieval: 'v2' });
+  assert.deepEqual(v2, v1);
   const constrained = await assembleBrief({
     root, task: 'Fix ranking without changing src/rank.mjs', retrieval: 'v2',
   });

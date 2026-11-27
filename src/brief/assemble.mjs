@@ -221,7 +221,7 @@ export async function assembleBrief({
   commands = [],
   proof = false,
   workScope = null,
-  retrieval = 'v2',
+  retrieval = 'v3',
   only = null,
   subtask = null,
   nash = false,
@@ -402,7 +402,11 @@ export async function assembleBrief({
     // rows stay as context and the caution below says so. When something does resolve, keep
     // only the resolver rows: the rest made a two-file task look like it touched src/name.mjs.
     const matched = v3Result?.matched ?? ranked.filter((row) => row.resolver > 0).length;
-    focused = matched > 0 ? ranked.filter((row) => row.resolver > 0) : ranked;
+    const spelledSet = spelled.length > 0 ? new Set(spelled) : null;
+    const spelledMatched = spelledSet && isV3 ? ranked.filter((row) => spelledSet.has(row.path)) : [];
+    focused = spelledMatched.length > 0
+      ? spelledMatched
+      : matched > 0 ? ranked.filter((row) => row.resolver > 0) : ranked;
     if (task.trim().length > 0 && matched === 0) {
       packet.add('CAUTIONS', 'matched 0: no path or symbol matches this task’s words, so FILES is context rather than a match', {
         hard: true,

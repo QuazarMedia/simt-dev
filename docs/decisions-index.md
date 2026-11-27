@@ -275,3 +275,4 @@ in [architecture/history.md](architecture/history.md).
 | [265](decisions/ADR-265-hits-authority-and-intent-walks.md) | Precomputed HITS hub and authority scores with intent walks | accepted · 2026-11-27 |
 | [266](decisions/ADR-266-nash-fair-packing-and-symbol-scope-briefs.md) | Opt-in Nash packing, symbol-scope spans, and session anti-redundancy | accepted · 2026-11-27 |
 | [267](decisions/ADR-267-retrieval-v3-opt-in-and-zero-rebuild-rollback.md) | Retrieval v3 opt-in and zero-rebuild rollback | accepted · 2026-11-27 |
+| [268](decisions/ADR-268-retrieval-v3-is-the-default.md) | Retrieval v3 is the default | accepted · 2026-11-27 |

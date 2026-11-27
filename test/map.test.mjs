@@ -579,7 +579,7 @@ test('experimental map explains exact entity, lexical, graph and coupling contri
   const cold = await invoke(['--task', 'resolveToken', '--explain']);
   assert.equal(cold.code, 0, cold.stdout + cold.stderr);
   const first = JSON.parse(cold.stdout);
-  assert.equal(first.retrieval, 'v2');
+  assert.equal(first.retrieval, 'v3');
   assert.equal(first.basis, 'matched');
   assert.equal(first.files[0].path, 'helper.mjs');
   const helper = first.evidence.find(({ path }) => path === 'helper.mjs').channels;
@@ -589,11 +589,11 @@ test('experimental map explains exact entity, lexical, graph and coupling contri
   assert.ok(app.directional.witness.steps.some(({ kind }) => kind === 'called_by' || kind === 'imported_by_symbol'));
   assert.ok(first.evidence.find(({ path }) => path === 'support.mjs').channels.coupling.conceptual > 0);
 
-  const index = await simt(['index', '--retrieval', 'v2', '--json'], { cwd: root });
+  const index = await simt(['index', '--retrieval', 'v3', '--json'], { cwd: root });
   assert.equal(index.code, 0, index.stdout + index.stderr);
   assert.equal((await invoke(['--task', 'resolveToken', '--explain'])).stdout, cold.stdout);
   const plain = JSON.parse((await invoke(['--task', 'resolveToken'])).stdout);
-  assert.equal(plain.retrieval, 'v2');
+  assert.equal(plain.retrieval, 'v3');
   assert.equal(plain.evidence, undefined);
   const legacy = JSON.parse((await invoke(['--task', 'resolveToken', '--retrieval', 'v1'])).stdout);
   assert.equal(legacy.retrieval, undefined);

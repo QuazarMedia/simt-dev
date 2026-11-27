@@ -363,7 +363,7 @@ test('the opt-in fielded policy reaches file input, repository rank and scoped b
   const plain = JSON.parse((await simt(args)).stdout);
   const fielded = JSON.parse((await simt([...args, ...selected])).stdout);
   assert.equal(legacy.retrieval, undefined);
-  assert.equal(plain.retrieval, 'v2');
+  assert.equal(plain.retrieval, 'v3');
   assert.equal(fielded.retrieval, 'v2');
   assert.equal(fielded.schemaVersion, legacy.schemaVersion);
   assert.deepEqual(fielded.ranked.map(({ id }) => id), ['public']);

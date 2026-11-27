@@ -9,10 +9,10 @@ export function parseSubtaskId(value) {
   return /^\d+$/u.test(text) && Number.isSafeInteger(number) && number > 0 ? number : NaN;
 }
 
-export function detailCommands(task, subjects, { paths = null, selected = null } = {}) {
+export function detailCommands(task, subjects, { paths = null, selected = null, retrieval = 'v3' } = {}) {
   return subjects.map((subject) => {
     const id = subject.id;
-    const base = CLI + ' brief --retrieval v2 --subtask ' + id + ' --budget 4096 --task=' + shellWord(task);
+    const base = CLI + ' brief --retrieval ' + retrieval + ' --subtask ' + id + ' --budget 4096 --task=' + shellWord(task);
     const command = paths === null ? base : base + ' --paths=' + shellWord(paths.join(','));
     const path = subject.files[0]?.path;
     return {

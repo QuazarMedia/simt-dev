@@ -8,7 +8,7 @@ a prompt hook or MCP brief.
 simt index
 ```
 
-`simt index` builds the local v7 SQLite cache (`v2` is the default query mode;
+`simt index` builds the local v7 SQLite cache (`v3` is the default query mode;
 `--retrieval v1`, `--retrieval v2`, and `--retrieval v3` all run on the same
 index with no rebuild required).
 
@@ -21,30 +21,30 @@ example uses `source_path` for a file already tracked in the repository.
 ```sh
 simt brief "Fix the calculation in $source_path and add a regression test for it"
 simt brief "Fix the calculation in $source_path and add a regression test for it" --subtask 2
-simt brief "Fix the calculation in $source_path and add a regression test for it" --retrieval v3
-simt map --task "Find the calculation that applies the current rate" --retrieval v3 --explain
+simt map --task "Find the calculation that applies the current rate" --explain
 ```
 
 Use the numbered subtasks in the first packet to select a detailed brief.
-`--retrieval v3` adds commit-history FTS, repository-mined concept expansion,
-post-retrieval QPP channel weighting, construct SDM (`invocations` and
+Default retrieval (`v3`) combines commit-history FTS, repository-mined concept
+expansion, post-retrieval QPP channel weighting, construct SDM (`invocations` and
 `string_literals`), HITS authority walks, and bound symbol-scope line spans
 (`path:L1-L2 sym`) on files longer than 200 lines. `map --explain` prints the
 ranking channels, feedback expansion terms, and QPP diagnostics.
 
-Optional `simt brief` flags work with either `v2` or `v3`:
+Optional `simt brief` flags work across modes:
 
 - `--scopes`: emit bound symbol-scope line spans (`path:L1-L2 sym`) for files
-  over 200 lines (enabled automatically under `--retrieval v3`).
+  over 200 lines (enabled automatically by default under `v3`).
 - `--nash`: enable Nash Social Welfare fair packing across subtasks and facets.
 - `--seen <paths|ledger>`: down-weight unchanged items already delivered in a
   prior turn; edited files reset to full weight automatically.
 
-Use `--retrieval v1` or `--retrieval v2` to return to legacy or default v2
-ranking on the same index. Prompt hooks use v1, v2, or v3 when the repository
-sets `brief.retrieval` to `"v1"`, `"v2"`, or `"v3"` in `simt.json` (and may set
-`brief.seen: true` for session anti-redundancy). MCP `brief` accepts `retrieval`,
-`scopes`, `nash`, and `seen` without mutating any session ledger on disk.
+Use `--retrieval v2` or `--retrieval v1` to restore v2 or legacy v1 ranking on
+the same index. Prompt hooks default to `v3` when `"brief": {}` is configured
+in `simt.json`, and honour `"brief": { "retrieval": "v2" | "v1" }` for rollback
+(plus `"brief": { "seen": true }` for session anti-redundancy). MCP `brief`
+accepts `retrieval`, `scopes`, `nash`, and `seen` without mutating any session
+ledger on disk.
 
 ## Trace a source edit and select tests
 

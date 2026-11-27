@@ -52,7 +52,7 @@ export async function briefCommand(args, flags, commands = []) {
   }
   const subtask = parseSubtaskId(flags.subtask);
   if (Number.isNaN(subtask)) return fail('subtask must be a positive integer', EXIT.USAGE, 'use --subtask <n>');
-  const retrieval = retrievalMode(flags.retrieval ?? (subtask === null ? undefined : 'v2'));
+  const retrieval = retrievalMode(flags.retrieval);
   if (subtask !== null && (flags.scope !== undefined || retrieval === 'v1')) {
     return fail('subtask selection requires a composite brief', EXIT.USAGE, 'use --retrieval v2 or v3 without --scope');
   }

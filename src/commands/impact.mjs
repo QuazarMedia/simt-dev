@@ -92,7 +92,7 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
     throw issue('choose paths or symbols, --changed, or --task');
   }
   const advanced = changed || task || args.length > 1 || flags.all === true || args.some((target) => target.includes('#'));
-  const retrieval = retrievalMode(flags.retrieval ?? (advanced ? 'v2' : undefined));
+  const retrieval = retrievalMode(flags.retrieval);
   if (retrieval === null) throw issue('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1, v2 or v3');
   if (retrieval === 'v1' && advanced) throw issue('this query requires retrieval v2', EXIT.USAGE, 'pass --retrieval v2');
   // The parser already checks CLI callers; this is the library and MCP door, which

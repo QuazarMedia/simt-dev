@@ -230,7 +230,7 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests, { v3 = false
 }
 
 export async function assembleCompositeBrief({
-  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, retrieval = 'v2', nash = false, scopeSpans = false, seen = null, recordSeen = true,
+  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, retrieval = 'v3', nash = false, scopeSpans = false, seen = null, recordSeen = true,
 }) {
   const isV3 = retrieval === 'v3';
   const need = (facets) => section === null || facets.includes(section);
@@ -351,7 +351,7 @@ export async function assembleCompositeBrief({
   const rawItems = candidates.items();
   const seenState = await loadSeenState(root, seen ?? flags?.seen ?? null, { record: recordSeen });
   const { items, summary: seenSummary } = await applySeenWeights(rawItems, seenState);
-  const drillDown = detailCommands(task, tasks, { paths: named, selected: subtask });
+  const drillDown = detailCommands(task, tasks, { paths: named, selected: subtask, retrieval: isV3 ? 'v3' : 'v2' });
   const footerBytes = Math.min(350, Math.floor(budget / 4));
   const packed = buildCompactPacket(items, {
     budget,

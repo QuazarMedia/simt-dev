@@ -1,5 +1,5 @@
 export function retrievalMode(value) {
-  if (value === undefined) return 'v2';
+  if (value === undefined) return 'v3';
   return value === 'v1' || value === 'v2' || value === 'v3' ? value : null;
 }
 

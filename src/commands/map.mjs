@@ -95,7 +95,11 @@ export async function mapCommand(args, flags) {
     files: rendered.files,
     text: rendered.text,
     ...(experimental ? { retrieval } : {}),
-    ...(result && flags.explain === true ? { evidence: result.evidence, feedback: result.feedback } : {}),
+    ...(result && flags.explain === true ? {
+      evidence: result.evidence,
+      feedback: result.feedback,
+      ...(result.qpp ? { qpp: result.qpp } : {}),
+    } : {}),
   };
   if (isJson(flags)) {
     emitJson(payload);
@@ -124,6 +128,12 @@ export async function mapCommand(args, flags) {
     }
     const expansion = payload.feedback?.expansion ?? [];
     if (expansion.length) lines.push(`feedback  ${expansion.map(({ term, sources }) => `${term} (${sources.join(', ')})`).join(', ')}`);
+    if (payload.qpp) {
+      const qppText = Object.entries(payload.qpp)
+        .map(([name, meta]) => `${name}=${meta.effectiveWeight} (nqc=${meta.nqc}, gap=${meta.topGap})`)
+        .join(', ');
+      if (qppText) lines.push(`qpp       ${qppText}`);
+    }
   }
   emit(lines.join('\n'));
   return EXIT.OK;

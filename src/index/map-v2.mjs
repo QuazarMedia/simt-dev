@@ -9,6 +9,7 @@ import { searchCommitIr } from './graph-read.mjs';
 import { conceptualPartners } from './lexical.mjs';
 import { rankByFileGraph } from './map.mjs';
 import { searchWithConceptMap, searchWithFeedback } from './prf.mjs';
+import { fuseQppChannels } from './qpp.mjs';
 import { nativeConceptualPartners, searchFtsBm25FBundle } from './store.mjs';
 import { rankByCosine } from './vectors.mjs';
 
@@ -195,14 +196,18 @@ function matchedFields(rows, task, paths) {
   return result;
 }
 
-function explainRanks(ranked, lists, fields, feedback = null) {
+function explainRanks(ranked, lists, fields, feedback = null, qpp = null) {
   const evidence = new Map(ranked.map(({ path, rank }) => [path, { path, rank, channels: {} }]));
-  for (const { id, weight, items } of lists) {
+  for (const { id, qppId, weight, items } of lists) {
+    const qppMeta = qpp ? (qpp[qppId ?? id] ?? qpp[id] ?? null) : null;
     for (const [index, { path, ...row }] of items.entries()) {
       const entry = evidence.get(path);
       if (!entry) continue;
       entry.channels[id] = {
-        rank: index + 1, weight, ...row,
+        rank: index + 1,
+        weight: qppMeta ? qppMeta.effectiveWeight : weight,
+        ...row,
+        ...(qppMeta ? { qpp: qppMeta } : {}),
         ...(id === 'bm25f' ? {
           matchedFields: BM25F_FIELDS.filter((field) => fields.get(path)?.has(field)),
           ...(feedback?.conceptExpansions?.length ? { conceptExpansions: feedback.conceptExpansions } : {}),
@@ -434,6 +439,7 @@ export async function rankMapV2(root, graph, task, {
   explain = false, queryVector = null, coupling = true, structure = null,
   exactOnly = false, feedbackEnabled = true, directional = true, includeTests = undefined,
   preloadedBundle = null, commitIr = false, commitRows = null, conceptMap = false, conceptRows = null,
+  qppFusion = false,
 } = {}) {
   const allPaths = new Set(graph.files.map(({ path }) => path));
   if (!task.trim()) {
@@ -553,8 +559,8 @@ export async function rankMapV2(root, graph, task, {
   ]);
   const stemWeight = hasScope ? 1.6 : 0.70;
   const lists = [
-    { id: 'entity', weight: 3, items: tier1 },
-    ...(tier2.length ? [{ id: 'entity', weight: 0.35, items: tier2 }] : []),
+    { id: 'entity', qppId: 'entity', weight: 3, items: tier1 },
+    ...(tier2.length ? [{ id: 'entity', qppId: tier1.length ? 'entity_tier2' : 'entity', weight: 0.35, items: tier2 }] : []),
     { id: 'bm25f', weight: 2.35, items: lexical },
     ...(stems.length ? [{ id: 'stem', weight: stemWeight, items: stems }] : []),
     ...(fileGraph.resolver.length ? [{ id: 'resolver', weight: 0.65, items: fileGraph.resolver }] : []),
@@ -572,14 +578,16 @@ export async function rankMapV2(root, graph, task, {
     lists.push({ id: 'centrality', weight: 1, items: centrality(allowedSet, graph.edges) });
   }
   const tier = new Map(exact.map(({ path, tier: value }) => [path, value]));
-  const ranked = fuseChannels(lists).map((row) => ({ ...row, resolver: Number(matched.has(row.path)) }))
+  const fusion = qppFusion ? fuseQppChannels(lists) : { ranked: fuseChannels(lists), qpp: null };
+  const ranked = fusion.ranked.map((row) => ({ ...row, resolver: Number(matched.has(row.path)) }))
     .sort((a, b) => (tier.get(a.path) === 1 ? 1 : 2) - (tier.get(b.path) === 1 ? 1 : 2) || b.rank - a.rank || cmp(a.path, b.path));
   return {
     ranked,
     matched: matched.size,
     evidence: explain
-      ? explainRanks(ranked, lists, matchedFields(entityRows ?? overlayRows, task, new Set(ranked.map(({ path }) => path))), effectiveFeedback)
+      ? explainRanks(ranked, lists, matchedFields(entityRows ?? overlayRows, task, new Set(ranked.map(({ path }) => path))), effectiveFeedback, fusion.qpp)
       : [],
+    ...(fusion.qpp ? { qpp: fusion.qpp } : {}),
     feedback: {
       reason: effectiveFeedback.reason,
       expansion: effectiveFeedback.expansion,

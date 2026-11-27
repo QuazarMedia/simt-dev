@@ -85,6 +85,9 @@ function gradeObservation(task, label, observation) {
   switch (task.stratum) {
     case 'lexical':
     case 'vocabulary-gap':
+    case 'zero-overlap-symptom':
+    case 'error-literal':
+    case 'scale-50k':
       if (!Array.isArray(observation.ranking)) throw new Error(`ranking missing for ${task.id}`);
       return gradeRanking(observation.ranking, label.files);
     case 'composite':

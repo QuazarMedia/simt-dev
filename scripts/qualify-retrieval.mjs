@@ -13,7 +13,7 @@ import { rankMapV2 } from '../src/index/map-v2.mjs';
 import { reindex } from '../src/index/store.mjs';
 import { run } from '../src/run.mjs';
 import { git, gitText } from '../src/sys/git.mjs';
-import { buildRetrievalCorpus } from '../packages/bench/src/multitask-corpus.mjs';
+import { buildRetrievalCorpus, scaleFiles50k } from '../packages/bench/src/multitask-corpus.mjs';
 import { evaluateRetrievalGates, runRetrievalAblation } from '../packages/bench/src/ablate.mjs';
 import { measureMapPhases, summarizeLatency } from '../packages/bench/src/retrieval-metrics.mjs';
 
@@ -26,6 +26,14 @@ const lexOptions = {
   '+guarded-prf': { directional: false, coupling: false },
   '+directional-graph': { feedbackEnabled: false, coupling: false },
   'full-v2': {},
+  'v2-candidate': {},
+  '+commit-ir': { commitIr: true },
+  '+pmi-thesaurus': { conceptMap: true },
+  '+qpp-fusion': { qppFusion: true },
+  '+sdm-constructs': { sdm: true },
+  '+hits-walk': { hitsWalk: true },
+  '+nash-pack': {},
+  'full-v3': { commitIr: true, conceptMap: true, qppFusion: true, sdm: true, hitsWalk: true },
 };
 
 async function document(engine, root, command, args = [], flags = {}) {
@@ -67,24 +75,35 @@ function observation(items, packed) {
   return { text: packed.text, files: facets.FILES ?? [], facets };
 }
 
-async function corpusEvaluation(baseline, baselinePath, directory, corpus) {
+async function addCommitHistory(root, commits = []) {
+  for (const [file, message] of commits) {
+    const abs = join(root, file);
+    const body = await readFile(abs, 'utf8');
+    await writeFile(abs, body + '\n');
+    await git(root, ['add', '--', file]);
+    await git(root, [...fixtureCommit, message]);
+  }
+}
+
+async function corpusEvaluation(baseline, baselinePath, directory, corpus, { selected } = {}) {
   const before = join(directory, 'fixture-baseline');
   const after = join(directory, 'fixture-candidate');
   const lexicalBefore = join(directory, 'history-baseline');
   const lexicalAfter = join(directory, 'history-candidate');
-  const { files, cochanges } = corpus.fixture;
+  const { files, cochanges, commits = [] } = corpus.fixture;
   const histories = corpus.tasks.some(({ base }) => base) ? [lexicalBefore, lexicalAfter] : [];
   await Promise.all([
     stage(before, files), stage(after, files),
     ...histories.map((path) => git(directory, ['clone', '-q', '--shared', '--no-checkout', baselinePath, path])),
   ]);
   await addCochangeHistory(after, cochanges);
+  if (commits.length) await addCommitHistory(after, commits);
   await Promise.all([baseline.reindex(before), reindex(after, { fielded: true })]);
 
   let current;
   let graph;
   const reusable = new Map();
-  return runRetrievalAblation({ tasks: corpus.tasks, gold: corpus.gold, files, async evaluate({ task, arm, budgets }) {
+  return runRetrievalAblation({ tasks: corpus.tasks, gold: corpus.gold, files, selected, async evaluate({ task, arm, budgets }) {
     if (current !== task.id) {
       current = task.id;
       reusable.clear();
@@ -106,20 +125,23 @@ async function corpusEvaluation(baseline, baselinePath, directory, corpus) {
       return entry.rows[index];
     }
 
-    if (task.stratum === 'lexical' || task.stratum === 'vocabulary-gap') {
+    if (['lexical', 'vocabulary-gap', 'zero-overlap-symptom', 'error-literal', 'scale-50k'].includes(task.stratum)) {
       const legacy = task.base ? lexicalBefore : before;
       const fresh = task.base ? lexicalAfter : after;
       const options = lexOptions[arm];
       if (!options) return replay('legacy-ranking', async () => ({
         ranking: (await document(baseline.run, legacy, 'map', [], { task: task.prompt, budget: '8192' })).files.map(({ path }) => path),
       }));
-      graph ??= await loadLiveGraph(fresh, { fielded: true, binding: true, cochange: true });
+      graph ??= await loadLiveGraph(fresh, { fielded: true, binding: true, cochange: true, commitIr: true, conceptMap: true, hits: true });
       return { ranking: (await rankMapV2(fresh, graph, task.prompt, options)).ranked.map(({ path }) => path) };
     }
 
     if (task.stratum === 'composite') {
-      const split = arm === '+decompose' || arm === 'full-v2';
+      const split = arm === '+decompose' || arm === 'full-v2' || arm === 'v2-candidate'
+        || arm === '+nash-pack' || arm === 'full-v3' || arm.startsWith('+') && arm in lexOptions;
       const repack = arm === '+submodular-pack' || arm === '+decompose';
+      const nash = arm === '+nash-pack' || arm === 'full-v3';
+      const scopeSpans = arm === 'full-v3';
       if (!split && !repack) return replay('legacy-packet', async () => {
         const packets = {};
         for (const budget of budgets) {
@@ -136,7 +158,7 @@ async function corpusEvaluation(baseline, baselinePath, directory, corpus) {
         for (const budget of budgets) packets[budget] = observation(result.items, pack(result.items, { budget }));
       } else {
         for (const budget of budgets) {
-          const result = await assembleBrief({ root: after, task: task.prompt, budget, build: false, federate: false, retrieval: 'v2' });
+          const result = await assembleBrief({ root: after, task: task.prompt, budget, build: false, federate: false, retrieval: 'v2', nash, scopeSpans });
           packets[budget] = observation(result.items, result.packed);
         }
       }
@@ -144,9 +166,9 @@ async function corpusEvaluation(baseline, baselinePath, directory, corpus) {
     }
 
     const [impact, why] = task.requests;
-    const symbol = arm === '+symbol-bind' || arm === 'full-v2';
-    const coupled = arm === '+cochange' || arm === 'full-v2';
-    const governs = arm === '+governance' || arm === 'full-v2';
+    const symbol = arm === '+symbol-bind' || arm === 'full-v2' || arm === 'v2-candidate' || arm === 'full-v3';
+    const coupled = arm === '+cochange' || arm === 'full-v2' || arm === 'v2-candidate' || arm === 'full-v3';
+    const governs = arm === '+governance' || arm === 'full-v2' || arm === 'v2-candidate' || arm === 'full-v3';
     const legacy = await replay('legacy-structural', async () => ({
       impact: await document(baseline.run, before, 'impact', [why.target]),
       why: await document(baseline.run, before, 'why', [why.target]),
@@ -181,7 +203,7 @@ function scaleFiles(count) {
 async function scaleEvaluation(baseline, directory, count) {
   const prior = join(directory, `scale-${count}-baseline`);
   const next = join(directory, `scale-${count}-candidate`);
-  const files = scaleFiles(count);
+  const files = count >= 50_000 ? scaleFiles50k(count) : scaleFiles(count);
   await Promise.all([stage(prior, files), stage(next, files)]);
   await Promise.all([baseline.reindex(prior), reindex(next, { fielded: true })]);
   const edit = files['src/rate.mjs'].replace('return 1', 'return 3');
@@ -243,9 +265,22 @@ async function hookEvaluation(count, prior, next, baseline, prompt) {
   return { count, command: 'prompt-submit', baseline: summarizeLatency(durations[0]), candidate: summarizeLatency(durations[1]) };
 }
 
-async function main([baselinePath, directory, mode = 'all']) {
-  if (!baselinePath || !directory || !['all', 'quality', 'structure', 'scale', 'hooks'].includes(mode)) {
-    throw new Error('usage: node scripts/qualify-retrieval.mjs <baseline-checkout> <empty-output-dir> [quality|structure|scale|hooks]');
+async function main(argv) {
+  let suite = 'v2';
+  const positional = [];
+  for (let i = 0; i < argv.length; i += 1) {
+    if (argv[i] === '--suite' && argv[i + 1]) {
+      suite = argv[i + 1];
+      i += 1;
+    } else if (argv[i].startsWith('--suite=')) {
+      suite = argv[i].slice('--suite='.length);
+    } else {
+      positional.push(argv[i]);
+    }
+  }
+  const [baselinePath, directory, mode = 'all'] = positional;
+  if (!baselinePath || !directory || !['all', 'quality', 'structure', 'scale', 'hooks'].includes(mode) || !['v2', 'v3'].includes(suite)) {
+    throw new Error('usage: node scripts/qualify-retrieval.mjs <baseline-checkout> <empty-output-dir> [quality|structure|scale|hooks] [--suite v2|v3]');
   }
   const baselineRoot = resolve(baselinePath);
   const output = resolve(directory);
@@ -256,23 +291,28 @@ async function main([baselinePath, directory, mode = 'all']) {
     atBaseline('src/run.mjs'), atBaseline('src/brief/assemble.mjs'), atBaseline('src/index/store.mjs'),
     atBaseline('src/agenthooks/prompt.mjs'),
   ]));
-  const basis = { baseline: await gitText(baselineRoot, ['rev-parse', 'HEAD']), node: process.version, platform: process.platform };
+  const basis = { baseline: await gitText(baselineRoot, ['rev-parse', 'HEAD']), node: process.version, platform: process.platform, suite };
   if (['all', 'quality', 'structure'].includes(mode)) {
-    const corpus = await buildRetrievalCorpus(baselineRoot);
+    const corpus = await buildRetrievalCorpus(baselineRoot, { includeV3: suite === 'v3' });
     if (mode === 'structure') corpus.tasks = corpus.tasks.filter(({ stratum }) => stratum === 'impact-governance');
-    const report = await corpusEvaluation(baseline, baselineRoot, output, corpus);
+    const selected = suite === 'v3'
+      ? ['baseline-v1', 'full-v2', 'v2-candidate', '+commit-ir', '+pmi-thesaurus', '+qpp-fusion', '+sdm-constructs', '+hits-walk', '+nash-pack', 'full-v3']
+      : undefined;
+    const report = await corpusEvaluation(baseline, baselineRoot, output, corpus, { selected });
     await writeFile(join(output, 'quality.json'),
       JSON.stringify({ ...basis, ...report, gates: evaluateRetrievalGates(report) }, null, 2) + '\n');
   }
   if (mode === 'all' || mode === 'scale') {
     const rows = [];
-    for (const size of [500, 10000]) rows.push(...await scaleEvaluation(baseline, output, size));
+    const sizes = suite === 'v3' ? [10_000, 50_000] : [500, 10_000];
+    for (const size of sizes) rows.push(...await scaleEvaluation(baseline, output, size));
     await writeFile(join(output, 'scale.json'), JSON.stringify({ ...basis, rows }, null, 2) + '\n');
   }
   if (mode === 'hooks') {
     const rows = [];
     const prompt = 'Fix rate in src/rate.mjs, and add tests for dispatch in src/dispatch.mjs.';
-    for (const size of [500, 10000]) {
+    const sizes = suite === 'v3' ? [10_000, 50_000] : [500, 10_000];
+    for (const size of sizes) {
       rows.push(await hookEvaluation(size, join(output, `scale-${size}-baseline`),
         join(output, `scale-${size}-candidate`), baseline.deliverPrompt, prompt));
     }
@@ -280,4 +320,6 @@ async function main([baselinePath, directory, mode = 'all']) {
   }
 }
 
-await main(process.argv.slice(2));
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
+  await main(process.argv.slice(2));
+}

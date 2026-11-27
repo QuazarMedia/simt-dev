@@ -8,6 +8,8 @@ import { listCandidates } from './mine.mjs';
 
 export const SUBTASK_COUNTS = Object.freeze([2, 3, 4, 6, 8]);
 export const RETRIEVAL_STRATA = Object.freeze(['lexical', 'vocabulary-gap', 'composite', 'impact-governance']);
+export const V3_ADVERSARIAL_STRATA = Object.freeze(['zero-overlap-symptom', 'error-literal', 'scale-50k']);
+export const ALL_V3_STRATA = Object.freeze([...RETRIEVAL_STRATA, ...V3_ADVERSARIAL_STRATA]);
 
 const VOCABULARY = [
   ['renewal', 'rotateCredentials', 'People get logged out too early while browsing'],
@@ -184,7 +186,7 @@ function syntheticCases(count) {
   return { cases, files, cochanges: fixtures.map(({ source, partner }) => [source, partner]) };
 }
 
-export async function buildRetrievalCorpus(root, { perStratum = VOCABULARY.length } = {}) {
+export async function buildRetrievalCorpus(root, { perStratum = VOCABULARY.length, includeV3 = false } = {}) {
   if (!Number.isInteger(perStratum) || perStratum < MIN_CASES || perStratum > VOCABULARY.length) {
     throw new Error(`perStratum must be an integer from ${MIN_CASES} to ${VOCABULARY.length}`);
   }
@@ -192,12 +194,174 @@ export async function buildRetrievalCorpus(root, { perStratum = VOCABULARY.lengt
   if (!mined.ok) throw new Error(`could not mine retrieval history: ${mined.error}`);
   const { cases, files, cochanges } = syntheticCases(perStratum);
   const lexical = await lexicalCases(root, mined.candidates, perStratum);
-  const entries = [...lexical, ...cases].sort((a, b) => cmp(a.task.id, b.task.id));
+  let allCases = [...lexical, ...cases];
+  let commits = [];
+  if (includeV3) {
+    const v3 = buildV3Fixtures(perStratum);
+    Object.assign(files, v3.files);
+    cochanges.push(...v3.cochanges);
+    commits = v3.commits;
+    allCases = [...allCases, ...v3.cases];
+  }
+  const entries = allCases.sort((a, b) => cmp(a.task.id, b.task.id));
   const tasks = entries.map(({ task }) => task);
   const gold = Object.fromEntries(entries.map(({ task, label }) => [task.id, label]));
-  const corpus = { tasks, gold, fixture: { files, cochanges } };
-  validateRetrievalCorpus(corpus, { perStratum });
+  const strata = includeV3 ? ALL_V3_STRATA : RETRIEVAL_STRATA;
+  const corpus = { tasks, gold, fixture: { files, cochanges, ...(commits.length ? { commits } : {}) } };
+  validateRetrievalCorpus(corpus, { perStratum, strata });
   return corpus;
+}
+
+const V3_SYMPTOMS = [
+  ['stale', 'session', 'cookie', 'persists', 'after', 'forced', 'logout', 'across', 'browser', 'tabs'],
+  ['memory', 'grows', 'unbounded', 'when', 'slow', 'network', 'downloads', 'stall'],
+  ['duplicate', 'billing', 'charge', 'appears', 'after', 'double', 'submit', 'button', 'click'],
+  ['midnight', 'activity', 'counts', 'under', 'wrong', 'calendar', 'date', 'zone'],
+  ['accented', 'customer', 'names', 'sort', 'after', 'plain', 'alphabetical', 'entries'],
+  ['dropped', 'socket', 'stays', 'silent', 'while', 'operator', 'remains', 'away'],
+  ['exported', 'spreadsheet', 'columns', 'shift', 'on', 'embedded', 'comma', 'characters'],
+  ['orphan', 'worker', 'leaves', 'queued', 'background', 'jobs', 'stuck', 'forever'],
+  ['cached', 'avatar', 'shows', 'previous', 'picture', 'after', 'profile', 'upload'],
+  ['pagination', 'repeats', 'trailing', 'rows', 'across', 'adjacent', 'pages'],
+  ['archived', 'bundle', 'expands', 'into', 'empty', 'nested', 'folders'],
+  ['primary', 'region', 'outage', 'blanks', 'dashboard', 'without', 'replica', 'switch'],
+  ['keyboard', 'typing', 'triggers', 'redundant', 'search', 'requests', 'per', 'letter'],
+  ['unsaved', 'editor', 'draft', 'vanishes', 'following', 'browser', 'reload'],
+  ['receipt', 'total', 'differs', 'by', 'single', 'penny', 'under', 'tax'],
+  ['private', 'telephone', 'digits', 'leak', 'into', 'audit', 'exports'],
+  ['heavy', 'batch', 'starves', 'interactive', 'short', 'requests', 'indefinitely'],
+  ['daylight', 'clock', 'transition', 'fires', 'reminders', 'sixty', 'minutes', 'early'],
+  ['crash', 'restart', 'loses', 'recent', 'unflushed', 'journal', 'edits'],
+  ['compacted', 'segment', 'archive', 'grows', 'larger', 'despite', 'deletions'],
+  ['concurrent', 'browser', 'tabs', 'send', 'identical', 'upstream', 'reads'],
+  ['finished', 'checkout', 'misses', 'receipt', 'dispatch', 'notification'],
+  ['regional', 'visitors', 'render', 'untranslated', 'fallback', 'strings'],
+  ['edited', 'binary', 'download', 'keeps', 'identical', 'fingerprint', 'stamp'],
+  ['single', 'cluster', 'machine', 'absorbs', 'nearly', 'all', 'tenants'],
+  ['outage', 'storm', 'hammers', 'downstream', 'gateway', 'without', 'delay'],
+  ['expired', 'history', 'remains', 'visible', 'past', 'cleanup', 'cutoff'],
+  ['bank', 'settlement', 'lines', 'never', 'appear', 'in', 'ledger'],
+  ['burst', 'traffic', 'bypasses', 'hourly', 'tenant', 'allowance', 'cap'],
+  ['tampered', 'payload', 'passes', 'header', 'signature', 'verification'],
+];
+
+const ERROR_LITERALS = [
+  ['E101', 'unexpected frame checksum mismatch during replay'],
+  ['E102', 'missing audit signature during token rotation'],
+  ['E103', 'rate allowance exhausted before window rollover'],
+  ['E104', 'idempotency conflict on closed ledger entry'],
+  ['E105', 'backoff deadline exceeded on upstream socket'],
+  ['E106', 'continuation cursor corrupted past tail boundary'],
+  ['E107', 'retention cutoff predates active snapshot lock'],
+  ['E108', 'unicode folding diverged on decomposed mark'],
+  ['E109', 'cache eviction missed aliased tenant key'],
+  ['E110', 'statement reconciliation unbalanced by rounding penny'],
+  ['E111', 'pending read fanout stalled on closed channel'],
+  ['E112', 'keepalive probe timed out under idle proxy'],
+  ['E113', 'producer pause threshold ignored by stream sink'],
+  ['E114', 'quantized invoice total failed parity check'],
+  ['E115', 'ownership lease orphaned during worker drain'],
+  ['E116', 'window bucket boundary crossed UTC midnight'],
+  ['E117', 'delimiter escape broken on quoted cell value'],
+  ['E118', 'digest verification skipped zero byte trailer'],
+  ['E119', 'shard placement skewed above capacity ceiling'],
+  ['E120', 'outbox enqueue aborted before receipt commit'],
+  ['E121', 'segment compaction retained tombstoned records'],
+  ['E122', 'snapshot hydration rejected stale schema tag'],
+  ['E123', 'redaction filter bypassed nested contact phone'],
+  ['E124', 'fairness scheduler starved priority queue lane'],
+  ['E125', 'bundle unpack rejected trailing directory slash'],
+  ['E126', 'replica fallback selected unreachable standby'],
+  ['E127', 'locale negotiation dropped primary region tag'],
+  ['E128', 'search debounce flushed before timer expiry'],
+  ['E129', 'collation compare failed on accented prefix'],
+  ['E130', 'timezone conversion skipped spring transition'],
+];
+
+function buildV3Fixtures(count) {
+  const files = {};
+  const cochanges = [];
+  const commits = [];
+  const cases = [];
+
+  for (let i = 0; i < count; i += 1) {
+    const tag = String(i + 1).padStart(2, '0');
+    const words = V3_SYMPTOMS[i % V3_SYMPTOMS.length];
+    const prose = words.join(' ');
+
+    // 1. zero-overlap-symptom: file/symbol tokens ('impl', 'unit', 'exec') share 0 tokens with prompt words!
+    const zFile = `src/impl/unit${tag}.mjs`;
+    const zSym = `execUnit${tag}`;
+    const zDecoy = `src/impl/decoy${tag}.mjs`;
+    files[zFile] = `// ${prose}\nexport function ${zSym}(payload) { return payload ?? null; }\n`;
+    files[zDecoy] = `export function helperDecoy${tag}(v) { return v; }\n`;
+    files[`docs/decisions/ADR-3${tag}-unit.md`] = `---\nsimt-affects: ["${zFile}"]\n---\n# ADR-3${tag} — ${zSym}\n\nStatus: accepted\n\n${prose} handled in ${zSym}.\n`;
+    commits.push([zFile, `fix(core): ${prose} in ${zSym}\n\nEnsures ${zSym} resolves ${prose}.`]);
+    commits.push([zFile, `chore(core): harden ${zSym} for ${words.slice(0, 4).join(' ')}`]);
+    cases.push({
+      task: { id: `zero-overlap-${tag}`, stratum: 'zero-overlap-symptom', prompt: prose },
+      label: { files: [zFile] },
+    });
+
+    // 2. error-literal: pasted finding code + multi-word error literal inside string_literals
+    const [errCode, errMsg] = ERROR_LITERALS[i % ERROR_LITERALS.length];
+    const fullLiteral = `SIMT-${errCode}: ${errMsg}`;
+    const eFile = `src/handlers/chk${tag}.mjs`;
+    const eDecoy = `src/handlers/noise${tag}.mjs`;
+    const msgWords = errMsg.split(' ');
+    files[eFile] = `export function runCheck${tag}(state) {\n  if (!state) throw new Error('${fullLiteral}');\n  return true;\n}\n`;
+    files[eDecoy] = `export function runNoise${tag}() {\n  // ${msgWords[0]} ${'filler '.repeat(12)}${msgWords[msgWords.length - 1]}\n  return false;\n}\n`;
+    cases.push({
+      task: { id: `error-literal-${tag}`, stratum: 'error-literal', prompt: `${fullLiteral} at runtime` },
+      label: { files: [eFile] },
+    });
+
+    // 3. scale-50k: 30 evaluation tasks targeting anchor files in a 50k repo
+    const sFile = `src/scale/anchor${tag}.mjs`;
+    const sSym = `anchorHandler${tag}`;
+    files[sFile] = `export function ${sSym}(ctx) { return ctx ? 1 : 0; }\n`;
+    cases.push({
+      task: { id: `scale50k-${tag}`, stratum: 'scale-50k', prompt: `Fix ${sSym} failure in anchor ${tag}` },
+      label: { files: [sFile] },
+    });
+  }
+
+  return { files, cochanges, commits, cases };
+}
+
+export function buildV3RetrievalCorpus({ perStratum = V3_SYMPTOMS.length } = {}) {
+  if (!Number.isInteger(perStratum) || perStratum < MIN_CASES || perStratum > V3_SYMPTOMS.length) {
+    throw new Error(`perStratum must be an integer from ${MIN_CASES} to ${V3_SYMPTOMS.length}`);
+  }
+  const { files, cochanges, commits, cases } = buildV3Fixtures(perStratum);
+  files['package.json'] = '{"name":"v3-retrieval-fixture","type":"module","scripts":{"test":"node --test"}}\n';
+  const entries = cases.sort((a, b) => cmp(a.task.id, b.task.id));
+  const tasks = entries.map(({ task }) => task);
+  const gold = Object.fromEntries(entries.map(({ task, label }) => [task.id, label]));
+  const corpus = { tasks, gold, fixture: { files, cochanges, commits } };
+  validateRetrievalCorpus(corpus, { perStratum, strata: V3_ADVERSARIAL_STRATA });
+  return corpus;
+}
+
+export function scaleFiles50k(count = 50_000) {
+  const files = {
+    'package.json': '{"name":"scale-50k-fixture","type":"module","scripts":{"test":"node --test"}}\n',
+    '.gitignore': '.simt/\n',
+    'test/dispatch.test.mjs': 'import { dispatch } from "../src/dispatch.mjs";\nif (dispatch() < 1) throw new Error("dispatch");\n',
+    'src/dispatch.mjs': 'import { rate } from "./rate.mjs";\nexport function dispatch() { return rate(); }\n',
+    'src/rate.mjs': 'export function rate() { return 1; }\nexport function quota() { return 2; }\n',
+    'src/profile.mjs': 'import { quota } from "./rate.mjs";\nexport function profile() { return quota(); }\n',
+    'docs/decisions/ADR-001-rate.md': '# ADR-001 — Rate\n\nStatus: accepted\n\nAffects: `src/rate.mjs`\n',
+  };
+  for (let i = 1; i <= 30; i += 1) {
+    const tag = String(i).padStart(2, '0');
+    files[`src/scale/anchor${tag}.mjs`] = `export function anchorHandler${tag}(ctx) { return ctx ? ${i} : 0; }\n`;
+    files[`test/scale/anchor${tag}.test.mjs`] = `import { anchorHandler${tag} } from '../../src/scale/anchor${tag}.mjs';\nanchorHandler${tag}(true);\n`;
+  }
+  for (let i = Object.keys(files).length; i < count; i += 1) {
+    files[`src/modules/m${String(i).padStart(5, '0')}.mjs`] = `export const moduleValue${i} = ${i};\n`;
+  }
+  return files;
 }
 
 function nonemptyStrings(values) {
@@ -217,6 +381,9 @@ function validLabel(stratum, label) {
   switch (stratum) {
     case 'lexical':
     case 'vocabulary-gap':
+    case 'zero-overlap-symptom':
+    case 'error-literal':
+    case 'scale-50k':
       return nonemptyStrings(label.files);
     case 'composite':
       return Array.isArray(label.subtasks) && SUBTASK_COUNTS.includes(label.subtasks.length)
@@ -229,12 +396,12 @@ function validLabel(stratum, label) {
   }
 }
 
-export function validateRetrievalCorpus({ tasks, gold }, { perStratum = 30 } = {}) {
+export function validateRetrievalCorpus({ tasks, gold }, { perStratum = 30, strata = RETRIEVAL_STRATA } = {}) {
   if (!Array.isArray(tasks) || !gold || typeof gold !== 'object' || Array.isArray(gold)) {
     throw new Error('retrieval corpus requires public tasks and a gold record');
   }
   const seen = new Set();
-  const counts = new Map(RETRIEVAL_STRATA.map((stratum) => [stratum, 0]));
+  const counts = new Map(strata.map((stratum) => [stratum, 0]));
   const balance = new Map(SUBTASK_COUNTS.map((count) => [count, 0]));
   for (const task of tasks) {
     const { id, stratum, prompt, requests, base } = task ?? {};
@@ -260,6 +427,13 @@ export function validateRetrievalCorpus({ tasks, gold }, { perStratum = 30 } = {
     if (!Object.hasOwn(gold, id) || !gold[id] || !validLabel(stratum, gold[id])) {
       throw new Error(`missing or invalid retrieval gold: ${id}`);
     }
+    if (stratum === 'zero-overlap-symptom') {
+      const promptTokens = new Set(tokenize(prompt));
+      const goldTokens = new Set(tokenize(gold[id].files.join(' ')));
+      for (const tok of promptTokens) {
+        if (goldTokens.has(tok)) throw new Error(`zero-overlap task ${id} shares token ${tok} with gold`);
+      }
+    }
     seen.add(id);
     counts.set(stratum, counts.get(stratum) + 1);
     if (stratum === 'composite') {
@@ -269,9 +443,11 @@ export function validateRetrievalCorpus({ tasks, gold }, { perStratum = 30 } = {
   }
   if (Object.keys(gold).length !== seen.size) throw new Error('retrieval gold contains orphan task IDs');
   if ([...counts.values()].some((count) => count < perStratum)) throw new Error('retrieval strata are undersized');
-  const sizes = [...balance.values()];
-  if (Math.min(...sizes) < 1 || Math.max(...sizes) - Math.min(...sizes) > 1) {
-    throw new Error('composite subtask counts are unbalanced');
+  if (counts.has('composite')) {
+    const sizes = [...balance.values()];
+    if (Math.min(...sizes) < 1 || Math.max(...sizes) - Math.min(...sizes) > 1) {
+      throw new Error('composite subtask counts are unbalanced');
+    }
   }
 }
 

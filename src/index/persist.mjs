@@ -17,6 +17,7 @@ import {
 } from './concept-map.mjs';
 import { writeCitations } from './commit-citations.mjs';
 import { writeGovernance } from './governance-persist.mjs';
+import { persistFileHits } from './hits.mjs';
 import { BINDING_VERSION } from './bind.mjs';
 import { BM25F_FIELDS } from './bm25f.mjs';
 import { lexicalWriter } from './lexical-store.mjs';
@@ -576,6 +577,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     );
     const priorBinding = db.prepare("select value from meta where key = 'binding_version'").get()?.value;
     if (next.length || removed.length || meta.edgeOwners?.length || priorBinding !== String(BINDING_VERSION)) persistSymbolGraph(db);
+    if (next.length || removed.length || meta.edgeOwners?.length || meta.hitsRefresh) persistFileHits(db);
     if (meta.cochange) writeCochange(db, meta.cochange);
     if (meta.governance) writeGovernance(db, meta.governance);
     if (meta.citations) writeCitations(db, meta.citations);
@@ -751,7 +753,7 @@ export async function readSchema(root) {
 
 const BUILD_META_KEYS = [
   'schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis',
-  'fts_fields', 'lexical_terms', 'commit_fts', 'concept_map', 'fts_constructs',
+  'fts_fields', 'lexical_terms', 'commit_fts', 'concept_map', 'fts_constructs', 'hits_scores',
 ];
 
 /**

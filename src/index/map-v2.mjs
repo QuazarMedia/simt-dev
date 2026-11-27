@@ -1,11 +1,12 @@
-import { inferRetrievalIntent, isMetaDocPath, kindPriorFor } from '../brief/kind.mjs';
+import { classifyTask, inferRetrievalIntent, isMetaDocPath, kindPriorFor } from '../brief/kind.mjs';
 import { isTestPath } from '../testing/paths.mjs';
 import { cmp } from '../util/sort.mjs';
 import { symbolKey, symbolNodePaths } from './bind.mjs';
 import { BM25F_FIELDS, fieldQueryTerms, scoreFtsBm25F } from './bm25f.mjs';
 import { directionalGraph, expandDirectional } from './directional.mjs';
 import { exactEntityCandidates, searchEntityCandidates } from './entities.mjs';
-import { searchCommitIr } from './graph-read.mjs';
+import { readFileHits, searchCommitIr } from './graph-read.mjs';
+import { computeHitsScores } from './hits.mjs';
 import { conceptualPartners } from './lexical.mjs';
 import { rankByFileGraph } from './map.mjs';
 import { searchWithConceptMap, searchWithFeedback } from './prf.mjs';
@@ -138,7 +139,7 @@ function prepareSeededStructure(graph, seedPaths) {
 
 // Exported so the scale harness can time the graph and coupling phases in
 // isolation; they are the engine's own walk, not a proxy.
-export function structuralHits({ nodes, byName, links }, paths, anchors, lexical) {
+export function structuralHits({ nodes, byName, links }, paths, anchors, lexical, walkOpts = {}) {
   const seeds = [];
   const seedPaths = new Set();
   for (const { path, matches: hits } of anchors.slice(0, SEED_CAP)) {
@@ -151,7 +152,7 @@ export function structuralHits({ nodes, byName, links }, paths, anchors, lexical
   for (const { path, score } of lexical.slice(0, Math.max(0, SEED_CAP - seeds.length))) {
     if (max > 0) seeds.push({ node: `file:${path}`, score: 0.65 * score / max });
   }
-  const ranked = expandDirectional(links, seeds);
+  const ranked = expandDirectional(links, seeds, walkOpts);
   const best = new Map();
   for (const { node, score, witness } of ranked) {
     const path = nodes.get(node);
@@ -436,11 +437,34 @@ function fuseChannels(lists, k = 40) {
     .sort((a, b) => (a.rank !== b.rank ? (a.rank < b.rank ? 1 : -1) : cmp(a.path, b.path)));
 }
 
+function dirOfPath(path) {
+  const slash = path.lastIndexOf('/');
+  return slash > 0 ? path.slice(0, slash) : '';
+}
+
+function subsystemCohesionDirs(files, seeds) {
+  const dirSizes = new Map();
+  for (const { path } of files) {
+    const dir = dirOfPath(path);
+    if (dir) dirSizes.set(dir, (dirSizes.get(dir) ?? 0) + 1);
+  }
+  const seedCounts = new Map();
+  for (const { path } of seeds.slice(0, 5)) {
+    const dir = dirOfPath(path);
+    if (dir) seedCounts.set(dir, (seedCounts.get(dir) ?? 0) + 1);
+  }
+  const dirs = new Set();
+  for (const [dir, count] of seedCounts) {
+    if (count >= 2 && (dirSizes.get(dir) ?? Infinity) <= 16) dirs.add(dir);
+  }
+  return dirs;
+}
+
 export async function rankMapV2(root, graph, task, {
   explain = false, queryVector = null, coupling = true, structure = null,
   exactOnly = false, feedbackEnabled = true, directional = true, includeTests = undefined,
   preloadedBundle = null, commitIr = false, commitRows = null, conceptMap = false, conceptRows = null,
-  qppFusion = false, sdm = false,
+  qppFusion = false, sdm = false, hitsWalk = false,
 } = {}) {
   const allPaths = new Set(graph.files.map(({ path }) => path));
   if (!task.trim()) {
@@ -550,6 +574,9 @@ export async function rankMapV2(root, graph, task, {
   const commitIrPromise = commitIr
     ? searchCommitIr(root, task, { rows: commitRows, allowPath, limit: LIMIT })
     : null;
+  const hitsPromise = hitsWalk
+    ? (graph.hits ? Promise.resolve(graph.hits) : readFileHits(root))
+    : null;
   const seedPaths = new Set([
     ...exact.slice(0, SEED_CAP).map(({ path }) => path),
     ...lexical.slice(0, SEED_CAP).map(({ path }) => path),
@@ -557,19 +584,40 @@ export async function rankMapV2(root, graph, task, {
   const mapStructure = directional
     ? (structure ?? prepareSeededStructure(graph, seedPaths))
     : null;
-  const [nativePartners, commitHits] = await Promise.all([
+  const [nativePartners, commitHits, rawHits] = await Promise.all([
     nativePartnersPromise ?? Promise.resolve(null),
     commitIrPromise ?? Promise.resolve([]),
+    hitsPromise ?? Promise.resolve(null),
   ]);
+  let hitsMap = rawHits;
+  if (hitsWalk && (!hitsMap || !hitsMap.size) && graph.files?.length) {
+    hitsMap = computeHitsScores(graph.files, graph.edges ?? [], { root });
+  }
+  const walkIntent = hitsWalk
+    ? (/\b(?:wiring|wire|entrypoint|dispatch(?:er)?|command|registry|route)\b/i.test(task) ? 'wiring' : classifyTask(task).kind)
+    : 'default';
+  const cohesionDirs = hitsWalk ? subsystemCohesionDirs(graph.files ?? [], exact.length ? exact : lexical) : null;
+  const tier1Paths = new Set(tier1.map(({ path }) => path));
+  const effectiveLexical = hitsWalk && hitsMap && walkIntent === 'bugfix'
+    ? lexical.map((row) => (hitsMap.get(row.path)?.barrel && !tier1Paths.has(row.path)
+      ? { ...row, score: row.score * 0.25 }
+      : row)).sort(byScore)
+    : lexical;
   const stemWeight = hasScope ? 1.6 : 0.70;
   const lists = [
     { id: 'entity', qppId: 'entity', weight: 3, items: tier1 },
     ...(tier2.length ? [{ id: 'entity', qppId: tier1.length ? 'entity_tier2' : 'entity', weight: 0.35, items: tier2 }] : []),
-    { id: 'bm25f', weight: 2.35, items: lexical },
+    { id: 'bm25f', weight: 2.35, items: effectiveLexical },
     ...(stems.length ? [{ id: 'stem', weight: stemWeight, items: stems }] : []),
     ...(fileGraph.resolver.length ? [{ id: 'resolver', weight: 0.65, items: fileGraph.resolver }] : []),
     ...(directional && fileGraph.pagerank.length ? [{ id: 'pagerank', weight: 0.30, items: fileGraph.pagerank }] : []),
-    { id: 'directional', weight: 0.9, items: directional ? structuralHits(mapStructure, paths, exact, lexical) : [] },
+    {
+      id: 'directional',
+      weight: 0.9,
+      items: directional
+        ? structuralHits(mapStructure, paths, exact, effectiveLexical, hitsWalk ? { hits: hitsMap, intent: walkIntent, cohesionDirs } : {})
+        : [],
+    },
     ...(commitHits.length ? [{ id: 'commit_ir', weight: 0.70, items: commitHits }] : []),
     { id: 'coupling', weight: 0.15, items: coupling ? couplingHits(fts ?? overlayRows, changes, couplingAnchors, paths, nativePartners) : [] },
   ];

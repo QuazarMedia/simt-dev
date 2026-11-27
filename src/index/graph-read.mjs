@@ -279,3 +279,19 @@ export async function readConceptExpansions(root, queryTerms, { rows = null, max
   if (error) return { expansions: [], terms: [] };
   return selectConceptExpansions(matched, unique, { maxPerTerm });
 }
+
+export async function readFileHits(root) {
+  const { rows, error } = await readSqliteRows(
+    root,
+    `select substr(key, 6) as path,
+       json_extract(props, '$.authority') as authority,
+       json_extract(props, '$.hub') as hub,
+       json_extract(props, '$.barrel') as barrel
+     from nodes where kind = 'file' and props is not null`,
+  );
+  if (error || !rows.length) return new Map();
+  return new Map(rows.map(({ path, authority, hub, barrel }) => [
+    path,
+    { authority: Number(authority ?? 0), hub: Number(hub ?? 0), barrel: Boolean(barrel) },
+  ]));
+}

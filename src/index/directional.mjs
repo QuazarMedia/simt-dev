@@ -60,6 +60,19 @@ function ownerFileNode(node) {
   return hash > 4 ? `file:${node.slice(4, hash)}` : null;
 }
 
+function nodePath(node) {
+  if (!node) return null;
+  if (node.startsWith('file:')) return node.slice(5);
+  const owner = ownerFileNode(node);
+  return owner ? owner.slice(5) : node;
+}
+
+function dirOf(path) {
+  if (!path) return '';
+  const slash = path.lastIndexOf('/');
+  return slash > 0 ? path.slice(0, slash) : '';
+}
+
 function isSelfEnclosed(entry) {
   return entry.witness.steps.length === 1
     && entry.witness.steps[0].kind === 'enclosed_by'
@@ -70,7 +83,7 @@ function isSelfEnclosed(entry) {
  * Spread positive lexical evidence across two bounded frontiers.
  * The activation is a sum, while the witness follows its strongest contribution.
  */
-export function expandDirectional(graph, seeds) {
+export function expandDirectional(graph, seeds, { hits = null, intent = 'default', cohesionDirs = null } = {}) {
   const starts = new Map();
   for (const { node, score, exact = false } of seeds) {
     if (!node || !Number.isFinite(score) || score <= 0) continue;
@@ -104,7 +117,31 @@ export function expandDirectional(graph, seeds) {
       found.set(entry.node, { node: entry.node, score: (previous?.score ?? 0) + entry.score, witness });
     }
   }
-  return [...found.values()].sort(byRank).map(({ node, score, witness: { seed, weight, steps } }) => ({
+  const adjusted = [...found.values()].map((entry) => {
+    if (!hits && !cohesionDirs?.size) return entry;
+    const path = nodePath(entry.node);
+    const meta = path ? hits?.get(path) : null;
+    let score = entry.score;
+    if (meta) {
+      if (meta.barrel && (intent === 'bugfix' || intent === 'default')) {
+        score *= 0.25;
+      } else if (intent === 'bugfix') {
+        score *= 1 + 0.45 * (meta.authority ?? 0);
+      } else if (intent === 'feature' || intent === 'wiring' || intent === 'refactor') {
+        score *= 1 + 0.45 * (meta.hub ?? 0) + 0.20 * (meta.authority ?? 0);
+      } else {
+        score *= 1 + 0.20 * (meta.authority ?? 0);
+      }
+    }
+    if (cohesionDirs?.size && entry.witness.steps.length === 1) {
+      const dir = dirOf(path);
+      if (dir && cohesionDirs.has(dir) && dirOf(nodePath(entry.witness.seed)) === dir) {
+        score += 0.08;
+      }
+    }
+    return { ...entry, score };
+  });
+  return adjusted.sort(byRank).map(({ node, score, witness: { seed, weight, steps } }) => ({
     node, score, witness: { seed, weight, steps },
   }));
 }

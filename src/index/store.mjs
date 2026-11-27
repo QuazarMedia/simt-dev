@@ -403,6 +403,7 @@ export async function reindex(root, opts = {}) {
     fieldedRows,
     conceptRows,
     conceptMapRefresh: stored.meta.concept_map !== '1',
+    hitsRefresh: stored.meta.hits_scores !== '1',
     cochange,
     governance: governance?.snapshot ?? null,
     citations,

@@ -211,13 +211,30 @@ function scaleFiles(count) {
 }
 
 async function scaleEvaluation(baseline, directory, count, { v3 = false } = {}) {
+  const paired = count < 50_000;
   const prior = join(directory, `scale-${count}-baseline`);
   const next = join(directory, `scale-${count}-candidate`);
   const files = count >= 50_000 ? scaleFiles50k(count) : scaleFiles(count);
-  await Promise.all([stage(prior, files), stage(next, files)]);
-  await Promise.all([baseline.reindex(prior), reindex(next, { fielded: true })]);
+  await (paired ? Promise.all([stage(prior, files), stage(next, files)]) : stage(next, files));
+  let indexFullMs = 0;
+  if (paired) {
+    await Promise.all([baseline.reindex(prior), reindex(next, { fielded: true })]);
+  } else {
+    const start = performance.now();
+    await reindex(next, { fielded: true });
+    indexFullMs = performance.now() - start;
+  }
   const edit = files['src/rate.mjs'].replace('return 1', 'return 3');
-  await Promise.all([prior, next].map((path) => writeFile(join(path, 'src/rate.mjs'), edit)));
+  await Promise.all((paired ? [prior, next] : [next]).map((path) => writeFile(join(path, 'src/rate.mjs'), edit)));
+  let indexIncMs = 0;
+  if (!paired) {
+    await git(next, ['add', 'src/rate.mjs']);
+    await git(next, [...fixtureCommit, 'Update rate for incremental reindex timing']);
+    const start = performance.now();
+    await reindex(next, { fielded: true });
+    indexIncMs = performance.now() - start;
+    await writeFile(join(next, 'src/rate.mjs'), edit.replace('return 3', 'return 5'));
+  }
   const prompt = 'Fix rate in src/rate.mjs, and add tests for dispatch in src/dispatch.mjs.';
   const common = { changed: true };
   const commands = [
@@ -229,20 +246,30 @@ async function scaleEvaluation(baseline, directory, count, { v3 = false } = {}) 
     ['gate', [], common, { ...common, precise: true }],
   ];
   const rows = [];
+  if (!paired) {
+    rows.push({ count, command: 'index-full', baseline: null, candidate: summarizeLatency([indexFullMs]) });
+    rows.push({ count, command: 'index-incremental', baseline: null, candidate: summarizeLatency([indexIncMs]) });
+  }
   for (const [command, args, oldFlags, newFlags] of commands) {
     process.stderr.write(`qualify ${count} files ${command}\n`);
     const timings = { baseline: [], candidate: [] };
     for (let index = -1; index < LATENCY_SAMPLES; index += 1) {
-      const arms = [['baseline', baseline.run, prior, oldFlags], ['candidate', run, next, newFlags]];
-      if (index % 2 === 1) arms.reverse();
+      const arms = paired
+        ? (index % 2 === 1 ? [['candidate', run, next, newFlags], ['baseline', baseline.run, prior, oldFlags]]
+          : [['baseline', baseline.run, prior, oldFlags], ['candidate', run, next, newFlags]])
+        : [['candidate', run, next, newFlags]];
       for (const [name, engine, root, flags] of arms) {
         const start = performance.now();
         await document(engine, root, command, args, flags);
         if (index >= 0) timings[name].push(performance.now() - start);
       }
     }
-    rows.push({ count, command, ...Object.fromEntries(Object.entries(timings)
-      .map(([name, measurements]) => [name, summarizeLatency(measurements)])) });
+    rows.push({
+      count,
+      command,
+      baseline: paired ? summarizeLatency(timings.baseline) : null,
+      candidate: summarizeLatency(timings.candidate),
+    });
   }
   if (v3) {
     process.stderr.write(`qualify ${count} files map-v3 / brief-v3\n`);
@@ -283,19 +310,20 @@ async function scaleEvaluation(baseline, directory, count, { v3 = false } = {}) 
   }
   rows.find(({ command }) => command === 'map').candidate.phases = Object.fromEntries(
     Object.entries(phaseSamples).map(([name, samples]) => [name, summarizeLatency(samples)]));
-  return [...rows, await hookEvaluation(count, prior, next, baseline.deliverPrompt, prompt)];
+  return [...rows, await hookEvaluation(count, paired ? prior : null, next, baseline.deliverPrompt, prompt)];
 }
 
 async function hookEvaluation(count, prior, next, baseline, prompt) {
-  const roots = [prior, next];
-  for (const [index, root] of roots.entries()) {
-    await writeFile(join(root, 'simt.json'), JSON.stringify({ brief: index ? { retrieval: 'v2' } : {} }));
+  const roots = prior ? [prior, next] : [next];
+  for (const root of roots) {
+    await writeFile(join(root, 'simt.json'), JSON.stringify({ brief: root === next ? { retrieval: 'v2' } : {} }));
   }
-  const calls = [baseline, deliverPrompt];
+  const calls = prior ? [baseline, deliverPrompt] : [deliverPrompt];
   const row = adapter('claude');
-  const durations = [[], []];
+  const durations = roots.map(() => []);
   for (let run = -1; run < LATENCY_SAMPLES; run += 1) {
-    for (const index of run % 2 === 0 ? [0, 1] : [1, 0]) {
+    const order = roots.length === 2 ? (run % 2 === 0 ? [0, 1] : [1, 0]) : [0];
+    for (const index of order) {
       const root = roots[index];
       const start = performance.now();
       const result = await calls[index](row, { prompt, cwd: root }, { root });
@@ -303,7 +331,12 @@ async function hookEvaluation(count, prior, next, baseline, prompt) {
       if (!result.json) throw new Error(`prompt delivery failed: ${result.skipped}`);
     }
   }
-  return { count, command: 'prompt-submit', baseline: summarizeLatency(durations[0]), candidate: summarizeLatency(durations[1]) };
+  return {
+    count,
+    command: 'prompt-submit',
+    baseline: prior ? summarizeLatency(durations[0]) : null,
+    candidate: summarizeLatency(durations[prior ? 1 : 0]),
+  };
 }
 
 async function main(argv) {

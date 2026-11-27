@@ -11,6 +11,7 @@ import { dirname, join, resolve } from 'node:path';
 import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
 import { writeCochange } from './cochange.mjs';
+import { COMMIT_FTS_DDL } from './commit-ir.mjs';
 import { writeCitations } from './commit-citations.mjs';
 import { writeGovernance } from './governance-persist.mjs';
 import { BINDING_VERSION } from './bind.mjs';
@@ -20,7 +21,7 @@ import { persistSymbolGraph } from './symbol-persist.mjs';
 
 export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
-export const SCHEMA_V = '6';
+export const SCHEMA_V = '7';
 
 // The writer has waited 5 s for a busy database since ADR-115; a reader that
 // returned immediately turned a transient build into INDEX_BUSY for a caller that
@@ -139,6 +140,13 @@ const MIGRATIONS = [
       db.exec('insert into fts_legacy(body, node_id, kind) select body, node_id, kind from fts order by rowid');
       db.exec('drop table fts');
       db.exec(FTS_SCHEMA);
+    },
+  },
+  {
+    from: 6,
+    to: 7,
+    apply: (db) => {
+      db.exec(COMMIT_FTS_DDL);
     },
   },
 ];
@@ -415,6 +423,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     migrateDb(db);
     db.exec(FTS_SCHEMA);
     db.exec(FTS_LEGACY_SCHEMA);
+    db.exec(COMMIT_FTS_DDL);
     // The `edges` table is v5-shaped now on every path: the preamble created
     // it on a cold build, the migration swapped it in on a legacy one.
     db.exec(INDEXES);
@@ -727,7 +736,7 @@ export async function readSchema(root) {
   return rows[0]?.value ?? '';
 }
 
-const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis', 'fts_fields', 'lexical_terms'];
+const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis', 'fts_fields', 'lexical_terms', 'commit_fts'];
 
 /**
  * The stamps a build leaves, with the read error attached.

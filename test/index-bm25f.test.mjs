@@ -78,7 +78,7 @@ test('migrates a v5 database without changing baseline ranking, then updates fie
   assert.deepEqual(await readFieldedFts(root), []);
   const version = new DatabaseSync(join(root, SQLITE_FILE), { readOnly: true });
   try {
-    assert.equal(version.prepare('pragma user_version').get().user_version, 6);
+    assert.equal(version.prepare('pragma user_version').get().user_version, 7);
   } finally {
     version.close();
   }

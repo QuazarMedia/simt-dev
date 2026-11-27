@@ -5,6 +5,7 @@ import { symbolKey, symbolNodePaths } from './bind.mjs';
 import { BM25F_FIELDS, fieldQueryTerms, scoreFtsBm25F } from './bm25f.mjs';
 import { directionalGraph, expandDirectional } from './directional.mjs';
 import { exactEntityCandidates, searchEntityCandidates } from './entities.mjs';
+import { searchCommitIr } from './graph-read.mjs';
 import { conceptualPartners } from './lexical.mjs';
 import { rankByFileGraph } from './map.mjs';
 import { searchWithFeedback } from './prf.mjs';
@@ -408,7 +409,7 @@ function fuseChannels(lists, k = 40) {
 export async function rankMapV2(root, graph, task, {
   explain = false, queryVector = null, coupling = true, structure = null,
   exactOnly = false, feedbackEnabled = true, directional = true, includeTests = undefined,
-  preloadedBundle = null,
+  preloadedBundle = null, commitIr = false, commitRows = null,
 } = {}) {
   const allPaths = new Set(graph.files.map(({ path }) => path));
   if (!task.trim()) {
@@ -498,6 +499,9 @@ export async function rankMapV2(root, graph, task, {
   const nativePartnersPromise = coupling && graph.nativeLexical && couplingSources.size
     ? nativeConceptualPartners(root, couplingSources)
     : null;
+  const commitIrPromise = commitIr
+    ? searchCommitIr(root, task, { rows: commitRows, allowPath, limit: LIMIT })
+    : null;
   const seedPaths = new Set([
     ...exact.slice(0, SEED_CAP).map(({ path }) => path),
     ...lexical.slice(0, SEED_CAP).map(({ path }) => path),
@@ -505,7 +509,10 @@ export async function rankMapV2(root, graph, task, {
   const mapStructure = directional
     ? (structure ?? prepareSeededStructure(graph, seedPaths))
     : null;
-  const nativePartners = nativePartnersPromise ? await nativePartnersPromise : null;
+  const [nativePartners, commitHits] = await Promise.all([
+    nativePartnersPromise ?? Promise.resolve(null),
+    commitIrPromise ?? Promise.resolve([]),
+  ]);
   const stemWeight = hasScope ? 1.6 : 0.70;
   const lists = [
     { id: 'entity', weight: 3, items: tier1 },
@@ -515,6 +522,7 @@ export async function rankMapV2(root, graph, task, {
     ...(fileGraph.resolver.length ? [{ id: 'resolver', weight: 0.65, items: fileGraph.resolver }] : []),
     ...(directional && fileGraph.pagerank.length ? [{ id: 'pagerank', weight: 0.30, items: fileGraph.pagerank }] : []),
     { id: 'directional', weight: 0.9, items: directional ? structuralHits(mapStructure, paths, exact, lexical) : [] },
+    ...(commitHits.length ? [{ id: 'commit_ir', weight: 0.70, items: commitHits }] : []),
     { id: 'coupling', weight: 0.15, items: coupling ? couplingHits(fts ?? overlayRows, changes, couplingAnchors, paths, nativePartners) : [] },
   ];
   if (queryVector && graph.embeddings?.length) {

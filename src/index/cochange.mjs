@@ -2,11 +2,15 @@ import { git, gitText } from '../sys/git.mjs';
 import { GIT_SHA, parseNameLog } from '../sys/git-history.mjs';
 import { isTestPath } from '../testing/paths.mjs';
 import { cmp } from '../util/sort.mjs';
+import {
+  buildCommitFtsRows, COMMIT_BODY_BYTES, COMMIT_SOURCE_CAP, COMMIT_TEST_CAP,
+  truncateUtf8, writeCommitFts,
+} from './commit-ir.mjs';
 
 export const COCHANGE_WINDOW = 500;
 const HALF_LIFE = 100;
-const SOURCE_CAP = 15;
-const TEST_CAP = 8;
+const SOURCE_CAP = COMMIT_SOURCE_CAP;
+const TEST_CAP = COMMIT_TEST_CAP;
 const PARTNER_CAP = 12;
 const MIN_SUPPORT = 2;
 const MIN_CONFIDENCE = 0.25;
@@ -17,13 +21,21 @@ export const COCHANGE_DDL = 'create table if not exists cochange('
   + 'primary key(src_path, dst_path)) without rowid';
 
 export function parseCochangeLog(raw) {
-  return parseNameLog(raw, ['parents']).map(({ sha, paths, parents }) => ({
-    sha, paths, parents: parents.split(' ').filter(Boolean),
+  return parseNameLog(raw, ['parents', 'subject', 'body']).map(({ sha, paths, parents, subject, body }) => ({
+    sha,
+    paths,
+    parents: parents.split(' ').filter(Boolean),
+    subject: String(subject ?? ''),
+    body: truncateUtf8(body ?? '', COMMIT_BODY_BYTES),
   }));
 }
 
+function recordOf({ sha, paths, subject, body }) {
+  return { sha, paths, subject: subject ?? '', body: body ?? '' };
+}
+
 async function logRange(root, revision, { merges = false, limit = COCHANGE_WINDOW } = {}) {
-  const args = ['log', '--topo-order', '--format=%x00%H%x00%P%x00', '--name-only', '--no-renames', '-z',
+  const args = ['log', '--topo-order', '--format=%x00%H%x00%P%x00%s%x00%b%x00', '--name-only', '--no-renames', '-z',
     '--max-count=' + limit];
   if (!merges) args.push('--no-merges');
   return parseCochangeLog(await git(root, [...args, revision, '--']));
@@ -41,18 +53,34 @@ export async function updateCochangeHistory(root, prior = null) {
     try {
       const updated = await logRange(root, range, { merges: true, limit: COCHANGE_WINDOW + 1 });
       if (extendsHistory(updated, prior.head)) {
-        return { head: updated[0].sha, commits: [...updated.map(({ paths }) => paths), ...prior.commits].slice(0, COCHANGE_WINDOW),
-          scanned: updated.length, rebuilt: false };
+        const priorRecords = Array.isArray(prior.commitRecords)
+          ? prior.commitRecords
+          : prior.commits.map((paths) => ({ sha: '', paths, subject: '', body: '' }));
+        return {
+          head: updated[0].sha,
+          commits: [...updated.map(({ paths }) => paths), ...prior.commits].slice(0, COCHANGE_WINDOW),
+          commitRecords: [...updated.map(recordOf), ...priorRecords].slice(0, COCHANGE_WINDOW),
+          scanned: updated.length,
+          rebuilt: false,
+        };
       }
     } catch {
       // A removed revision after a history rewrite cannot anchor the previous window.
     }
   }
   const head = await gitText(root, ['rev-parse', '--verify', '-q', 'HEAD'], { allowFailure: true });
-  if (head === null) return { head: '', commits: [], scanned: 0, rebuilt: prior?.head !== '' };
-  if (prior?.head === head) return { ...prior, scanned: 0, rebuilt: false };
+  if (head === null) return { head: '', commits: [], commitRecords: [], scanned: 0, rebuilt: prior?.head !== '' };
+  if (prior?.head === head && Array.isArray(prior.commitRecords)) {
+    return { ...prior, scanned: 0, rebuilt: false };
+  }
   const rows = await logRange(root, head);
-  return { head, commits: rows.map(({ paths }) => paths), scanned: rows.length, rebuilt: true };
+  return {
+    head,
+    commits: rows.map(({ paths }) => paths),
+    commitRecords: rows.map(recordOf),
+    scanned: rows.length,
+    rebuilt: true,
+  };
 }
 
 /** The input is newest first. Rejected commits still age the accepted observations. */
@@ -102,7 +130,11 @@ export function mineCochange(commits, { root = null, eligible = null } = {}) {
 export async function buildCochange(root, prior, paths, { refresh = false } = {}) {
   const history = await updateCochangeHistory(root, prior);
   if (!refresh && prior?.head === history.head) return null;
-  return { ...history, rows: mineCochange(history.commits, { root, eligible: paths }) };
+  return {
+    ...history,
+    rows: mineCochange(history.commits, { root, eligible: paths }),
+    commitFtsRows: buildCommitFtsRows(history.commitRecords, { root, eligible: paths }),
+  };
 }
 
 export function writeCochange(db, history) {
@@ -112,7 +144,9 @@ export function writeCochange(db, history) {
   for (const { src, dst, confidence, lift, support, decayedWeight } of history.rows) {
     insert.run(src, dst, confidence, lift, support, decayedWeight);
   }
+  writeCommitFts(db, history.commitFtsRows ?? []);
   const meta = db.prepare('insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value');
   meta.run('last_cochange_sha', history.head);
   meta.run('cochange_commits', JSON.stringify(history.commits));
+  meta.run('commit_ir_records', JSON.stringify(history.commitRecords ?? []));
 }

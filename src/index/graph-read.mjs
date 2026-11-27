@@ -1,5 +1,8 @@
 import { BM25F_FIELDS } from './bm25f.mjs';
 import { BINDING_VERSION } from './bind.mjs';
+import {
+  COMMIT_FTS_LIMIT, commitIrQuery, scoreCommitMatches, scoreCommitRows,
+} from './commit-ir.mjs';
 import { readSqliteBatch, readSqliteRows } from './persist.mjs';
 import { symbolGraphQueries } from './symbol-persist.mjs';
 
@@ -211,13 +214,20 @@ export async function readLiveSnapshot(root, {
 
 export async function readCochangeBasis(root) {
   const { rows, error } = await readSqliteRows(root,
-    "select key, value from meta where key in ('last_cochange_sha', 'cochange_commits')");
+    "select key, value from meta where key in ('last_cochange_sha', 'cochange_commits', 'commit_ir_records')");
   if (error) return null;
   const values = new Map(rows.map(({ key, value }) => [key, value]));
   if (!values.has('last_cochange_sha') || !values.has('cochange_commits')) return null;
   try {
     const commits = JSON.parse(values.get('cochange_commits'));
-    return Array.isArray(commits) ? { head: values.get('last_cochange_sha'), commits } : null;
+    if (!Array.isArray(commits)) return null;
+    const rawRecords = values.get('commit_ir_records');
+    const commitRecords = rawRecords ? JSON.parse(rawRecords) : null;
+    return {
+      head: values.get('last_cochange_sha'),
+      commits,
+      ...(Array.isArray(commitRecords) ? { commitRecords } : {}),
+    };
   } catch {
     return null;
   }
@@ -228,4 +238,21 @@ export async function readCochange(root) {
     "select src_path as src, dst_path as dst, 'cochange' as kind, confidence, confidence as weight, "
       + 'lift, support, decayed_weight as decayedWeight from cochange order by src_path, confidence desc, lift desc, support desc, dst_path');
   return withReadError(rows, error?.message?.includes('no such table: cochange') ? null : error);
+}
+
+export async function searchCommitIr(root, task, { rows = null, allowPath = null, limit = 30 } = {}) {
+  if (Array.isArray(rows)) return scoreCommitRows(rows, task, { allowPath, limit });
+  const match = commitIrQuery(task);
+  if (!match) return [];
+  const { rows: matched, error } = await readSqliteRows(
+    root,
+    `select sha, age, file_count, files_json, -bm25(commit_fts, 0, 0, 0, 0, 2.0, 1.0) as score
+     from commit_fts
+     where commit_fts match ?
+     order by score desc, age asc, sha asc
+     limit ?`,
+    [match, COMMIT_FTS_LIMIT],
+  );
+  if (error) return [];
+  return scoreCommitMatches(matched, { allowPath, limit });
 }

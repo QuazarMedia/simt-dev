@@ -268,7 +268,7 @@ export async function reindex(root, opts = {}) {
   const version = await readSchema(root);
   // A cache written before symbols existed has the right blobs and the wrong
   // tables. Re-extract once, then an unchanged blob stays untouched.
-  const forceSchema = version !== SCHEMA_V && version !== '5';
+  const forceSchema = version !== SCHEMA_V && version !== '5' && version !== '6';
   // The package layout is an input of the row, not decoration: an unchanged blob
   // under a new nearest package marker has a new `pkg`, and resolution can cross a
   // boundary it did not before.
@@ -278,7 +278,9 @@ export async function reindex(root, opts = {}) {
   const hadFielded = stored.meta.fts_fields === '1';
   const fielded = hadFielded || opts.fielded !== false;
   const inputs = inputsDigest(root, { adapter, packages });
-  const priorInputs = version === '5' ? inputsDigest(root, { adapter, packages, schema: version }) : inputs;
+  const priorInputs = version === '5' || version === '6'
+    ? inputsDigest(root, { adapter, packages, schema: version })
+    : inputs;
   const resolution = resolutionDigest(root, listed);
   // A cache with no stamp was written by a reading this one cannot describe, so
   // it is rebuilt rather than partly reused.
@@ -369,7 +371,12 @@ export async function reindex(root, opts = {}) {
   const tree = treeDigest(listed);
   const { prepareGovernance } = await import('./governance-store.mjs');
   const [cochange, governance, citations] = await Promise.all([
-    readCochangeBasis(root).then((basis) => buildCochange(root, basis, paths, { refresh: force || resolutionChanged })),
+    readCochangeBasis(root).then((basis) => buildCochange(
+      root,
+      basis,
+      paths,
+      { refresh: force || resolutionChanged || stored.meta.commit_fts !== '1' || !Array.isArray(basis?.commitRecords) },
+    )),
     prepareGovernance(root, listed),
     readSqliteRows(root, CITATIONS_BASIS_SQL).then(({ rows }) => prepareCitations(root, rows[0]?.value)),
   ]);

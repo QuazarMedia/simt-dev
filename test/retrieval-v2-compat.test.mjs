@@ -166,8 +166,8 @@ test('installed index upgrades v5 and leaves a newer file byte-identical', async
   await cli(root, ['index', '--retrieval', 'v2']);
   const newer = new DatabaseSync(path);
   try {
-    assert.equal(newer.prepare('pragma user_version').get().user_version, 6);
-    newer.exec("update meta set value = '7' where key = 'schema'; pragma user_version = 7");
+    assert.equal(newer.prepare('pragma user_version').get().user_version, 7);
+    newer.exec("update meta set value = '99' where key = 'schema'; pragma user_version = 99");
   } finally {
     newer.close();
   }

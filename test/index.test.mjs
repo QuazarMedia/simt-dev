@@ -121,15 +121,15 @@ test('a database at a newer version is served from a sidecar, never overwritten 
     await reindex(root);
     const file = join(root, SQLITE_FILE);
     const newer = new DatabaseSync(file);
-    newer.exec('pragma user_version = 7');
-    newer.exec(`update meta set value = '7' where key = 'schema'`);
+    newer.exec('pragma user_version = 99');
+    newer.exec(`update meta set value = '99' where key = 'schema'`);
     newer.close();
     await reindex(root);
     const intact = new DatabaseSync(file);
-    assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 7, 'the newer database is untouched');
-    assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '7');
+    assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 99, 'the newer database is untouched');
+    assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '99');
     intact.close();
-    const sidecar = indexFileFor(root, '7');
+    const sidecar = indexFileFor(root, '99');
     assert.notEqual(sidecar, file);
     assert.ok((await stat(sidecar)).size > 0, 'this version built its sidecar');
     const rows = await readFiles(root);
@@ -166,7 +166,7 @@ test('a v3 database is migrated in place through v4 and v5 to v6 (Q44, Q76)', as
     db.close();
     await reindex(root);
     const after = new DatabaseSync(file);
-    assert.equal(Number(after.prepare('pragma user_version').get().user_version), 6, 'the chain ended at the current schema');
+    assert.equal(Number(after.prepare('pragma user_version').get().user_version), 7, 'the chain ended at the current schema');
     const sql = after.prepare(`select sql from sqlite_master where name = 'fts'`).get().sql;
     assert.ok(sql.includes('node_id'), 'the FTS table is keyed by node');
     assert.ok(after.prepare('select count(*) as n from fts_legacy').get().n > 0, 'the FTS rows survived the ordered migration chain');
@@ -326,10 +326,10 @@ test('a fresh build is the v6 entity layout, and the read shapes are SQL (Q76)',
       .prepare(`select name from sqlite_master where type in ('table', 'view') and name not like 'sqlite_%'`)
       .all()
       .map((row) => row.name);
-    for (const name of ['sources', 'nodes', 'edges', 'vectors', 'meta', 'fts']) {
+    for (const name of ['sources', 'nodes', 'edges', 'vectors', 'meta', 'fts', 'commit_fts']) {
       assert.ok(names.includes(name), `the ${name} table is present`);
     }
-    assert.equal(Number(db.prepare('pragma user_version').get().user_version), 6, 'the schema is stamped v6');
+    assert.equal(Number(db.prepare('pragma user_version').get().user_version), 7, 'the schema is stamped v7');
     const ftsSql = db.prepare(`select sql from sqlite_master where name = 'fts'`).get().sql;
     assert.ok(ftsSql.includes('node_id'), 'fts rows point at the file node, not a path string');
     const kinds = db.prepare(`select distinct kind from nodes`).all().map((row) => row.kind);

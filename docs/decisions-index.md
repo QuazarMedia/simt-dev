@@ -270,3 +270,8 @@ in [architecture/history.md](architecture/history.md).
 | [260](decisions/ADR-260-a-content-only-release-skips-the-binary-build.md) | a content-only release skips the binary build | accepted · 2026-11-23 |
 | [261](decisions/ADR-261-projected-rules-name-the-mcp-surface-as-a-second-door-not-a-second-system.md) | projected rules name the MCP surface as a second door, not a second system | accepted · 2026-11-24 |
 | [262](decisions/ADR-262-ecosystem-probes-and-root-aware-signal-vocabulary.md) | ecosystem probes and root-aware signal vocabulary | accepted · 2026-11-27 |
+| [263](decisions/ADR-263-commit-history-ir-and-repo-mined-concept-map.md) | Commit-history IR and repo-mined bilingual concept map | accepted · 2026-11-27 |
+| [264](decisions/ADR-264-qpp-adaptive-fusion-and-construct-sdm.md) | Post-retrieval QPP adaptive fusion and construct SDM | accepted · 2026-11-27 |
+| [265](decisions/ADR-265-hits-authority-and-intent-walks.md) | Precomputed HITS hub and authority scores with intent walks | accepted · 2026-11-27 |
+| [266](decisions/ADR-266-nash-fair-packing-and-symbol-scope-briefs.md) | Opt-in Nash packing, symbol-scope spans, and session anti-redundancy | accepted · 2026-11-27 |
+| [267](decisions/ADR-267-retrieval-v3-opt-in-and-zero-rebuild-rollback.md) | Retrieval v3 opt-in and zero-rebuild rollback | accepted · 2026-11-27 |

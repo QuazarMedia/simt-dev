@@ -163,8 +163,8 @@ async function registrySkills(root) {
 }
 
 export async function whyCommand(args, flags, commands = []) {
-  if (flags.retrieval !== undefined && !['v1', 'v2'].includes(flags.retrieval)) {
-    return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+  if (flags.retrieval !== undefined && !['v1', 'v2', 'v3'].includes(flags.retrieval)) {
+    return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1, v2 or v3');
   }
   const root = commandRoot(flags);
   const target = args[0];

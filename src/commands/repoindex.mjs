@@ -5,7 +5,7 @@
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { SQLITE_FILE, reindex } from '../index/store.mjs';
-import { retrievalMode } from '../index/retrieval-mode.mjs';
+import { isModernRetrieval, retrievalMode } from '../index/retrieval-mode.mjs';
 import { openIndex } from '../index/open.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { git } from '../sys/git.mjs';
@@ -84,11 +84,11 @@ export async function indexCommand(args, flags) {
     }
   }
   const retrieval = retrievalMode(flags.retrieval);
-  if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+  if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1, v2 or v3');
   let result;
   try {
     result = await reindex(root, {
-      fielded: retrieval === 'v2',
+      fielded: isModernRetrieval(retrieval),
       embed: flags.embed === true,
       allowRemote: flags.allowRemote === true,
     });

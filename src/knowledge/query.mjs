@@ -124,7 +124,7 @@ export function rankCorpus(
         exact.push({ id: unit.id, citation: citationOf(unit, artifact) });
       }
     }
-    exact.sort((a, b) => retrieval === 'v2'
+    exact.sort((a, b) => (retrieval === 'v2' || retrieval === 'v3')
       ? cmp(String(a.id), String(b.id)) || cmp(a.citation.path, b.citation.path)
       : String(a.id).localeCompare(String(b.id)));
   }

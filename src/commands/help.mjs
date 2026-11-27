@@ -190,7 +190,7 @@ ${CLI} tests <path>          the tests that exercise a file: an import, the conv
                            --changed reads from the diff
 ${CLI} gate [path...]        the tests a change reaches, and only those
                            (--changed reads the diff instead of the paths)
-${CLI} impact <file|symbol|file#symbol>... [--retrieval v2]
+${CLI} impact <file|symbol|file#symbol>... [--retrieval v1|v2|v3]
                            who a change reaches: importers, tests, governance and consumers
                            (--changed uses Git hunks, --task resolves names in a prompt,
                            and --all also shows conceptual matches when dependents exist)
@@ -396,7 +396,7 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --search <task>         index: BM25 rows for a task, from the open cache
 --rank <task>           index: files ranked for a task, from the open cache
 --query <text>          knowledge rank: the question the units are ranked against
---retrieval <v1|v2>     select the retrieval policy for brief, map, index, impact, why or knowledge rank
+--retrieval <v1|v2|v3>  select the retrieval policy for brief, map, index, impact, why or knowledge rank
 --nash                  brief: enable Nash Social Welfare fair packing across subtasks and facets
 --scopes                brief: emit symbol-scope line spans (path:L1-L2 sym) for large files
 --seen <paths|ledger>   brief: down-weight unchanged paths, ids or session ledger items already in context

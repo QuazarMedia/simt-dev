@@ -173,9 +173,10 @@ function projectByRole(role, anchors, rankedPaths, { graph, tests, include, root
   return projected;
 }
 
-async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
+async function retrieveSubtasks(root, graph, tasks, allowed, tests, { v3 = false } = {}) {
   const queries = new Map();
   let structure;
+  const v3Options = v3 ? { commitIr: true, conceptMap: true, qppFusion: true, sdm: true, hitsWalk: true } : {};
   return Promise.all(tasks.map(async (task) => {
     if (!task.query) return { ...task, files: [], feedback: null, evidence: [] };
     const excluded = new Set(task.excludedPaths);
@@ -189,7 +190,7 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
       };
     }
     const role = classifyArtifactRole(task.query);
-    const key = JSON.stringify([task.query, task.excludedPaths, role]);
+    const key = JSON.stringify([task.query, task.excludedPaths, role, v3]);
     const eligibleFiles = graph.files.filter(include);
     const eligible = new Set(eligibleFiles.map(({ path }) => path));
     const anchored = [...new Set(task.anchors.map(({ path }) => path))].filter((path) => eligible.has(path));
@@ -204,6 +205,7 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
         explain: true,
         coupling: true,
         includeTests: false,
+        ...v3Options,
       }));
     }
     const rank = await queries.get(key);
@@ -216,6 +218,7 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
         explain: true,
         coupling: true,
         includeTests: true,
+        ...v3Options,
       });
       projected = projectByRole(role, seedAnchors, withTests.ranked.map(({ path }) => path), { graph, tests, include, root });
     }
@@ -227,8 +230,9 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
 }
 
 export async function assembleCompositeBrief({
-  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, nash = false, scopeSpans = false, seen = null, recordSeen = true,
+  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, retrieval = 'v2', nash = false, scopeSpans = false, seen = null, recordSeen = true,
 }) {
+  const isV3 = retrieval === 'v3';
   const need = (facets) => section === null || facets.includes(section);
   const [graph, repo, registry, records, lessons] = await Promise.all([
     loadLiveGraph(root, { build, fielded: true, nativeLexical: true, binding: true, cochange: true }),
@@ -242,7 +246,7 @@ export async function assembleCompositeBrief({
   const allowed = named === null ? null : new Set(named);
   const tests = testEdges({ files: graph.files, imports: graph.edges }, { root });
   const bound = bindSubtaskAnchors(parts, graph, { paths: named, scopes: repo.manifest?.work?.scopes });
-  const ranked = await retrieveSubtasks(root, graph, bound, allowed, tests);
+  const ranked = await retrieveSubtasks(root, graph, bound, allowed, tests, { v3: isV3 });
   const { kind, tasks, obligations } = classifySubtaskIntents(clusterSubtasks(ranked));
   const basis = tasks.length > 1 ? 'the widest kind across ' + tasks.length + ' subtasks' : tasks[0]?.intent?.basis ?? 'no positive action';
   const plan = orderSubtasks(tasks, graph);
@@ -367,7 +371,7 @@ export async function assembleCompositeBrief({
     sections: keptSections(items, packed.cut),
     ...(seenSummary ? { seen: seenSummary } : {}),
     composite: {
-      retrieval: 'v2', subtasks: tasks, lanes, overlaps, taskOrder: { ...plan, obligations },
+      retrieval: isV3 ? 'v3' : 'v2', subtasks: tasks, lanes, overlaps, taskOrder: { ...plan, obligations },
       constraints, subtaskCoverage: subtaskCoverage(tasks, items, packed.cut), drillDown,
       ...(structuredScopes ? { scopes: structuredScopes } : {}),
       ...(subtask === null ? {} : { selectedSubtask: subtask }),

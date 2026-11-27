@@ -11,7 +11,7 @@ import { buildProofPacket } from './proof.mjs';
 import { decomposePrompt, maskPrompt, MAX_SUBTASKS } from './decompose.mjs';
 
 function questionList(task, retrieval) {
-  if (retrieval !== 'v2') return [task];
+  if (retrieval !== 'v2' && retrieval !== 'v3') return [task];
   const clauses = decomposePrompt(task);
   if (clauses.length > 1) return clauses.map(({ text }) => text);
   const { masked } = maskPrompt(task);
@@ -110,7 +110,7 @@ export async function assembleScopedBrief({ root, task, budget, workScope, retri
   return {
     root, kind: 'work', basis: 'declared local scope', task, scope: scope.paths, workScope, budget: ceiling,
     items: packet.items, packed, sections,
-    ...(retrieval === 'v2' ? { retrieval } : {}),
+    ...(retrieval === 'v2' || retrieval === 'v3' ? { retrieval } : {}),
     proof: { complete: matches.size > 0 && omittedObligations.length === 0 && !proof.overBudget,
       citations, omittedObligations,
       ...(multi ? { questions: questions.map((text, index) => ({ id: index + 1, text,

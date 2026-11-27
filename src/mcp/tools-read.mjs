@@ -22,7 +22,7 @@ export const TOOLS_READ = [
         targets: { type: 'array', items: { type: 'string', minLength: 1 } },
         task: { type: 'string' },
         changed: { type: 'boolean' },
-        retrieval: { type: 'string', enum: ['v1', 'v2'] },
+        retrieval: { type: 'string', enum: ['v1', 'v2', 'v3'] },
         only: { type: 'string', enum: IMPACT_SECTIONS },
         maxHops: { type: 'integer', minimum: 1 },
         all: { type: 'boolean' },

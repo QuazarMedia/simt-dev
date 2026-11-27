@@ -49,7 +49,8 @@ import { commandCard } from '../kernel/card.mjs';
 import { decisionHits, scopeHits, sourceRoots } from '../index/govern.mjs';
 import { rankFiles, renderMap, spelledPaths } from '../index/map.mjs';
 import { embedTaskQuery } from '../index/vectors.mjs';
-import { searchFtsBm25 } from '../index/store.mjs';
+import { isModernRetrieval } from '../index/retrieval-mode.mjs';
+import { searchFtsBm25, searchFtsBm25FBundle } from '../index/store.mjs';
 import { coverage } from '../index/coverage.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { loadMcpRegistry, selectServers } from '../mcpconfig/registry.mjs';
@@ -230,10 +231,12 @@ export async function assembleBrief({
 } = {}) {
   if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope, retrieval });
   const effectiveSeen = seen ?? flags?.seen ?? null;
+  const isV3 = retrieval === 'v3';
+  const effectiveScopeSpans = scopeSpans || isV3;
   // A view is the same packet with the other sections never collected, so it shares the
   // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
   const section = only === null ? null : String(only).toUpperCase();
-  if (retrieval === 'v2' || subtask !== null) {
+  if (isModernRetrieval(retrieval) || subtask !== null) {
     const [{ decomposePrompt }, { extractConstraints }] = await Promise.all([
       import('./decompose.mjs'),
       import('./constraints.mjs'),
@@ -249,7 +252,7 @@ export async function assembleBrief({
     if (selected || parts.length > 1 || constrained) {
       const { assembleCompositeBrief } = await import('./multi.mjs');
       const result = await assembleCompositeBrief({ root, task, parts: selected ? [selected] : parts,
-        paths, budget, flags, build, commands, section, subtask, nash, scopeSpans, seen: effectiveSeen, recordSeen });
+        paths, budget, flags, build, commands, section, subtask, retrieval, nash, scopeSpans: effectiveScopeSpans, seen: effectiveSeen, recordSeen });
       if (proof && !result.cold) result.proof = await summarizeProof(root, result.items, result.packed, budget, true);
       return result;
     }
@@ -269,7 +272,19 @@ export async function assembleBrief({
   const asked = task.trim().length > 0;
   const pending = named ? parsePathList(paths) : null;
 
-  const graph = await loadLiveGraph(root, { build, text: task.trim().length > 0, embed: flags?.embed === true });
+  const searching = task.trim().length > 0;
+  const [graph, preloadedBundle] = await Promise.all([
+    loadLiveGraph(root, {
+      build,
+      text: !isV3 && searching,
+      fielded: isV3 && searching,
+      nativeLexical: isV3 && searching,
+      binding: isV3 && searching,
+      cochange: isV3 && searching,
+      embed: flags?.embed === true,
+    }),
+    isV3 && searching ? searchFtsBm25FBundle(root, task, {}).catch(() => null) : null,
+  ]);
   if (graph.cold) {
     return { cold: true, broken: graph.broken === true, indexError: graph.indexError ?? null };
   }
@@ -362,7 +377,7 @@ export async function assembleBrief({
   let focused = [];
   let singleScopes = null;
   if (need(['FILES', 'TESTS', 'DECISIONS', 'LESSONS', 'FEDERATION', 'CAUTIONS'])) {
-    const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts }) : [];
+    const bm25 = !isV3 && searching ? await searchFtsBm25(root, task, { fts }) : [];
     const queryVector =
       flags?.embed === true && embeddings.length > 0
         ? await embedTaskQuery(root, task, {
@@ -370,12 +385,23 @@ export async function assembleBrief({
             allowRemote: flags?.allowRemote === true,
           })
         : null;
-    const ranked = rankFiles({ files, symbols, edges, fts, bm25, embeddings, queryVector, task });
+    const v3Result = isV3 && searching
+      ? await (await import('../index/map-v2.mjs')).rankMapV2(root, graph, task, {
+        queryVector,
+        preloadedBundle: graph.nativeLexical && preloadedBundle && !preloadedBundle.error ? preloadedBundle : null,
+        commitIr: true,
+        conceptMap: true,
+        qppFusion: true,
+        sdm: true,
+        hitsWalk: true,
+      })
+      : null;
+    const ranked = v3Result?.ranked ?? rankFiles({ files, symbols, edges, fts, bm25, embeddings, queryVector, task });
     // A resolver hit is the task's own words against a path or symbol; a fused score is
     // positive for graph neighbours and BM25 body hits too. When nothing resolves, those
     // rows stay as context and the caution below says so. When something does resolve, keep
     // only the resolver rows: the rest made a two-file task look like it touched src/name.mjs.
-    const matched = ranked.filter((row) => row.resolver > 0).length;
+    const matched = v3Result?.matched ?? ranked.filter((row) => row.resolver > 0).length;
     focused = matched > 0 ? ranked.filter((row) => row.resolver > 0) : ranked;
     if (task.trim().length > 0 && matched === 0) {
       packet.add('CAUTIONS', 'matched 0: no path or symbol matches this task’s words, so FILES is context rather than a match', {
@@ -384,7 +410,7 @@ export async function assembleBrief({
       });
     }
     const rendered = renderMap(focused, symbols, { level: 'names', budget: budget > 0 ? budget * MAP_FACTOR : 0 });
-    if (scopeSpans && rendered.files.length) {
+    if (effectiveScopeSpans && rendered.files.length) {
       const [{ resolveLiveScopes, selectFileScopes }, { compactScopedFileLine, symbolEntrypoints }] = await Promise.all([
         import('./scopes.mjs'),
         import('./render.mjs'),
@@ -670,6 +696,7 @@ export async function assembleBrief({
 
   return {
     root, kind, basis, task, scope, budget, items, packed, sections, proof: proofSummary,
+    ...(isV3 ? { retrieval: 'v3' } : {}),
     ...(singleScopes ? { scopes: singleScopes } : {}),
     ...(seenSummary ? { seen: seenSummary } : {}),
   };

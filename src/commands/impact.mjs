@@ -24,7 +24,7 @@ import {
 } from '../index/impact.mjs';
 import { targetsForHunks, targetsForTask } from '../index/impact-targets.mjs';
 import { conceptualPartners } from '../index/lexical.mjs';
-import { retrievalMode } from '../index/retrieval-mode.mjs';
+import { isModernRetrieval, retrievalMode } from '../index/retrieval-mode.mjs';
 import { governs, sourceRoots } from '../index/govern.mjs';
 import { decisionRecords, ruleScopes } from './why.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -93,7 +93,7 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
   }
   const advanced = changed || task || args.length > 1 || flags.all === true || args.some((target) => target.includes('#'));
   const retrieval = retrievalMode(flags.retrieval ?? (advanced ? 'v2' : undefined));
-  if (retrieval === null) throw issue('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+  if (retrieval === null) throw issue('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1, v2 or v3');
   if (retrieval === 'v1' && advanced) throw issue('this query requires retrieval v2', EXIT.USAGE, 'pass --retrieval v2');
   // The parser already checks CLI callers; this is the library and MCP door, which
   // receive flags without that check. A cap is a positive integer, not a string:
@@ -102,7 +102,7 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
   if (maxHop !== null && (!Number.isInteger(maxHop) || maxHop < 1)) {
     throw issue(`--max-hops must be a positive integer`, EXIT.USAGE, 'pass --max-hops 1, --max-hops 2, …');
   }
-  const precise = retrieval === 'v2';
+  const precise = isModernRetrieval(retrieval);
   let changes = [];
   try {
     if (changed) changes = await readChangeHunks(root);

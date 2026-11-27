@@ -37,8 +37,8 @@ export async function briefPayload(args, { only = null } = {}) {
   const subtask = parseSubtaskId(args?.subtask);
   if (Number.isNaN(subtask)) throw new Error('subtask must be a positive integer');
   const retrieval = retrievalMode(args?.retrieval ?? (subtask === null ? undefined : 'v2'));
-  if (subtask !== null && retrieval === 'v1') throw new Error('subtask selection requires retrieval v2');
-  if (retrieval === null) throw new Error("retrieval must be v1 or v2");
+  if (subtask !== null && retrieval === 'v1') throw new Error('subtask selection requires retrieval v2 or v3');
+  if (retrieval === null) throw new Error('retrieval must be v1, v2 or v3');
   const result = await assembleBrief({
     root,
     task: typeof args?.task === 'string' ? args.task : '',
@@ -275,7 +275,7 @@ export const TOOLS_FACTS = [
         paths: { type: 'string', description: 'comma-separated paths to scope the packet to, instead of the files git reports as modified' },
         budget: { type: 'number', description: 'byte ceiling; 0 means the whole packet (default 2048)' },
         subtask: { type: 'integer', minimum: 1, description: 'focus the packet on this subtask number' },
-        retrieval: { type: 'string', enum: ['v1', 'v2'], description: 'v2 enables experimental composite packets' },
+        retrieval: { type: 'string', enum: ['v1', 'v2', 'v3'], description: 'v2 enables composite packets; v3 adds commit/concept/QPP/SDM/HITS ranking and scope spans' },
         scopes: { type: 'boolean', description: 'emit bound symbol-scope line spans (`path:L1-L2 sym`) for large files' },
         nash: { type: 'boolean', description: 'enable Nash Social Welfare fair packing across subtasks and facets' },
         seen: { type: 'string', description: 'comma-separated paths/ids or session ledger path already in context' },

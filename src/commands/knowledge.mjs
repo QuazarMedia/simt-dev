@@ -468,7 +468,7 @@ export async function knowledgeCommand(sub, args, flags) {
   // The four document doors answer a question over one file, and none of them writes.
   if (sub === 'rank' || sub === 'derivations' || sub === 'debt' || sub === 'impact') {
     const retrieval = retrievalMode(flags.retrieval);
-    if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+    if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1, v2 or v3');
     if (sub === 'rank' && flags.scope !== undefined) {
       if (args.length > 0) return fail(`unknown knowledge rank argument ${args[0]}`, EXIT.USAGE, RANK_USAGE);
       if (flags.input !== undefined) return fail('knowledge rank reads --input or --scope, not both', EXIT.USAGE, RANK_USAGE);

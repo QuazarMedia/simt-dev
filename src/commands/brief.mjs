@@ -54,9 +54,9 @@ export async function briefCommand(args, flags, commands = []) {
   if (Number.isNaN(subtask)) return fail('subtask must be a positive integer', EXIT.USAGE, 'use --subtask <n>');
   const retrieval = retrievalMode(flags.retrieval ?? (subtask === null ? undefined : 'v2'));
   if (subtask !== null && (flags.scope !== undefined || retrieval === 'v1')) {
-    return fail('subtask selection requires a composite brief', EXIT.USAGE, 'use --retrieval v2 without --scope');
+    return fail('subtask selection requires a composite brief', EXIT.USAGE, 'use --retrieval v2 or v3 without --scope');
   }
-  if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+  if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1, v2 or v3');
   const result = await assembleBrief({
     root: commandRoot(flags),
     task: String(args[0] ?? flags.task ?? ''),

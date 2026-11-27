@@ -49,7 +49,7 @@ export const SPEC = [
   { path: 'bench probes', usage: '--yes', summary: 'run the deterministic probes against a workspace', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task","yes"], writes: 'repo' },
   { path: 'bench report', usage: '[--compare a b]', summary: 'summarise the runs recorded in the vault', defaultFor: 'bench', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench run', usage: '--yes', summary: 'run agents against the mined tasks', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task","yes"], writes: 'repo' },
-  { path: 'brief', usage: '"<task>" [--only <section>] [--scope <id>] [--retrieval v2] [--subtask <n>] [--scopes] [--nash] [--seen <paths|ledger>]', mcp: { name: 'brief', flags: ['budget', 'nash', 'only', 'paths', 'retrieval', 'scopes', 'seen', 'subtask', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","nash","only","paths","proof","task","scope","scopes","retrieval","seen","subtask"], },
+  { path: 'brief', usage: '"<task>" [--only <section>] [--scope <id>] [--retrieval v1|v2|v3] [--subtask <n>] [--scopes] [--nash] [--seen <paths|ledger>]', mcp: { name: 'brief', flags: ['budget', 'nash', 'only', 'paths', 'retrieval', 'scopes', 'seen', 'subtask', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","nash","only","paths","proof","task","scope","scopes","retrieval","seen","subtask"], values: { retrieval: ['v1', 'v2', 'v3'] }, },
   { path: 'check', usage: '[--changed]', mcp: { name: 'check', flags: ['changed'] }, summary: 'report stale or missing generated regions and every check finding', flags: ["changed","check","diff","dry-run","frozen","surfaces"], },
   { path: 'work inspect', mcp: { name: 'work_inspect', flags: [] }, summary: "what this repository's work consists of, and which validations are actually available", flags: [], },
   // The write the read above proposes: one scope, named explicitly, previewed before it
@@ -80,8 +80,8 @@ export const SPEC = [
   // `--only <section>` answers with one section of the report; the set mirrors IMPACT_SECTIONS
   // in src/commands/impact.mjs, which this file cannot import without pulling the command's
   // whole graph into the registry (spec.test.mjs refuses that for index.mjs).
-  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>" [--only <section>] [--max-hops <n>]', mcp: { name: 'impact', flags: ['all', 'changed', 'max-hops', 'only', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace the import closure, tests and related evidence for a change', flags: ['all', 'changed', 'max-hops', 'only', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'], only: ['importers', 'tests', 'cochange', 'conceptual', 'governs', 'owners', 'consumers'] }, },
-  { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v2]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2"] }, },
+  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>" [--only <section>] [--max-hops <n>]', mcp: { name: 'impact', flags: ['all', 'changed', 'max-hops', 'only', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace the import closure, tests and related evidence for a change', flags: ['all', 'changed', 'max-hops', 'only', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2', 'v3'], only: ['importers', 'tests', 'cochange', 'conceptual', 'governs', 'owners', 'consumers'] }, },
+  { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v1|v2|v3]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2", "v3"] }, },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated
   // Git hooks are a separate, explicit install.
@@ -120,7 +120,7 @@ export const SPEC = [
   { path: 'lessons list', summary: 'deterministic lesson candidates and the promoted lessons', defaultFor: 'lessons', flags: ["diff","expires","paths","task"], },
   { path: 'lessons review', usage: '<id> --yes', summary: 'promote one lesson candidate into docs/lessons', flags: ["diff","expires","paths","task","yes"], writes: 'repo' },
   { path: 'local doctor', usage: '[--allow-remote]', summary: 'the local model endpoints, and whether they answer', defaultFor: 'local', flags: ["allow-remote"], },
-  { path: 'map', usage: '[--task "<task>"] [--retrieval v2] [--explain]', summary: 'the files a task is most likely to touch, within a byte budget', flags: ["allow-remote","budget","embed","explain","level","recall","retrieval","task"], values: { retrieval: ["v1", "v2"], level: ['outline', 'names', 'signatures'] }, },
+  { path: 'map', usage: '[--task "<task>"] [--retrieval v1|v2|v3] [--explain]', summary: 'the files a task is most likely to touch, within a byte budget', flags: ["allow-remote","budget","embed","explain","level","recall","retrieval","task"], values: { retrieval: ["v1", "v2", "v3"], level: ['outline', 'names', 'signatures'] }, },
   { path: 'mcp', usage: '[--list]', summary: 'serve the read-only MCP surface over stdio', flags: ["list"], },
   { path: 'mcp status', usage: '--harness <id>', summary: 'which servers the selected harnesses have configured, entry-level', flags: ["harness", "registry"], },
   { path: 'mcp install', usage: '--harness <id> --yes', writes: 'repo', summary: 'write the registry servers into the selected harnesses project configs', flags: ["harness", "registry", "yes"], },
@@ -180,7 +180,7 @@ export const SPEC = [
   { path: 'verify status', usage: '(--input <file> | --changed --scope <id> [--input <attestations>])', mcp: { name: 'verify_status', flags: [] }, summary: 'closure over recorded obligations, and what is unresolved', defaultFor: 'verify', flags: ["input","changed","scope"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff","dry-run"], },
   { path: 'workspace upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', aliases: ['upgrade'], flags: ["yes","all","diff","workspace","dry-run"], },
-  { path: 'why', usage: '[<subject>...] | --changed', summary: 'what governs paths, symbols, rules, decisions, skills or finding codes', flags: ['changed', 'retrieval'], values: { retrieval: ['v1', 'v2'] }, },
+  { path: 'why', usage: '[<subject>...] | --changed', summary: 'what governs paths, symbols, rules, decisions, skills or finding codes', flags: ['changed', 'retrieval'], values: { retrieval: ['v1', 'v2', 'v3'] }, },
 ];
 
 

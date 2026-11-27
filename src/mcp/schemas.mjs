@@ -358,7 +358,7 @@ export const output = {
       sections: { type: 'object', additionalProperties: { type: 'array', items: { type: 'string' } } },
       text: { type: 'string' },
       note: { type: ['string', 'null'] },
-      retrieval: { type: 'string', enum: ['v2'] },
+      retrieval: { type: 'string', enum: ['v2', 'v3'] },
       subtasks: { type: 'array', items: { type: 'object' } },
       lanes: { type: 'array', items: { type: 'object' } },
       overlaps: { type: 'array', items: { type: 'object' } },

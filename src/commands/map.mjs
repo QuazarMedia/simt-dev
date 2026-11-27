@@ -4,7 +4,7 @@
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
-import { retrievalMode } from '../index/retrieval-mode.mjs';
+import { isModernRetrieval, retrievalMode } from '../index/retrieval-mode.mjs';
 import { searchFtsBm25, searchFtsBm25FBundle } from '../index/store.mjs';
 import {
   DEFAULT_BUDGET,
@@ -33,9 +33,10 @@ export async function mapCommand(args, flags) {
   const task = typeof flags.task === 'string' ? flags.task : '';
   const retrieval = retrievalMode(flags.retrieval);
   if (retrieval === null) {
-    return fail(`unknown retrieval version ${flags.retrieval}`, EXIT.USAGE, 'use --retrieval v1 or v2');
+    return fail(`unknown retrieval version ${flags.retrieval}`, EXIT.USAGE, 'use --retrieval v1, v2 or v3');
   }
-  const experimental = retrieval === 'v2';
+  const experimental = isModernRetrieval(retrieval);
+  const isV3 = retrieval === 'v3';
   const searching = task.trim().length > 0;
   let loaded;
   let preloadedBundle = null;
@@ -68,6 +69,7 @@ export async function mapCommand(args, flags) {
       explain: flags.explain === true,
       queryVector,
       preloadedBundle: loaded.nativeLexical && preloadedBundle && !preloadedBundle.error ? preloadedBundle : null,
+      ...(isV3 ? { commitIr: true, conceptMap: true, qppFusion: true, sdm: true, hitsWalk: true } : {}),
     })
     : null;
   const ranked = result?.ranked ?? rankFiles({ ...loaded, bm25, queryVector, task });

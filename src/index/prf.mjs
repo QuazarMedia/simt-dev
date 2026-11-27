@@ -5,6 +5,7 @@ import {
   FIELD_RESULT_LIMIT, fieldCandidateStatement, fieldQueryTerms, ftsQuote, scoreFtsBm25F,
 } from './bm25f.mjs';
 import { resolveEntityAnchors } from './entities.mjs';
+import { readConceptExpansions } from './graph-read.mjs';
 import { collectFileTerms } from './lexical.mjs';
 import { readSqliteBatch } from './persist.mjs';
 import { readGraph, searchFtsBm25F } from './store.mjs';
@@ -177,4 +178,43 @@ export async function searchWithFeedback(root, task, {
   }
   if (!results || error) return unchanged('index-unavailable', error);
   return { ranking: interpolate(original, expansion, results), expansion, reason: null, error: null };
+}
+
+export async function searchWithConceptMap(root, task, {
+  ranking = [], fts, conceptRows = null,
+} = {}) {
+  const queryTerms = fieldQueryTerms(task);
+  if (!queryTerms.length) return { ranking, conceptExpansions: [], reason: 'empty-query' };
+  const { expansions, terms } = await readConceptExpansions(root, queryTerms, { rows: conceptRows });
+  if (!terms.length) return { ranking, conceptExpansions: [], reason: 'no-concept-terms' };
+
+  let results;
+  let error = null;
+  if (fts === undefined) {
+    const batch = await readSqliteBatch(root, [
+      ["select value from meta where key = 'fts_field_stats'"],
+      ...terms.map(({ term }) => fieldCandidateStatement([term], undefined, FIELD_RESULT_LIMIT)),
+      ...terms.map(({ term }) => ['select count(*) as df from fts where fts match ?', [ftsQuote(term)]]),
+    ], { legacySql: null });
+    error = batch.error;
+    if (!error && batch.results) {
+      const rawStats = batch.results[0]?.[0]?.value;
+      const parsedStats = rawStats ? JSON.parse(rawStats) : null;
+      results = terms.map(({ term }, index) => {
+        const rows = batch.results[1 + index] ?? [];
+        const df = batch.results[1 + terms.length + index]?.[0]?.df ?? 0;
+        const stats = parsedStats ? { N: parsedStats.N, avgdl: parsedStats.avgdl, df: [df] } : null;
+        return scoreFtsBm25F(rows, term, { stats });
+      });
+    }
+  } else {
+    results = terms.map(({ term }) => scoreFtsBm25F(fts, term));
+  }
+  if (!results || error) return { ranking, conceptExpansions: [], reason: 'index-unavailable', error };
+  return {
+    ranking: interpolate(ranking, terms, results),
+    conceptExpansions: expansions,
+    reason: null,
+    error: null,
+  };
 }

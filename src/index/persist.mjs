@@ -12,6 +12,9 @@ import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
 import { writeCochange } from './cochange.mjs';
 import { COMMIT_FTS_DDL } from './commit-ir.mjs';
+import {
+  CONCEPT_MAP_DDL, CONCEPT_SOURCES_DDL, rebuildConceptMapTable, writeConceptSources,
+} from './concept-map.mjs';
 import { writeCitations } from './commit-citations.mjs';
 import { writeGovernance } from './governance-persist.mjs';
 import { BINDING_VERSION } from './bind.mjs';
@@ -147,6 +150,8 @@ const MIGRATIONS = [
     to: 7,
     apply: (db) => {
       db.exec(COMMIT_FTS_DDL);
+      db.exec(CONCEPT_MAP_DDL);
+      db.exec(CONCEPT_SOURCES_DDL);
     },
   },
 ];
@@ -424,6 +429,8 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     db.exec(FTS_SCHEMA);
     db.exec(FTS_LEGACY_SCHEMA);
     db.exec(COMMIT_FTS_DDL);
+    db.exec(CONCEPT_MAP_DDL);
+    db.exec(CONCEPT_SOURCES_DDL);
     // The `edges` table is v5-shaped now on every path: the preamble created
     // it on a cold build, the migration swapped it in on a legacy one.
     db.exec(INDEXES);
@@ -558,6 +565,10 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     if (meta.cochange) writeCochange(db, meta.cochange);
     if (meta.governance) writeGovernance(db, meta.governance);
     if (meta.citations) writeCitations(db, meta.citations);
+    if (meta.conceptRows?.length) writeConceptSources(db, meta.conceptRows, ids);
+    if (next.length || removed.length || meta.cochange || meta.governance || meta.conceptMapRefresh) {
+      rebuildConceptMapTable(db);
+    }
     upsertMeta.run('schema', SCHEMA_V);
     if (meta.fielded || invalidatedFielded) {
       const ready = meta.fielded ? '1' : '0';
@@ -736,7 +747,9 @@ export async function readSchema(root) {
   return rows[0]?.value ?? '';
 }
 
-const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis', 'fts_fields', 'lexical_terms', 'commit_fts'];
+const BUILD_META_KEYS = [
+  'schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis', 'fts_fields', 'lexical_terms', 'commit_fts', 'concept_map',
+];
 
 /**
  * The stamps a build leaves, with the read error attached.

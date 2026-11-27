@@ -8,7 +8,7 @@ import { exactEntityCandidates, searchEntityCandidates } from './entities.mjs';
 import { searchCommitIr } from './graph-read.mjs';
 import { conceptualPartners } from './lexical.mjs';
 import { rankByFileGraph } from './map.mjs';
-import { searchWithFeedback } from './prf.mjs';
+import { searchWithConceptMap, searchWithFeedback } from './prf.mjs';
 import { nativeConceptualPartners, searchFtsBm25FBundle } from './store.mjs';
 import { rankByCosine } from './vectors.mjs';
 
@@ -195,7 +195,7 @@ function matchedFields(rows, task, paths) {
   return result;
 }
 
-function explainRanks(ranked, lists, fields) {
+function explainRanks(ranked, lists, fields, feedback = null) {
   const evidence = new Map(ranked.map(({ path, rank }) => [path, { path, rank, channels: {} }]));
   for (const { id, weight, items } of lists) {
     for (const [index, { path, ...row }] of items.entries()) {
@@ -203,11 +203,35 @@ function explainRanks(ranked, lists, fields) {
       if (!entry) continue;
       entry.channels[id] = {
         rank: index + 1, weight, ...row,
-        ...(id === 'bm25f' ? { matchedFields: BM25F_FIELDS.filter((field) => fields.get(path)?.has(field)) } : {}),
+        ...(id === 'bm25f' ? {
+          matchedFields: BM25F_FIELDS.filter((field) => fields.get(path)?.has(field)),
+          ...(feedback?.conceptExpansions?.length ? { conceptExpansions: feedback.conceptExpansions } : {}),
+        } : {}),
       };
     }
   }
   return [...evidence.values()];
+}
+
+function lexicalNqc(rows) {
+  if (!Array.isArray(rows) || rows.length < 2) return 0;
+  const k = Math.min(10, rows.length);
+  const m = Math.min(30, rows.length);
+  const top = rows.slice(0, k).map(({ score }) => score);
+  const tail = rows.slice(0, m).map(({ score }) => score);
+  const tailMean = tail.reduce((sum, value) => sum + value, 0) / tail.length + 1e-9;
+  const topMean = top.reduce((sum, value) => sum + value, 0) / top.length;
+  const variance = top.reduce((sum, value) => sum + (value - topMean) ** 2, 0) / top.length;
+  return Math.sqrt(variance) / tailMean;
+}
+
+function hasExactAnchor(anchors) {
+  for (const hits of anchors?.values() ?? []) {
+    if (hits.some(({ kind, quoted }) => kind === 'path' || kind === 'suffix' || kind === 'qualified-symbol' || quoted === true)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function singularize(word) {
@@ -409,7 +433,7 @@ function fuseChannels(lists, k = 40) {
 export async function rankMapV2(root, graph, task, {
   explain = false, queryVector = null, coupling = true, structure = null,
   exactOnly = false, feedbackEnabled = true, directional = true, includeTests = undefined,
-  preloadedBundle = null, commitIr = false, commitRows = null,
+  preloadedBundle = null, commitIr = false, commitRows = null, conceptMap = false, conceptRows = null,
 } = {}) {
   const allPaths = new Set(graph.files.map(({ path }) => path));
   if (!task.trim()) {
@@ -465,10 +489,24 @@ export async function rankMapV2(root, graph, task, {
   const feedback = feedbackEnabled && !directLexMatch
     ? await searchWithFeedback(root, task, { ranking: feedbackInput, graph, anchors: entities.anchors, fts })
     : { ranking, reason: directLexMatch ? 'direct-lexical' : 'disabled', expansion: [] };
+  const bareSymbolQuery = entities.anchors.size > 0 && fieldQueryTerms(task).length <= 1;
+  const conceptEligible = conceptMap
+    && !exactOnly
+    && !hasScope
+    && !directLexMatch
+    && !bareSymbolQuery
+    && !hasExactAnchor(entities.anchors)
+    && (feedbackInput.length === 0 || lexicalNqc(feedbackInput) < 0.75);
+  const conceptResult = conceptEligible
+    ? await searchWithConceptMap(root, task, { ranking: feedback.ranking, fts, conceptRows })
+    : { ranking: feedback.ranking, conceptExpansions: [] };
+  const effectiveFeedback = conceptResult.conceptExpansions.length
+    ? { ...feedback, ranking: conceptResult.ranking, conceptExpansions: conceptResult.conceptExpansions }
+    : { ...feedback, conceptExpansions: [] };
   const exact = entities.candidates.filter(({ tier, path }) => tier <= 2 && allowPath(path));
   const matched = new Set(entities.candidates.filter(({ tier, path }) => tier <= 3 && allowPath(path)).map(({ path }) => path));
   const phrases = new Map(entities.candidates.map(({ path, phrase, components }) => [path, { phrase, score: components.proximity }]));
-  const primary = feedback.ranking.filter(valid);
+  const primary = effectiveFeedback.ranking.filter(valid);
   const local = scoreFtsBm25F(overlayRows, task).filter(({ path }) => allowPath(path));
   const weightedRaw = [primary, local].flatMap((rows) =>
     rows.map((row) => {
@@ -539,7 +577,13 @@ export async function rankMapV2(root, graph, task, {
   return {
     ranked,
     matched: matched.size,
-    evidence: explain ? explainRanks(ranked, lists, matchedFields(entityRows ?? overlayRows, task, new Set(ranked.map(({ path }) => path)))) : [],
-    feedback: { reason: feedback.reason, expansion: feedback.expansion },
+    evidence: explain
+      ? explainRanks(ranked, lists, matchedFields(entityRows ?? overlayRows, task, new Set(ranked.map(({ path }) => path))), effectiveFeedback)
+      : [],
+    feedback: {
+      reason: effectiveFeedback.reason,
+      expansion: effectiveFeedback.expansion,
+      conceptExpansions: effectiveFeedback.conceptExpansions,
+    },
   };
 }

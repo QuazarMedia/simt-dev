@@ -1,8 +1,10 @@
+import { cmp } from '../util/sort.mjs';
 import { BM25F_FIELDS } from './bm25f.mjs';
 import { BINDING_VERSION } from './bind.mjs';
 import {
   COMMIT_FTS_LIMIT, commitIrQuery, scoreCommitMatches, scoreCommitRows,
 } from './commit-ir.mjs';
+import { selectConceptExpansions } from './concept-map.mjs';
 import { readSqliteBatch, readSqliteRows } from './persist.mjs';
 import { symbolGraphQueries } from './symbol-persist.mjs';
 
@@ -255,4 +257,19 @@ export async function searchCommitIr(root, task, { rows = null, allowPath = null
   );
   if (error) return [];
   return scoreCommitMatches(matched, { allowPath, limit });
+}
+
+export async function readConceptExpansions(root, queryTerms, { rows = null, maxPerTerm = 3 } = {}) {
+  const unique = [...new Set(queryTerms ?? [])].sort(cmp);
+  if (!unique.length) return { expansions: [], terms: [] };
+  if (Array.isArray(rows)) return selectConceptExpansions(rows, unique, { maxPerTerm });
+  const { rows: matched, error } = await readSqliteRows(
+    root,
+    `select prose_term, code_term, ppmi, support from concept_map
+     where prose_term in (select value from json_each(?))
+     order by prose_term, ppmi desc, support desc, code_term asc`,
+    [JSON.stringify(unique)],
+  );
+  if (error) return { expansions: [], terms: [] };
+  return selectConceptExpansions(matched, unique, { maxPerTerm });
 }

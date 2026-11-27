@@ -19,6 +19,7 @@ import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
 import { sourceLineFacts } from './source-lines.mjs';
 import { buildCochange } from './cochange.mjs';
+import { extractConceptFileTerms } from './concept-map.mjs';
 import { CITATIONS_BASIS_SQL, prepareCitations } from './commit-citations.mjs';
 import { readCochangeBasis, readFts, withReadError } from './graph-read.mjs';
 export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols } from './graph-read.mjs';
@@ -284,7 +285,10 @@ export async function reindex(root, opts = {}) {
   const resolution = resolutionDigest(root, listed);
   // A cache with no stamp was written by a reading this one cannot describe, so
   // it is rebuilt rather than partly reused.
-  const force = forceSchema || (fielded && stored.meta.lexical_terms !== '1') || stored.error != null || stored.meta.inputs !== priorInputs;
+  const force = forceSchema
+    || (fielded && (stored.meta.lexical_terms !== '1' || stored.meta.concept_map !== '1'))
+    || stored.error != null
+    || stored.meta.inputs !== priorInputs;
   // Import resolution reads the tracked path set and the language table, not a
   // file's bytes. When either moves, an unchanged importer's edge can name a
   // destination that was added, deleted or renamed; its stored specifiers are
@@ -309,6 +313,7 @@ export async function reindex(root, opts = {}) {
   const edges = [];
   const fts = [];
   const fieldedRows = [];
+  const conceptRows = [];
   let skipped = 0;
   for (const entry of changed) {
     const lang = langOf(entry.path, root);
@@ -339,6 +344,7 @@ export async function reindex(root, opts = {}) {
     }
     fts.push(...buildFtsBodies(entry.path, pulled.symbols, text, root));
     if (fielded) fieldedRows.push(...buildFieldedFtsBodies(entry.path, pulled.symbols, text, root));
+    conceptRows.push({ path: entry.path, ...extractConceptFileTerms(entry.path, text, lang, pulled.symbols) });
   }
   const edgeOwners = [];
   if (resolutionChanged) {
@@ -388,6 +394,8 @@ export async function reindex(root, opts = {}) {
     edgeOwners,
     fielded,
     fieldedRows,
+    conceptRows,
+    conceptMapRefresh: stored.meta.concept_map !== '1',
     cochange,
     governance: governance?.snapshot ?? null,
     citations,

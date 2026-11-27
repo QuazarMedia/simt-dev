@@ -503,20 +503,20 @@ Columns follow `templates/plan/tracker.json`. `Lane` names disjoint file sets so
 | V08 | SQLite-native 10k-file acceleration (`map` & `why`) | 1 | perf | L | V01 | L | — | warm 10k p50: `map<=80ms`, `why<=15ms`, `brief<=130ms` | Complete | dd3e84c · test: node --test test/scale-latency-regression.test.mjs test/map.test.mjs test/why-graph.test.mjs |
 | V09 | Track A paired qualification & 10k scale verification | 2 | rollout | M | V02, V05, V07, V08 | M | P1 | v2 beats v1 on every stratum & latency bar | Complete | 0ee65b2 |
 | V10 | Promote v2 to default & ratify superseding ADR | 2 | rollout | S | V09 | S | P1 | v2 default; `--retrieval v1` rollback; isolated suite 100% | Complete | 082b61f |
-| V11 | Commit-history IR channel (`commit_fts`, v7 schema) | 3 | history | M | V10 | M | P2 | `Locus`/`AmaLgam` maxp+sum2 channel; <=15ms refresh | Queued | — |
-| V12 | Repo-mined bilingual PMI concept thesaurus (`concept_map`) | 3 | history | L | V11 | L | P2 | zero-overlap vocab-gap recovery; 0% drift on exact queries | Queued | — |
-| V13 | Post-retrieval QPP-weighted adaptive fusion (NQC + gap) | 3 | rank | M | V10 | M | P3 | zero Fusion Tax; QPP weights beat static RRF + `--explain` | Queued | — |
-| V14 | Sequential Dependence Model (SDM) & construct fields | 3 | rank | M | V13 | M | P3 | `invocations` + `string_literals`; top-32 SDM <=2ms | Queued | — |
-| V15 | Precomputed HITS Hub/Authority & intent-aware walks | 3 | graph | M | V10 | M | P4 | authority>barrel on bugfix; hub lift on wiring; <=15ms index | Queued | — |
-| V16 | Nash Social Welfare fair packer & progressive compression | 4 | pack | M | V10 | M | P5 | MSC@2048>=0.93, MSC@1024>=0.70; <=5ms pack | Queued | — |
-| V17 | Symbol-scope / hunk-level retrieval & brief spans | 4 | scope | M | V10 | M | P6 | accurate `path:L1-L2 sym` for >200-line files; overlay-live | Queued | — |
-| V18 | Deterministic session anti-redundancy (`--seen`) | 4 | scope | S | V17 | S | P6 | Turn-2 surfaces fresh items; dirty edit resets weight to 1.0 | Queued | — |
-| V19 | v3 upgrade for `knowledge rank` & proof packets | 4 | pack | S | V14, V16 | S | P5 | SDM + QPP + Nash coverage on knowledge doors; Unicode intact | Queued | — |
-| V20 | Expanded v3 adversarial & 50k-file scale benchmark strata | 4 | bench | M | V02, V10 | M | — | 3 new 30-task strata (zero-overlap, error-literal, 50k scale) | Queued | — |
-| V21 | Full paired v1 vs v2 vs v3 ablation & 10k/50k report | 5 | rollout | M | V12, V15, V18, V19, V20 | M | P7 | all promoted v3 levers clear Track B bars honestly | Queued | — |
-| V22 | Isolated-consumer compat, v6->v7 migration & MCP parity | 5 | rollout | M | V21 | M | — | v5/v6->v7 safe; cold-safe; CLI/MCP parity; isolated 100% | Queued | — |
-| V23 | Ratify v3 ADRs, promote qualified levers & rollback flags | 5 | rollout | S | V22 | S | P7 | numbered ADRs landed; `--retrieval v1\|v2\|v3` on same cache | Queued | — |
-| V24 | Regenerate command docs, explain telemetry & guide | 5 | rollout | S | V23 | S | — | docs/spec/genericity/shipped tests 100%; receiver-clean | Queued | — |
+| V11 | Commit-history IR channel (`commit_fts`, v7 schema) | 3 | history | M | V10 | M | P2 | `Locus`/`AmaLgam` maxp+sum2 channel; <=15ms refresh | Complete | bdcce064 |
+| V12 | Repo-mined bilingual PMI concept thesaurus (`concept_map`) | 3 | history | L | V11 | L | P2 | zero-overlap vocab-gap recovery; 0% drift on exact queries | Complete | 412b9980 |
+| V13 | Post-retrieval QPP-weighted adaptive fusion (NQC + gap) | 3 | rank | M | V10 | M | P3 | zero Fusion Tax; QPP weights beat static RRF + `--explain` | Complete | b4a8bf42 |
+| V14 | Sequential Dependence Model (SDM) & construct fields | 3 | rank | M | V13 | M | P3 | `invocations` + `string_literals`; top-32 SDM <=2ms | Complete | f5342244 |
+| V15 | Precomputed HITS Hub/Authority & intent-aware walks | 3 | graph | M | V10 | M | P4 | authority>barrel on bugfix; hub lift on wiring; <=15ms index | Complete | 681d8988 |
+| V16 | Nash Social Welfare fair packer & progressive compression | 4 | pack | M | V10 | M | P5 | MSC@2048>=0.93, MSC@1024>=0.70; <=5ms pack | Complete | 3aaa5541 |
+| V17 | Symbol-scope / hunk-level retrieval & brief spans | 4 | scope | M | V10 | M | P6 | accurate `path:L1-L2 sym` for >200-line files; overlay-live | Complete | 16bf2b72 |
+| V18 | Deterministic session anti-redundancy (`--seen`) | 4 | scope | S | V17 | S | P6 | Turn-2 surfaces fresh items; dirty edit resets weight to 1.0 | Complete | 02d8a348 |
+| V19 | v3 upgrade for `knowledge rank` & proof packets | 4 | pack | S | V14, V16 | S | P5 | SDM + QPP + Nash coverage on knowledge doors; Unicode intact | Complete | a7f0362d |
+| V20 | Expanded v3 adversarial & 50k-file scale benchmark strata | 4 | bench | M | V02, V10 | M | — | 3 new 30-task strata (zero-overlap, error-literal, 50k scale) | Complete | 6909de44 |
+| V21 | Full paired v1 vs v2 vs v3 ablation & 10k/50k report | 5 | rollout | M | V12, V15, V18, V19, V20 | M | P7 | all promoted v3 levers clear Track B bars honestly | Complete | 0c908286 |
+| V22 | Isolated-consumer compat, v6->v7 migration & MCP parity | 5 | rollout | M | V21 | M | — | v5/v6->v7 safe; cold-safe; CLI/MCP parity; isolated 100% | Complete | 7c0ffded |
+| V23 | Ratify v3 ADRs, promote qualified levers & rollback flags | 5 | rollout | S | V22 | S | P7 | numbered ADRs landed; `--retrieval v1\|v2\|v3` on same cache | Complete | ef4763b4 |
+| V24 | Regenerate command docs, explain telemetry & guide | 5 | rollout | S | V23 | S | — | docs/spec/genericity/shipped tests 100%; receiver-clean | Complete | 8e18d90a |
 
 ## 12. Risks and how determinism survives
 

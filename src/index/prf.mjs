@@ -211,8 +211,12 @@ export async function searchWithConceptMap(root, task, {
     results = terms.map(({ term }) => scoreFtsBm25F(fts, term));
   }
   if (!results || error) return { ranking, conceptExpansions: [], reason: 'index-unavailable', error };
+  const totalWeight = terms.reduce((sum, { weight }) => sum + weight, 0);
+  const cappedTerms = totalWeight > 0.35
+    ? terms.map((row) => ({ ...row, weight: round((row.weight * 0.35) / totalWeight) }))
+    : terms;
   return {
-    ranking: interpolate(ranking, terms, results),
+    ranking: interpolate(ranking, cappedTerms, results),
     conceptExpansions: expansions,
     reason: null,
     error: null,

@@ -65,9 +65,15 @@ export function fuseQppChannels(lists, { k = RRF_K, gamma = COMBMNZ_GAMMA } = {}
   const channelStats = {};
 
   for (const list of lists ?? []) {
-    const { id, qppId, items = [], weight = 1 } = list;
+    const { id, qppId, items = [], weight = 1, maxPhi = 2.0 } = list;
     if (!Array.isArray(items) || !(weight > 0) || !items.length) continue;
-    const metrics = computeQppMetrics(items, weight);
+    const rawMetrics = computeQppMetrics(items, weight);
+    const phi = clamp(0.25, maxPhi, rawMetrics.phi);
+    const metrics = {
+      ...rawMetrics,
+      phi,
+      effectiveWeight: round(weight * phi),
+    };
     const key = qppId ?? (Object.hasOwn(channelStats, id) ? `${id}_2` : id);
     channelStats[key] = {
       baseWeight: round(weight),
@@ -87,7 +93,7 @@ export function fuseQppChannels(lists, { k = RRF_K, gamma = COMBMNZ_GAMMA } = {}
       const normScore = span > EPS
         ? (rawScore - metrics.minScore) / span
         : (items.length === 1 && metrics.maxScore > 0 ? 1 : (metrics.maxScore > 0 ? 0.5 : 0));
-      const contrib = metrics.effectiveWeight * (0.5 / (k + i + 1) + 0.5 * normScore);
+      const contrib = metrics.effectiveWeight * (0.7 / (k + i + 1) + 0.3 * normScore);
       fused.set(path, (fused.get(path) ?? 0) + contrib);
       if (metrics.phi >= CONFIDENT_PHI) {
         confidentSum.set(path, (confidentSum.get(path) ?? 0) + metrics.phi);

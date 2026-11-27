@@ -610,16 +610,17 @@ export async function rankMapV2(root, graph, task, {
     { id: 'bm25f', weight: 2.35, items: effectiveLexical },
     ...(stems.length ? [{ id: 'stem', weight: stemWeight, items: stems }] : []),
     ...(fileGraph.resolver.length ? [{ id: 'resolver', weight: 0.65, items: fileGraph.resolver }] : []),
-    ...(directional && fileGraph.pagerank.length ? [{ id: 'pagerank', weight: 0.30, items: fileGraph.pagerank }] : []),
+    ...(directional && fileGraph.pagerank.length ? [{ id: 'pagerank', weight: 0.30, maxPhi: 1.0, items: fileGraph.pagerank }] : []),
     {
       id: 'directional',
       weight: 0.9,
+      maxPhi: 1.0,
       items: directional
         ? structuralHits(mapStructure, paths, exact, effectiveLexical, hitsWalk ? { hits: hitsMap, intent: walkIntent, cohesionDirs } : {})
         : [],
     },
     ...(commitHits.length ? [{ id: 'commit_ir', weight: 0.70, items: commitHits }] : []),
-    { id: 'coupling', weight: 0.15, items: coupling ? couplingHits(fts ?? overlayRows, changes, couplingAnchors, paths, nativePartners) : [] },
+    { id: 'coupling', weight: 0.15, maxPhi: 1.0, items: coupling ? couplingHits(fts ?? overlayRows, changes, couplingAnchors, paths, nativePartners) : [] },
   ];
   if (queryVector && graph.embeddings?.length) {
     const embedded = rankByCosine(graph.embeddings, queryVector).filter(({ path }) => paths.has(path));

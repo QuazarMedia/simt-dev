@@ -17,7 +17,7 @@ import { buildRetrievalCorpus, scaleFiles50k } from '../packages/bench/src/multi
 import { evaluateRetrievalGates, runRetrievalAblation } from '../packages/bench/src/ablate.mjs';
 import { measureMapPhases, summarizeLatency } from '../packages/bench/src/retrieval-metrics.mjs';
 
-const fixtureCommit = ['-c', 'commit.gpgsign=false', '-c', 'user.name=Retrieval Qualification',
+const fixtureCommit = ['-c', 'gc.auto=0', '-c', 'commit.gpgsign=false', '-c', 'user.name=Retrieval Qualification',
   '-c', 'user.email=qualification@example.invalid', 'commit', '-qm'];
 const STRATUM_REPETITIONS = 3;
 const LATENCY_SAMPLES = 20;
@@ -46,9 +46,14 @@ async function document(engine, root, command, args = [], flags = {}) {
 
 async function stage(root, files) {
   await mkdir(root);
+  const dirs = new Set([root]);
   for (const [path, content] of Object.entries(files)) {
     const file = join(root, path);
-    await mkdir(dirname(file), { recursive: true });
+    const dir = dirname(file);
+    if (!dirs.has(dir)) {
+      await mkdir(dir, { recursive: true });
+      dirs.add(dir);
+    }
     await writeFile(file, content);
   }
   await git(root, ['init', '-q']);
@@ -138,7 +143,7 @@ async function corpusEvaluation(baseline, baselinePath, directory, corpus, { sel
 
     if (task.stratum === 'composite') {
       const split = arm === '+decompose' || arm === 'full-v2' || arm === 'v2-candidate'
-        || arm === '+nash-pack' || arm === 'full-v3' || arm.startsWith('+') && arm in lexOptions;
+        || arm === '+nash-pack' || arm === 'full-v3' || (arm.startsWith('+') && arm in lexOptions);
       const repack = arm === '+submodular-pack' || arm === '+decompose';
       const nash = arm === '+nash-pack' || arm === 'full-v3';
       const scopeSpans = arm === 'full-v3';
@@ -150,37 +155,42 @@ async function corpusEvaluation(baseline, baselinePath, directory, corpus, { sel
         }
         return { packets };
       });
-      const packets = {};
-      if (repack) {
-        const args = { root: split ? after : before, task: task.prompt, budget: 0, build: false, federate: false };
-        const result = split ? await assembleBrief({ ...args, retrieval: 'v2' }) : await baseline.assembleBrief(args);
-        const pack = split ? buildPacket : buildCompactPacket;
-        for (const budget of budgets) packets[budget] = observation(result.items, pack(result.items, { budget }));
-      } else {
-        for (const budget of budgets) {
-          const result = await assembleBrief({ root: after, task: task.prompt, budget, build: false, federate: false, retrieval: 'v2', nash, scopeSpans });
-          packets[budget] = observation(result.items, result.packed);
+      const compositeKey = `composite:${split}:${repack}:${nash}:${scopeSpans}`;
+      return replay(compositeKey, async () => {
+        const packets = {};
+        if (repack) {
+          const args = { root: split ? after : before, task: task.prompt, budget: 0, build: false, federate: false };
+          const result = split ? await assembleBrief({ ...args, retrieval: 'v2' }) : await baseline.assembleBrief(args);
+          const pack = split ? buildPacket : buildCompactPacket;
+          for (const budget of budgets) packets[budget] = observation(result.items, pack(result.items, { budget }));
+        } else {
+          for (const budget of budgets) {
+            const result = await assembleBrief({ root: after, task: task.prompt, budget, build: false, federate: false, retrieval: 'v2', nash, scopeSpans });
+            packets[budget] = observation(result.items, result.packed);
+          }
         }
-      }
-      return { packets };
+        return { packets };
+      });
     }
 
     const [impact, why] = task.requests;
     const symbol = arm === '+symbol-bind' || arm === 'full-v2' || arm === 'v2-candidate' || arm === 'full-v3';
     const coupled = arm === '+cochange' || arm === 'full-v2' || arm === 'v2-candidate' || arm === 'full-v3';
     const governs = arm === '+governance' || arm === 'full-v2' || arm === 'v2-candidate' || arm === 'full-v3';
-    const legacy = await replay('legacy-structural', async () => ({
-      impact: await document(baseline.run, before, 'impact', [why.target]),
-      why: await document(baseline.run, before, 'why', [why.target]),
-    }));
-    const precise = symbol || coupled
-      ? await document(run, after, 'impact', [`${why.target}#${impact.target}`], { retrieval: 'v2' }) : null;
-    const reach = symbol ? precise : legacy.impact;
-    const policy = governs ? await document(run, after, 'why', [why.target], { retrieval: 'v2' }) : legacy.why;
-    return {
-      impact: [...reach.importers, ...reach.tests, ...(coupled ? precise.cochange.map(({ dst }) => dst) : [])],
-      governance: policy.items.filter(({ kind }) => ['decision', 'rule', 'skill'].includes(kind)).map(({ id }) => id),
-    };
+    return replay(`structural:${symbol}:${coupled}:${governs}`, async () => {
+      const legacy = await replay('legacy-structural', async () => ({
+        impact: await document(baseline.run, before, 'impact', [why.target]),
+        why: await document(baseline.run, before, 'why', [why.target]),
+      }));
+      const precise = symbol || coupled
+        ? await document(run, after, 'impact', [`${why.target}#${impact.target}`], { retrieval: 'v2' }) : null;
+      const reach = symbol ? precise : legacy.impact;
+      const policy = governs ? await document(run, after, 'why', [why.target], { retrieval: 'v2' }) : legacy.why;
+      return {
+        impact: [...reach.importers, ...reach.tests, ...(coupled ? precise.cochange.map(({ dst }) => dst) : [])],
+        governance: policy.items.filter(({ kind }) => ['decision', 'rule', 'skill'].includes(kind)).map(({ id }) => id),
+      };
+    });
   } });
 }
 
@@ -200,7 +210,7 @@ function scaleFiles(count) {
   return files;
 }
 
-async function scaleEvaluation(baseline, directory, count) {
+async function scaleEvaluation(baseline, directory, count, { v3 = false } = {}) {
   const prior = join(directory, `scale-${count}-baseline`);
   const next = join(directory, `scale-${count}-candidate`);
   const files = count >= 50_000 ? scaleFiles50k(count) : scaleFiles(count);
@@ -233,6 +243,37 @@ async function scaleEvaluation(baseline, directory, count) {
     }
     rows.push({ count, command, ...Object.fromEntries(Object.entries(timings)
       .map(([name, measurements]) => [name, summarizeLatency(measurements)])) });
+  }
+  if (v3) {
+    process.stderr.write(`qualify ${count} files map-v3 / brief-v3\n`);
+    const v3Map = [];
+    const v3Brief = [];
+    for (let index = -1; index < LATENCY_SAMPLES; index += 1) {
+      let start = performance.now();
+      const loaded = await loadLiveGraph(next, { fielded: true, nativeLexical: true, binding: true, cochange: true });
+      await rankMapV2(next, loaded, prompt, {
+        commitIr: true, conceptMap: true, qppFusion: true, sdm: true, hitsWalk: true,
+      });
+      if (index >= 0) v3Map.push(performance.now() - start);
+      start = performance.now();
+      await assembleBrief({
+        root: next, task: prompt, budget: 2048, build: false, federate: false,
+        retrieval: 'v2', nash: true, scopeSpans: true,
+      });
+      if (index >= 0) v3Brief.push(performance.now() - start);
+    }
+    rows.push({
+      count,
+      command: 'map-v3',
+      baseline: rows.find(({ command }) => command === 'map').baseline,
+      candidate: summarizeLatency(v3Map),
+    });
+    rows.push({
+      count,
+      command: 'brief-v3',
+      baseline: rows.find(({ command }) => command === 'brief').baseline,
+      candidate: summarizeLatency(v3Brief),
+    });
   }
   const graph = await loadLiveGraph(next, { fielded: true, binding: true, cochange: true });
   const phaseSamples = { ftsMs: [], entityMs: [], graphMs: [], couplingMs: [], packMs: [] };
@@ -305,7 +346,7 @@ async function main(argv) {
   if (mode === 'all' || mode === 'scale') {
     const rows = [];
     const sizes = suite === 'v3' ? [10_000, 50_000] : [500, 10_000];
-    for (const size of sizes) rows.push(...await scaleEvaluation(baseline, output, size));
+    for (const size of sizes) rows.push(...await scaleEvaluation(baseline, output, size, { v3: suite === 'v3' }));
     await writeFile(join(output, 'scale.json'), JSON.stringify({ ...basis, rows }, null, 2) + '\n');
   }
   if (mode === 'hooks') {

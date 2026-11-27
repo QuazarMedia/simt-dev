@@ -156,7 +156,7 @@ function nashObjective(model, { eps = 0.05, lambda = 0.35 } = {}) {
         const inc = eff.score - prev;
         if (inc > 0) {
           const cur = (seenTask.get(`_t_${eff.subtask}`) ?? taskTotals.get(eff.subtask) ?? 0);
-          utility += eff.taskWeight * (Math.log(eps + cur + inc) - Math.log(eps + cur));
+          utility += eff.weight * (Math.log(eps + cur + inc) - Math.log(eps + cur));
           if (apply) {
             seenTask.set(gKey, eff.score);
             seenTask.set(`_t_${eff.subtask}`, cur + inc);

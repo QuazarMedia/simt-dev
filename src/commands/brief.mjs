@@ -109,6 +109,7 @@ export async function briefCommand(args, flags, commands = []) {
         sections,
         explain: explanation,
         proof: result.proof,
+        ...(result.scopes ? { scopes: result.scopes } : {}),
         ...result.composite,
         text: packed.text,
       },

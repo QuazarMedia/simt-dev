@@ -46,6 +46,22 @@ export function compactFileLine(path, symbols, task, { entrypoints = new Map(), 
     taggedLine([path, ...names, ...(extra ? ['+' + extra] : [])].join(' '), subtasks), limit);
 }
 
+export function compactScopedFileLine(path, scopes, symbols, task, {
+  entrypoints = new Map(), subtasks = [], limit = 95, maxSymbols = 4,
+} = {}) {
+  if (!Array.isArray(scopes) || !scopes.length) {
+    return compactFileLine(path, symbols, task, { entrypoints, subtasks, limit, maxSymbols });
+  }
+  const primary = scopes[0];
+  const header = `${path}:${primary.startLine}-${primary.endLine}`;
+  const scopeNames = [...new Set(scopes.map(({ name }) => name).filter(Boolean))];
+  const symbolNames = [...new Set((symbols ?? []).map(({ name }) => name).filter((name) => name && !scopeNames.includes(name)))];
+  const total = Math.max(scopeNames.length + symbolNames.length, (symbols ?? []).length);
+  const options = maxSymbols <= 0 ? [] : [...scopeNames, ...symbolNames].slice(0, maxSymbols);
+  return visibleList(options, total, (names, extra) =>
+    taggedLine([header, ...names, ...(extra ? ['+' + extra] : [])].join(' '), subtasks), limit);
+}
+
 export function compactTestLine(path, tests, { subtasks = [], limit = 140 } = {}) {
   const targets = [...new Set(tests)].sort(cmp);
   return visibleList(targets.slice(0, 3), targets.length, (picked, extra) => {

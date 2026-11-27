@@ -295,3 +295,26 @@ export async function readFileHits(root) {
     { authority: Number(authority ?? 0), hub: Number(hub ?? 0), barrel: Boolean(barrel) },
   ]));
 }
+
+export async function readPathScopes(root, paths) {
+  if (!Array.isArray(paths) || !paths.length) return new Map();
+  const { rows, error } = await readSqliteRows(
+    root,
+    `select s.path, json_extract(s.props, '$.lines') as lines, json_extract(s.props, '$.bindings') as bindings
+     from sources s where s.kind = 'blob' and s.path in (select value from json_each(?))`,
+    [JSON.stringify(paths)],
+  );
+  if (error || !rows.length) return new Map();
+  const out = new Map();
+  for (const row of rows) {
+    let scopes = [];
+    try {
+      const parsed = row.bindings ? JSON.parse(row.bindings) : null;
+      if (Array.isArray(parsed?.chunk?.scopes)) scopes = parsed.chunk.scopes;
+    } catch {
+      scopes = [];
+    }
+    out.set(row.path, { lines: Number(row.lines ?? 0), scopes });
+  }
+  return out;
+}

@@ -16,7 +16,8 @@ import { detailCommands, drillFooter, subtaskCoverage } from './drilldown.mjs';
 import { classifySubtaskIntents, isConfigPath, isDocPath, subtaskCommands } from './kind.mjs';
 import { keptSections } from './packet.mjs';
 import { clusterSubtasks, orderSubtasks, subtaskLanes } from './plan-graph.mjs';
-import { buildCompactPacket, compactFileLine, compactTestLine, symbolEntrypoints, taggedLine } from './render.mjs';
+import { buildCompactPacket, compactScopedFileLine, compactTestLine, symbolEntrypoints, taggedLine } from './render.mjs';
+import { resolveLiveScopes, selectFileScopes } from './scopes.mjs';
 
 const TOP_FILES = 3;
 
@@ -222,7 +223,7 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
 }
 
 export async function assembleCompositeBrief({
-  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, nash = false,
+  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, nash = false, scopeSpans = false,
 }) {
   const need = (facets) => section === null || facets.includes(section);
   const [graph, repo, registry, records, lessons] = await Promise.all([
@@ -270,6 +271,8 @@ export async function assembleCompositeBrief({
   }
   const entrypoints = symbolEntrypoints(graph.symbolGraph?.edges ?? []);
   const likelyPaths = new Set(tasks.flatMap(({ files }) => files.map(({ path }) => path)));
+  const liveScopes = scopeSpans ? await resolveLiveScopes(root, [...likelyPaths], graph) : new Map();
+  const pathScopes = new Map();
   const decisionContext = { files: likelyPaths, commands: new Set(commands), roots: sourceRoots(filePaths) };
   const recordById = new Map(records.map((record) => [record.id, record]));
   const governed = decisionPaths(records, decisionContext);
@@ -281,20 +284,27 @@ export async function assembleCompositeBrief({
     const likely = subject.files.map(({ path }) => path);
     for (const [index, path] of likely.entries()) {
       const weight = 1 / (1 + index * 0.7);
+      if (scopeSpans && !pathScopes.has(path)) {
+        const picked = selectFileScopes(path, liveScopes.get(path), task, { entrypoints });
+        if (picked.length) pathScopes.set(path, picked);
+      }
       add(
         'FILES',
         path,
         (ids) => {
           const query = ids.length ? ids.map((value) => byId.get(value).query).join(' ') : subject.query;
-          return compactFileLine(path, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids });
+          const fileScopes = scopeSpans ? selectFileScopes(path, liveScopes.get(path), query, { entrypoints }) : [];
+          if (fileScopes.length) pathScopes.set(path, fileScopes);
+          return compactScopedFileLine(path, fileScopes, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids });
         },
         id,
         weight,
         false,
         (ids) => {
           const query = ids.length ? ids.map((value) => byId.get(value).query).join(' ') : subject.query;
+          const fileScopes = scopeSpans ? (pathScopes.get(path) ?? []) : [];
           return [2, 1, 0].map((maxSymbols) =>
-            compactFileLine(path, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids, maxSymbols }));
+            compactScopedFileLine(path, fileScopes, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids, maxSymbols }));
         },
       );
       const reachable = isTestPath(path, root) ? [path] : transitiveTestsFor(path, tests, graph.edges, root, sortedFilePaths);
@@ -339,12 +349,18 @@ export async function assembleCompositeBrief({
     algorithm: nash ? 'nash' : 'auto',
   });
   const constraints = tasks.flatMap(({ id, constraints: rows }) => rows.map((row) => ({ subtaskId: id, ...row })));
+  const structuredScopes = scopeSpans && pathScopes.size
+    ? [...pathScopes.entries()]
+      .sort(([a], [b]) => cmp(a, b))
+      .flatMap(([path, list]) => list.map(({ name, startLine, endLine }) => ({ path, name, startLine, endLine })))
+    : null;
   return {
     root, kind, basis, task, scope, budget, items, packed,
     sections: keptSections(items, packed.cut),
     composite: {
       retrieval: 'v2', subtasks: tasks, lanes, overlaps, taskOrder: { ...plan, obligations },
       constraints, subtaskCoverage: subtaskCoverage(tasks, items, packed.cut), drillDown,
+      ...(structuredScopes ? { scopes: structuredScopes } : {}),
       ...(subtask === null ? {} : { selectedSubtask: subtask }),
     },
   };

@@ -365,6 +365,7 @@ export const output = {
       taskOrder: { type: 'object' },
       constraints: { type: 'array', items: { type: 'object' } },
       subtaskCoverage: { type: 'array', items: { type: 'object' } },
+      scopes: { type: 'array', items: { type: 'object' } },
       drillDown: { type: 'array', items: { type: 'object' } },
       selectedSubtask: { type: 'integer' },
     },

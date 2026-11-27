@@ -223,6 +223,7 @@ export async function assembleBrief({
   only = null,
   subtask = null,
   nash = false,
+  scopeSpans = false,
 } = {}) {
   if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope, retrieval });
   // A view is the same packet with the other sections never collected, so it shares the
@@ -244,7 +245,7 @@ export async function assembleBrief({
     if (selected || parts.length > 1 || constrained) {
       const { assembleCompositeBrief } = await import('./multi.mjs');
       const result = await assembleCompositeBrief({ root, task, parts: selected ? [selected] : parts,
-        paths, budget, flags, build, commands, section, subtask, nash });
+        paths, budget, flags, build, commands, section, subtask, nash, scopeSpans });
       if (proof && !result.cold) result.proof = await summarizeProof(root, result.items, result.packed, budget, true);
       return result;
     }
@@ -355,6 +356,7 @@ export async function assembleBrief({
   // held back) make CAUTIONS a consumer too. A view collecting none of them pays nothing
   // for the ranking that produces it.
   let focused = [];
+  let singleScopes = null;
   if (need(['FILES', 'TESTS', 'DECISIONS', 'LESSONS', 'FEDERATION', 'CAUTIONS'])) {
     const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts }) : [];
     const queryVector =
@@ -378,8 +380,37 @@ export async function assembleBrief({
       });
     }
     const rendered = renderMap(focused, symbols, { level: 'names', budget: budget > 0 ? budget * MAP_FACTOR : 0 });
-    for (const line of rendered.text.split('\n')) {
-      packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });
+    if (scopeSpans && rendered.files.length) {
+      const [{ resolveLiveScopes, selectFileScopes }, { compactScopedFileLine, symbolEntrypoints }] = await Promise.all([
+        import('./scopes.mjs'),
+        import('./render.mjs'),
+      ]);
+      const liveScopes = await resolveLiveScopes(root, rendered.files.slice(0, LIKELY_FILES).map(({ path }) => path), graph);
+      const entrypoints = symbolEntrypoints(graph.symbolGraph?.edges ?? []);
+      const symbolsByPath = new Map();
+      for (const sym of symbols) {
+        const bucket = symbolsByPath.get(sym.path) ?? [];
+        bucket.push(sym);
+        symbolsByPath.set(sym.path, bucket);
+      }
+      const collectedScopes = [];
+      for (const line of rendered.text.split('\n')) {
+        const path = line.split(' ', 1)[0];
+        const picked = selectFileScopes(path, liveScopes.get(path), task, { entrypoints });
+        if (picked.length) {
+          for (const s of picked) collectedScopes.push({ path, ...s });
+          packet.add('FILES', compactScopedFileLine(path, picked, symbolsByPath.get(path) ?? [], task, { entrypoints }), {
+            why: ['ranked by the task words against the import graph'],
+          });
+        } else {
+          packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });
+        }
+      }
+      if (collectedScopes.length) singleScopes = collectedScopes;
+    } else {
+      for (const line of rendered.text.split('\n')) {
+        packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });
+      }
     }
     if (rendered.truncated) {
       packet.add('CAUTIONS', `the map held back ${rendered.total - rendered.shown} of ${rendered.total} files`, {
@@ -611,7 +642,10 @@ export async function assembleBrief({
 
   const sections = keptSections(items, cut);
 
-  return { root, kind, basis, task, scope, budget, items, packed, sections, proof: proofSummary };
+  return {
+    root, kind, basis, task, scope, budget, items, packed, sections, proof: proofSummary,
+    ...(singleScopes ? { scopes: singleScopes } : {}),
+  };
 }
 
 async function summarizeProof(root, items, packed, budget, diverse = false) {

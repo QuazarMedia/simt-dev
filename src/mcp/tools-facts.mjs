@@ -87,6 +87,7 @@ export async function briefPayload(args, { only = null } = {}) {
     floorHeld: result.packed.floorHeld,
     cut: result.packed.cut,
     sections: result.sections,
+    ...(result.scopes ? { scopes: result.scopes } : {}),
     ...result.composite,
     text: result.packed.text,
   };

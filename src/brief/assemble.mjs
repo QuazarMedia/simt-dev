@@ -222,6 +222,7 @@ export async function assembleBrief({
   retrieval = 'v2',
   only = null,
   subtask = null,
+  nash = false,
 } = {}) {
   if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope, retrieval });
   // A view is the same packet with the other sections never collected, so it shares the
@@ -243,7 +244,7 @@ export async function assembleBrief({
     if (selected || parts.length > 1 || constrained) {
       const { assembleCompositeBrief } = await import('./multi.mjs');
       const result = await assembleCompositeBrief({ root, task, parts: selected ? [selected] : parts,
-        paths, budget, flags, build, commands, section, subtask });
+        paths, budget, flags, build, commands, section, subtask, nash });
       if (proof && !result.cold) result.proof = await summarizeProof(root, result.items, result.packed, budget, true);
       return result;
     }

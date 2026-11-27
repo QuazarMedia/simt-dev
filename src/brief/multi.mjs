@@ -36,11 +36,12 @@ function compact(value, limit) {
 function candidatePool(section, tagged) {
   const pool = new Map();
   return {
-    add(facet, key, render, id, score = 1, hard = false) {
+    add(facet, key, render, id, score = 1, hard = false, variants = null) {
       if (section !== null && section !== facet) return;
       const identity = JSON.stringify([facet, key]);
-      const row = pool.get(identity) ?? { render, facet, relevance: new Map(), hard: false };
+      const row = pool.get(identity) ?? { render, variants, facet, relevance: new Map(), hard: false };
       row.hard ||= hard;
+      if (variants && !row.variants) row.variants = variants;
       row.relevance.set(id, Math.max(score, row.relevance.get(id) ?? 0));
       pool.set(identity, row);
     },
@@ -49,8 +50,10 @@ function candidatePool(section, tagged) {
         const subtaskIds = [...row.relevance.keys()].filter((value) => value !== 0).sort((a, b) => a - b);
         const ids = tagged ? subtaskIds : [];
         const text = typeof row.render === 'function' ? row.render(ids) : taggedLine(row.render, ids);
+        const variants = typeof row.variants === 'function' ? row.variants(ids) : row.variants;
         return {
           id, order, section: row.facet, text, subtaskIds,
+          ...(Array.isArray(variants) ? { variants } : {}),
           priority: row.hard ? 'hard' : 'soft',
           relevance: [...row.relevance].map(([subtask, score]) => ({ subtask, score })),
           why: ['evidence for the named subtasks'],
@@ -218,7 +221,9 @@ async function retrieveSubtasks(root, graph, tasks, allowed, tests) {
   }));
 }
 
-export async function assembleCompositeBrief({ root, task, parts, paths, budget, flags, build, commands, section, subtask = null }) {
+export async function assembleCompositeBrief({
+  root, task, parts, paths, budget, flags, build, commands, section, subtask = null, nash = false,
+}) {
   const need = (facets) => section === null || facets.includes(section);
   const [graph, repo, registry, records, lessons] = await Promise.all([
     loadLiveGraph(root, { build, fielded: true, nativeLexical: true, binding: true, cochange: true }),
@@ -276,10 +281,22 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
     const likely = subject.files.map(({ path }) => path);
     for (const [index, path] of likely.entries()) {
       const weight = 1 / (1 + index * 0.7);
-      add('FILES', path, (ids) => {
-        const query = ids.length ? ids.map((value) => byId.get(value).query).join(' ') : subject.query;
-        return compactFileLine(path, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids });
-      }, id, weight);
+      add(
+        'FILES',
+        path,
+        (ids) => {
+          const query = ids.length ? ids.map((value) => byId.get(value).query).join(' ') : subject.query;
+          return compactFileLine(path, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids });
+        },
+        id,
+        weight,
+        false,
+        (ids) => {
+          const query = ids.length ? ids.map((value) => byId.get(value).query).join(' ') : subject.query;
+          return [2, 1, 0].map((maxSymbols) =>
+            compactFileLine(path, symbols.get(path) ?? [], query, { entrypoints, subtasks: ids, maxSymbols }));
+        },
+      );
       const reachable = isTestPath(path, root) ? [path] : transitiveTestsFor(path, tests, graph.edges, root, sortedFilePaths);
       if (reachable.length) add('TESTS', path, (ids) => compactTestLine(path, reachable, { subtasks: ids }), id, weight);
       else if (index === 0) add('CAUTIONS', 'test:' + path, 'No direct test recorded for ' + path, id, 0.5);
@@ -316,7 +333,11 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
   const items = candidates.items();
   const drillDown = detailCommands(task, tasks, { paths: named, selected: subtask });
   const footerBytes = Math.min(350, Math.floor(budget / 4));
-  const packed = buildCompactPacket(items, { budget, footer: drillFooter(tasks, drillDown, footerBytes) });
+  const packed = buildCompactPacket(items, {
+    budget,
+    footer: drillFooter(tasks, drillDown, footerBytes),
+    algorithm: nash ? 'nash' : 'auto',
+  });
   const constraints = tasks.flatMap(({ id, constraints: rows }) => rows.map((row) => ({ subtaskId: id, ...row })));
   return {
     root, kind, basis, task, scope, budget, items, packed,

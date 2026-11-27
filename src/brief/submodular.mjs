@@ -79,15 +79,30 @@ function prepare(items, { facetWeights = {}, taskWeights = {}, saturation = {}, 
     }
     const effects = [];
     for (const [key, { subtask, facet, score, group }] of [...relevance].sort(([a], [b]) => cmp(a, b))) {
-      const weight = (facetWeights[facet] ?? DEFAULT_WEIGHTS[facet] ?? 1) * (taskWeights[subtask] ?? 1);
+      const facetWeight = facetWeights[facet] ?? DEFAULT_WEIGHTS[facet] ?? 1;
+      const taskWeight = taskWeights[subtask] ?? 1;
+      const weight = facetWeight * taskWeight;
       const beta = saturation[facet] ?? 1;
       if (weight > 0 && beta > 0 && Number.isFinite(weight) && Number.isFinite(beta)) {
-        effects.push(effect(key, group, score, weight, beta));
+        effects.push({
+          ...effect(key, group, score, weight, beta),
+          subtask,
+          facet,
+          taskWeight,
+          facetWeight,
+        });
       }
     }
     const floor = facetFloors[section];
     if (Number.isFinite(floor) && floor > 0 && relevance.size) {
-      effects.push(effect(JSON.stringify(['floor', section]), 'first', 1, floor, 1));
+      effects.push({
+        ...effect(JSON.stringify(['floor', section]), 'first', 1, floor, 1),
+        subtask: 0,
+        facet: section,
+        taskWeight: 1,
+        facetWeight: floor,
+        isFloor: true,
+      });
     }
     return {
       id, bytes, section, effects, order: sectionOrder.get(section) ?? SECTIONS.length, subject, hard: priority === 'hard',
@@ -116,6 +131,63 @@ function objective(model) {
   };
 }
 
+function nashObjective(model, { eps = 0.05, lambda = 0.35 } = {}) {
+  const taskTotals = new Map();
+  const facetTotals = new Map();
+  const taskGroups = new Map();
+  const facetGroups = new Map();
+  const floorHit = new Set();
+  return (row, apply = false) => {
+    let utility = 0;
+    const seenTask = new Map();
+    const seenFacet = new Map();
+    for (const eff of row.effects) {
+      if (eff.isFloor) {
+        if (!floorHit.has(eff.facet)) {
+          utility += eff.facetWeight;
+          if (apply) floorHit.add(eff.facet);
+        }
+        continue;
+      }
+      if (Number.isFinite(eff.subtask) && eff.subtask > 0) {
+        const gKey = `${eff.subtask}\0${eff.group}`;
+        const prev = seenTask.get(gKey) ?? taskGroups.get(gKey) ?? 0;
+        const inc = eff.score - prev;
+        if (inc > 0) {
+          const cur = (seenTask.get(`_t_${eff.subtask}`) ?? taskTotals.get(eff.subtask) ?? 0);
+          utility += eff.taskWeight * (Math.log(eps + cur + inc) - Math.log(eps + cur));
+          if (apply) {
+            seenTask.set(gKey, eff.score);
+            seenTask.set(`_t_${eff.subtask}`, cur + inc);
+          }
+        }
+      }
+      const fgKey = `${eff.facet}\0${eff.group}`;
+      const fPrev = seenFacet.get(fgKey) ?? facetGroups.get(fgKey) ?? 0;
+      const fInc = eff.score - fPrev;
+      if (fInc > 0) {
+        const fCur = seenFacet.get(`_f_${eff.facet}`) ?? facetTotals.get(eff.facet) ?? 0;
+        utility += lambda * eff.facetWeight * (Math.sqrt(fCur + fInc) - Math.sqrt(fCur));
+        if (apply) {
+          seenFacet.set(fgKey, eff.score);
+          seenFacet.set(`_f_${eff.facet}`, fCur + fInc);
+        }
+      }
+    }
+    if (apply) {
+      for (const [k, v] of seenTask) {
+        if (k.startsWith('_t_')) taskTotals.set(Number(k.slice(3)), v);
+        else taskGroups.set(k, v);
+      }
+      for (const [k, v] of seenFacet) {
+        if (k.startsWith('_f_')) facetTotals.set(k.slice(3), v);
+        else facetGroups.set(k, v);
+      }
+    }
+    return utility;
+  };
+}
+
 function density(gain, bytes, power = 0.75) {
   return bytes === 0 ? (gain > 0 ? Infinity : 0) : gain / (bytes ** power);
 }
@@ -131,8 +203,8 @@ function better(candidate, best) {
       && cmp(candidate.trace.map(({ id }) => id).join('\0'), best.trace.map(({ id }) => id).join('\0')) < 0)));
 }
 
-function greedy(model, hard, soft, budget, { regularizer = 0, augment = false, power = 0.75 } = {}) {
-  const delta = objective(model);
+function greedy(model, hard, soft, budget, { regularizer = 0, augment = false, power = 0.75, makeObjective = objective } = {}) {
+  const delta = makeObjective(model);
   const trace = hard.map((row) => record(row, delta(row, true)));
   let bytes = trace.reduce((sum, row) => sum + row.bytes, 0);
   let utility = trace.reduce((sum, row) => sum + row.gain, 0);
@@ -235,7 +307,8 @@ export function packSubmodular(items, { budget = DEFAULT_BRIEF_BYTES, algorithm 
   let result;
   let method;
   if (budget === 0 || floor > budget) {
-    const delta = objective(model);
+    const makeObj = algorithm === 'nash' ? nashObjective : objective;
+    const delta = makeObj(model);
     const rows = budget === 0 ? model.rows : hard;
     const trace = rows.map((row) => record(row, delta(row, true)));
     result = {
@@ -244,6 +317,14 @@ export function packSubmodular(items, { budget = DEFAULT_BRIEF_BYTES, algorithm 
       utility: trace.reduce((sum, row) => sum + row.gain, 0),
     };
     method = budget === 0 ? 'unlimited' : 'floor';
+  } else if (algorithm === 'nash') {
+    result = greedy(model, hard, soft, budget, {
+      regularizer: Math.max(1, (budget - floor) / Math.max(1, soft.length)),
+      augment: true,
+      power: 0.75,
+      makeObjective: nashObjective,
+    });
+    method = 'nash';
   } else {
     const densityOnly = greedy(model, hard, soft, budget, { power: 1 });
     if (algorithm === 'density') {

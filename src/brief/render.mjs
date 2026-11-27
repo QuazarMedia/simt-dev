@@ -29,7 +29,7 @@ function visibleList(options, total, render, limit) {
   }
 }
 
-export function compactFileLine(path, symbols, task, { entrypoints = new Map(), subtasks = [], limit = 95 } = {}) {
+export function compactFileLine(path, symbols, task, { entrypoints = new Map(), subtasks = [], limit = 95, maxSymbols = 4 } = {}) {
   const terms = new Set(fieldQueryTerms(task));
   const rows = symbols.filter(({ name }) => name).map((symbol) => ({
     ...symbol,
@@ -41,7 +41,7 @@ export function compactFileLine(path, symbols, task, { entrypoints = new Map(), 
   const all = [...new Map(rows.sort(priority).map((row) => [row.name, row]).reverse()).values()].sort(priority);
   const matched = all.filter(({ hits }) => hits > 0);
   const structural = all.filter(({ hits, degree, exported }) => hits === 0 && (degree > 0 || exported)).slice(0, 2);
-  const options = [...matched, ...structural].slice(0, 4).map(({ name }) => name);
+  const options = maxSymbols <= 0 ? [] : [...matched, ...structural].slice(0, maxSymbols).map(({ name }) => name);
   return visibleList(options, all.length, (names, extra) =>
     taggedLine([path, ...names, ...(extra ? ['+' + extra] : [])].join(' '), subtasks), limit);
 }
@@ -66,7 +66,34 @@ function optionCost({ text }) {
   return text.split('\n').reduce((sum, line) => sum + bytes(line) + 3, 0);
 }
 
-export function buildCompactPacket(items, { budget = DEFAULT_BRIEF_BYTES, footer = simpleFooter, footerBytes = null } = {}) {
+function hasUncoveredSubtask(ordered, cutSet) {
+  const fileSubtasks = new Set();
+  const keptFileSubtasks = new Set();
+  const allSubtasks = new Set();
+  const keptSubtasks = new Set();
+  for (const item of ordered) {
+    for (const rel of item.relevance ?? []) {
+      if (Number.isFinite(rel.subtask) && rel.subtask > 0 && rel.score > 0) {
+        allSubtasks.add(rel.subtask);
+        if (!cutSet.has(item.id)) keptSubtasks.add(rel.subtask);
+        if (item.section === 'FILES') {
+          fileSubtasks.add(rel.subtask);
+          if (!cutSet.has(item.id)) keptFileSubtasks.add(rel.subtask);
+        }
+      }
+    }
+  }
+  const target = fileSubtasks.size ? fileSubtasks : allSubtasks;
+  const covered = fileSubtasks.size ? keptFileSubtasks : keptSubtasks;
+  for (const subtask of target) {
+    if (!covered.has(subtask)) return true;
+  }
+  return false;
+}
+
+export function buildCompactPacket(items, {
+  budget = DEFAULT_BRIEF_BYTES, footer = simpleFooter, footerBytes = null, algorithm = 'auto',
+} = {}) {
   const ordered = [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || cmp(a.id, b.id));
   const candidates = ordered.map((item) => {
     if (!SECTIONS.includes(item.section)) throw new Error('unknown brief section ' + item.section);
@@ -75,41 +102,60 @@ export function buildCompactPacket(items, { budget = DEFAULT_BRIEF_BYTES, footer
   const full = packetLines(ordered).join('\n');
   const before = bytes(full);
   if (budget === 0 || before <= budget) {
-    const selection = packSubmodular(candidates, { budget: 0, facetFloors: FACET_FLOORS });
+    const selection = packSubmodular(candidates, { budget: 0, facetFloors: FACET_FLOORS, algorithm });
     return { text: full, before, after: before, cut: [], floorHeld: false, trace: selection.trace };
   }
 
-  function render(selection, includeFooter = true) {
-    const lines = packetLines(ordered, new Set(selection.cut));
-    const tail = includeFooter ? footer(ordered, selection.cut, budget) : '';
-    if (tail) lines.push(tail);
-    const text = lines.join('\n');
-    return { before, after: bytes(text), text, cut: selection.cut, trace: selection.trace, utility: selection.utility };
+  function packRows(rows) {
+    function render(selection, includeFooter = true) {
+      const lines = packetLines(rows, new Set(selection.cut));
+      const tail = includeFooter ? footer(rows, selection.cut, budget) : '';
+      if (tail) lines.push(tail);
+      const text = lines.join('\n');
+      return { before, after: bytes(text), text, cut: selection.cut, trace: selection.trace, utility: selection.utility };
+    }
+
+    const hardHeaders = headerBytes(rows.filter(({ priority }) => priority === 'hard'));
+    const footSeed = footerBytes ?? bytes(footer(rows, rows, budget));
+    let capacity = Math.max(1, budget - hardHeaders - footSeed);
+    const choose = (value) => packSubmodular(rows, { budget: Math.max(1, value), facetFloors: FACET_FLOORS, algorithm });
+    let selection = choose(capacity);
+    let result = render(selection);
+    for (let pass = 0; pass < 3; pass += 1) {
+      const exactCapacity = Math.max(1, budget - (result.after - selection.bytes));
+      if (result.after <= budget && (exactCapacity <= capacity || !selection.cut.length)) break;
+      const trial = choose(exactCapacity);
+      const packed = render(trial);
+      if (result.after > budget || (packed.after <= budget && packed.utility > result.utility)) {
+        selection = trial;
+        result = packed;
+        capacity = exactCapacity;
+      } else {
+        break;
+      }
+    }
+    if (result.after > budget) {
+      selection = choose(1);
+      result = render(selection, false);
+    }
+    return result;
   }
 
-  const hardHeaders = headerBytes(candidates.filter(({ priority }) => priority === 'hard'));
-  const footSeed = footerBytes ?? bytes(footer(ordered, ordered, budget));
-  let capacity = Math.max(1, budget - hardHeaders - footSeed);
-  const choose = (value) => packSubmodular(candidates, { budget: Math.max(1, value), facetFloors: FACET_FLOORS });
-  let selection = choose(capacity);
-  let result = render(selection);
-  for (let pass = 0; pass < 3; pass += 1) {
-    const exactCapacity = Math.max(1, budget - (result.after - selection.bytes));
-    if (result.after <= budget && (exactCapacity <= capacity || !selection.cut.length)) break;
-    const trial = choose(exactCapacity);
-    const packed = render(trial);
-    if (result.after > budget || (packed.after <= budget && packed.utility > result.utility)) {
-      selection = trial;
-      result = packed;
-      capacity = exactCapacity;
-    } else {
-      break;
-    }
+  let currentRows = candidates;
+  let result = packRows(currentRows);
+  const maxVariants = currentRows.reduce((max, item) => Math.max(max, item.variants?.length ?? 0), 0);
+  for (let tier = 0; tier < maxVariants && hasUncoveredSubtask(currentRows, new Set(result.cut)); tier += 1) {
+    const nextRows = currentRows.map((item) => {
+      const variant = item.variants?.[tier];
+      if (!variant || bytes(variant) >= bytes(item.text)) return item;
+      const updated = { ...item, text: variant };
+      return { ...updated, bytes: optionCost(updated) };
+    });
+    const trial = packRows(nextRows);
+    currentRows = nextRows;
+    if (trial.after <= budget) result = trial;
   }
-  if (result.after > budget) {
-    selection = choose(1);
-    result = render(selection, false);
-  }
+
   const { utility, ...output } = result;
   return { ...output, floorHeld: output.after > budget };
 }
